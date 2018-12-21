@@ -1,0 +1,80 @@
+Colors are specified using predefined color names, or RGB, HEX, HSL, RGBA, HSLA values.
+Color Names
+
+In HTML, a color can be specified by using a color name:
+
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1 style="background-color:Tomato;">Tomato</h1>
+<h1 style="background-color:Orange;">Orange</h1>
+<h1 style="background-color:DodgerBlue;">DodgerBlue</h1>
+<h1 style="background-color:MediumSeaGreen;">MediumSeaGreen</h1>
+<h1 style="background-color:Gray;">Gray</h1>
+<h1 style="background-color:SlateBlue;">SlateBlue</h1>
+<h1 style="background-color:Violet;">Violet</h1>
+<h1 style="background-color:LightGray;">LightGray</h1>
+
+</body>
+</html>
+
+Background Color
+
+You can set the background color for HTML elements:
+Hello World
+
+
+Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat. Ut wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl ut aliquip ex ea commodo consequat.
+
+Example
+<h1 style="background-color:DodgerBlue;">Hello World</h1>
+<p style="background-color:Tomato;">Lorem ipsum...</p> 
+
+Text Color
+
+You can set the color of text:
+ 
+<h1 style="color:Tomato;">Hello World</h1>
+<p style="color:DodgerBlue;">Lorem ipsum...</p>
+<p style="color:MediumSeaGreen;">Ut wisi enim...</p> 
+
+Border Color
+
+You can set the color of borders:
+
+
+<h1 style="border:2px solid Tomato;">Hello World</h1>
+<h1 style="border:2px solid DodgerBlue;">Hello World</h1>
+<h1 style="border:2px solid Violet;">Hello World</h1> 
+
+Color Values
+
+In HTML, colors can also be specified using RGB values, HEX values, HSL values, RGBA values, and HSLA values:
+
+Same as color name "Tomato":
+rgb(255, 99, 71)
+#ff6347
+hsl(9, 100%, 64%)
+
+Same as color name "Tomato", but 50% transparent:
+rgba(255, 99, 71, 0.5)
+hsla(9, 100%, 64%, 0.5)
+Example
+<h1 style="background-color:rgb(255, 99, 71);">...</h1>
+<h1 style="background-color:#ff6347;">...</h1>
+<h1 style="background-color:hsl(9, 100%, 64%);">...</h1>
+
+<h1 style="background-color:rgba(255, 99, 71, 0.5);">...</h1>
+<h1 style="background-color:hsla(9, 100%, 64%, 0.5);">...</h1> 
+
+HEX Value
+
+In HTML, a color can be specified using a hexadecimal value in the form:
+
+#rrggbb
+
+Where rr (red), gg (green) and bb (blue) are hexadecimal values between 00 and ff (same as decimal 0-255).
+
+For example, #ff0000 is displayed as red, because red is set to its highest value (ff) and the others are set to the lowest value (00).
+

@@ -1,0 +1,99 @@
+Backgrounds
+
+
+
+The CSS background properties are used to define the background effects for elements.
+
+CSS background properties:
+
+    background-color
+    background-image
+    background-repeat
+    background-attachment
+    background-position
+
+Background Color
+
+The background-color property specifies the background color of an element.
+
+The background color of a page is set like this:
+Example
+body {
+  background-color: lightblue;
+} 
+
+With CSS, a color is most often specified by:
+
+    a valid color name - like "red"
+    a HEX value - like "#ff0000"
+    an RGB value - like "rgb(255,0,0)"
+
+Look at CSS Color Values for a complete list of possible color values.
+
+In the example below, the <h1>, <p>, and <div> elements have different background colors:
+Example
+h1 {
+  background-color: green;
+}
+
+div {
+  background-color: lightblue;
+}
+
+p {
+  background-color: yellow;
+} 
+
+Background Image
+
+The background-image property specifies an image to use as the background of an element.
+
+By default, the image is repeated so it covers the entire element.
+
+The background image for a page can be set like this:
+Example
+body {
+  background-image: url("paper.gif");
+} 
+
+Below is an example of a bad combination of text and background image. The text is hardly readable:
+Example
+body {
+  background-image: url("bgdesert.jpg");
+} 
+
+
+
+Note: When using a background image, use an image that does not disturb the text.
+Background Image - Repeat Horizontally or Vertically
+
+By default, the background-image property repeats an image both horizontally and vertically.
+
+Some images should be repeated only horizontally or vertically, or they will look strange, like this:
+Example
+body {
+  background-image: url("gradient_bg.png");
+} 
+
+ When using the shorthand property the order of the property values is:
+
+    background-color
+    background-image
+    background-repeat
+    background-attachment
+    background-position
+
+It does not matter if one of the property values is missing, as long as the other ones are in this order.
+
+All CSS Background Properties
+Property 	       Description
+
+background 	           Sets all the background properties in one declaration
+background-attachment 	   Sets whether a background image is fixed or scrolls with the rest of the page
+background-clip 	   Specifies the painting area of the background
+background-color 	   Sets the background color of an element
+background-image 	    Sets the background image for an element
+background-origin 	   Specifies where the background image(s) is/are positioned
+background-position 	   Sets the starting position of a background image
+background-repeat 	    Sets how a background image will be repeated
+background-size 	   Specifies the size of the background image(s)

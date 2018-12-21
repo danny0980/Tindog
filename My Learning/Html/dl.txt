@@ -1,0 +1,24 @@
+<dl>
+Definition list
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+    <dl>
+      <dt>Categories</dt>
+      <dd>Category 1</dd>
+      <dd>Category 2</dd>
+    </dl>
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<button>
+
+Clickable button, which can be used as a link or in forms
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <form>
+      <input type="text" name="name" value="">
+      <input type="text" name="email" value="">
+      <button name="submit">Send Form</button>
+    </form>
+
+
+
+
+  </body>
+</html>

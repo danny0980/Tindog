@@ -1,0 +1,25 @@
+<h1><h2><h3><h4><h5><h6>
+<h1> 
+
+has the biggest size, <h6> the lowest
+<html>
+ 
+ <head>...</head>
+
+  <body>
+
+    <header>
+
+
+      <h1>She suspicion dejection saw instantly</h1>
+      <h3>Boy desirous families prepared 
+        gay reserved add ecstatic say. 
+      </h3>
+
+
+    </header>
+
+
+
+  </body>
+</html>

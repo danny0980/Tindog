@@ -1,0 +1,21 @@
+<form method="post" enctype="multipart/form-data">
+
+
+Appends form-data inside the body of the HTTP request, including files
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <form action="" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" value="">
+      <input type="submit" value="Upload">
+    </form>
+
+
+
+  </body>
+</html>

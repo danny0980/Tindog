@@ -1,0 +1,22 @@
+class
+
+Apply class on elements
+
+<html>
+  <head>
+
+    <style>.red-text{ color: red }</style>
+
+  </head>
+  <body>
+
+
+
+    <p class="red-text">
+      Just four sold need over how any.
+    </p>
+
+
+
+  </body>
+</html>

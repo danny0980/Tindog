@@ -1,0 +1,21 @@
+<blockquote>
+
+The HTML 
+<blockquote> element defines a section that is quoted from another source.
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <blockquote>
+      Must you with him from him her were more.
+    </blockquote>
+
+
+
+
+  </body>
+</html>

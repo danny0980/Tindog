@@ -1,0 +1,18 @@
+alt
+
+Alternative text for an image that does not show
+
+<html>
+
+  <head>...</head>
+  <body>
+
+
+
+    <img src="lion.jpg" alt="Image of a lion">
+
+
+
+
+  </body>
+</html>

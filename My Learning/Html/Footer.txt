@@ -1,0 +1,17 @@
+<footer>
+
+A footer typically contains information about copyright data or links to related documents.
+<html>
+  <head>...</head>
+
+  <body>
+
+
+    <footer>
+      Copywrite 2019
+    </footer>
+
+
+  </body>
+
+</html>

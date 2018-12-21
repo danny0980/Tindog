@@ -1,0 +1,25 @@
+<address>
+The HTML 
+<address> element indicates that the enclosed HTML provides contact information for a person or people, or for an organization.
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+    <address>
+      Street Number,
+      City, Country
+    </address>
+
+
+
+
+
+  </body>
+
+
+
+</html>

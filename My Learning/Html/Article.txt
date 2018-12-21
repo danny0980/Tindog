@@ -1,0 +1,30 @@
+<article>
+The HTML 
+<article>
+ element represents a self-contained composition in a document, page, application, or site
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <article>
+
+      <h2>Concerns greatest</h2>
+
+      <p>Greatly hearted has who believe. 
+        Drift allow green son walls years for blush.
+        Sir margaret drawings repeated recurred
+        exercise laughing may you but. 
+      
+      </p>
+    </article>
+
+
+
+
+
+
+  </body>
+</html>

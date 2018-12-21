@@ -1,0 +1,21 @@
+<mark>
+
+The HTML Mark Text element 
+(<mark>) represents text which is marked or highlighted for reference or notation purposes
+
+<html>
+  <head>...</head>
+
+  <body>
+
+
+
+
+
+    <mark>This text is highlighted
+    </mark>
+
+
+
+  </body>
+</html>

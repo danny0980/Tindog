@@ -1,0 +1,20 @@
+<a href="mailto:email@email.com">
+Create links that open in the user's email program to send a message
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+
+    <a href="mailto:email@email.com">
+    Send us an email.
+    </a>
+
+
+
+  </body>
+</html>

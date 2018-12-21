@@ -1,0 +1,27 @@
+<label>
+
+Caption for form input
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <form action="login.php" method="post">
+      <!--  Label with attribute, needs id name -->
+      <label for="username">Username:</label>
+      <input type="text" id="username" name="username" value="">
+      <!--  Standard label -->
+      <label>Password:
+      <input type="password" name="password" value="">
+      </label>
+      <input type="submit" value="Login">
+    </form>
+
+
+
+
+
+  </body>
+</html>

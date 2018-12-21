@@ -1,0 +1,21 @@
+<header>
+It contains heading elements but also other elements like a logo, a search form etc.
+
+
+<html>
+
+  <head>...</head>
+  <body>
+
+
+
+    <header>
+      <h1>She suspicion dejection saw instantly</h1>
+      <img src="logo.png">
+    </header>
+
+
+
+
+  </body>
+</html>

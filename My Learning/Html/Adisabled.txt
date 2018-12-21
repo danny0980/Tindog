@@ -1,0 +1,22 @@
+disabled
+
+Disable an element
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+    <form>
+      <input type="checkbox" disabled="disabled">
+    </form>
+
+
+
+
+
+  </body>
+</html>

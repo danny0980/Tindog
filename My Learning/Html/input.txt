@@ -1,0 +1,32 @@
+<input>
+
+Multiple input types
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+    <form action="thank-you-page.php">
+      <input type="text" name="name" value="">
+      <input type="password" name="name" value="">
+      <input type="email" name="email" value="">
+      <input type="number" name="quantity" value="">
+      <input type="tel" name="phone" value="">
+      <input type="url" name="website" value="">
+      <input type="search" name="search" value="">
+      <input type="radio" name="contact_by" value="1" checked> Phone
+      <input type="radio" name="contact_by" value="1"> Email
+      <input type="checkbox" name="accept_terms" value=""> Accept Terms
+      <input type="submit" value="Submit">
+    </form>
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,17 @@
+style
+
+Apply inline styles on tags
+
+<html>
+  <head>...</head>
+  <body>
+
+
+    <p style="color:red">
+      Just four sold need over how any.
+    </p>
+
+
+
+  </body>
+</html>

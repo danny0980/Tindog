@@ -1,0 +1,23 @@
+<a href="https://www.google.com">
+Creates a hyperlink to external web page
+
+
+<html>
+
+
+  <head>...</head>
+  <body>
+
+
+
+
+    <a href="https://www.google.com">
+    Link to google
+    </a>
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,21 @@
+<textarea>
+
+Multi-line plain-text editing
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+    <form action="profile.php" method="post">
+      <textarea name="signature" rows="10" cols="50">Your signature here.</textarea>
+      <input type="submit" value="Save">
+    </form>
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<strong>
+
+Makes the contained text bold.
+
+
+<html>
+
+  <head>...</head>
+
+  <body>
+
+
+
+
+    <strong>This text is bold</strong>
+ 
+
+
+
+
+ </body>
+</html>

@@ -1,0 +1,38 @@
+Header/Body/Footer 
+<table>
+
+Table with header, body and footer
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <table>
+      <thead>
+        <tr>
+          <th>Header 1</th>
+          <th>Header 2</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Body 1</td>
+          <td>Body 2</td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>Footer 1</td>
+          <td>Footer 2</td>
+        </tr>
+      </tfoot>
+    </table>
+
+
+
+
+  </body>
+</html>

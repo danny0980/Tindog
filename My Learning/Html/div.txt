@@ -1,0 +1,20 @@
+<div>
+Container for content flow, used with css
+
+<html>
+  <head>
+
+    <style>
+      .sidebar{float: left; width: 200px}
+      .main-content{float:left; width: 100%; margin-left: 200px;}
+    </style>
+
+  </head>
+  <body>
+
+    <div class="sidebar"></div>
+    <div class="main-content"></div>
+ 
+
+ </body>
+</html>

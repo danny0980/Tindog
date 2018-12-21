@@ -1,0 +1,20 @@
+<a name=”name”>
+
+Link to an anchor
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <a href="#form">Go to form</a>
+    <p>...</p>
+    <a name="form"></a>
+
+
+
+  </body>
+
+</html>

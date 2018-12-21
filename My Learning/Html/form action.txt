@@ -1,0 +1,21 @@
+<form action="">
+
+Submits the form to a different page
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <form action="thank-you-page.php">
+      <input type="hidden" name="cart_item_id" value="12">
+      <input type="submit" value="Buy">
+    </form>
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,19 @@
+<small>
+
+The HTML 
+<small> element makes the text font size one size smaller
+
+<html>
+  <head>...</head>
+
+  <body>
+
+
+
+    <p><small>This text is smaller</small></p>
+
+
+
+
+  </body>
+</html>

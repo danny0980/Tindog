@@ -1,0 +1,20 @@
+<a href="tel:1234-56-78">
+
+
+A link to make phone numbers clickable on mobile phones
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+    <a href="tel:1234-56-78">
+    Give us a call at 1234-56-78
+    </a>
+
+
+
+  </body>
+</html>

@@ -1,0 +1,19 @@
+<em>
+
+Gives the contained text emphasis (usually as italics).
+
+
+<html>
+
+  <head>...</head>
+
+  <body>
+
+
+
+    <em>This text is italic</em>
+
+
+
+  </body>
+</html>

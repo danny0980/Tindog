@@ -1,0 +1,19 @@
+<span>
+
+A container for in-line content, such as content inside a paragraph.
+
+<html>
+
+  <head>...</head>
+
+  <body>
+
+
+
+    <span>This is a paragraph inside body
+    </span>
+
+
+
+  </body>
+</html>

@@ -1,0 +1,23 @@
+<form method="post">
+
+
+Appends form-data inside the body of the HTTP request
+
+
+<html>
+  <head>...</head>
+  <body>
+
+
+
+
+    <form action="" method="post">
+      <input type="text" name="email" value="">
+      <input type="submit" value="Subscribe">
+    </form>
+
+
+
+
+  </body>
+</html>

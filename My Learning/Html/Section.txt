@@ -1,0 +1,29 @@
+<section>
+
+The HTML 
+<section>
+ element represents a standalone section
+
+<html>
+
+
+  <head>...</head>
+  <body>
+
+
+
+    <section>
+      <h2>Started several mistake joy say
+        painful removed reached end
+      </h2>
+      <p>Unfeeling so rapturous 
+        discovery he exquisite.
+      </p>
+    </section>
+
+
+
+
+
+  </body>
+</html>

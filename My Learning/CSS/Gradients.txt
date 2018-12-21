@@ -1,0 +1,143 @@
+CSS gradients let you display smooth transitions between two or more specified colors.
+
+CSS defines two types of gradients:
+
+    Linear Gradients (goes down/up/left/right/diagonally)
+    Radial Gradients (defined by their center)
+
+CSS Linear Gradients
+
+To create a linear gradient you must define at least two color stops. Color stops are the colors you want to render smooth transitions among. You can also set a starting point and a direction (or an angle) along with the gradient effect.
+Syntax
+background-image: linear-gradient(direction, color-stop1, color-stop2, ...);
+
+Linear Gradient - Top to Bottom (this is default)
+
+The following example shows a linear gradient that starts at the top. It starts red, transitioning to yellow:
+Example
+#grad {
+  background-image: linear-gradient(red, yellow);
+} 
+
+ #grad {
+  background-image: linear-gradient(to right, red , yellow);
+}
+
+Linear Gradient - Diagonal
+
+You can make a gradient diagonally by specifying both the horizontal and vertical starting positions.
+
+The following example shows a linear gradient that starts at top left (and goes to bottom right). It starts red, transitioning to yellow:
+Example
+#grad {
+  background-image: linear-gradient(to bottom right, red, yellow);
+}
+Using Angles
+
+If you want more control over the direction of the gradient, you can define an angle, instead of the predefined directions (to bottom, to top, to right, to left, to bottom right, etc.).
+Syntax
+background-image: linear-gradient(angle, color-stop1, color-stop2);
+
+The angle is specified as an angle between a horizontal line and the gradient line.
+
+The following example shows how to use angles on linear gradients:
+Example
+#grad {
+  background-image: linear-gradient(-90deg, red, yellow);
+}
+Using Multiple Color Stops
+
+The following example shows a linear gradient (from top to bottom) with multiple color stops:
+Example
+#grad {
+  background-image: linear-gradient(red, yellow, green);
+}
+
+The following example shows how to create a linear gradient (from left to right) with the color of the rainbow and some text:
+Gradient Background
+Example
+#grad {
+  background-image: linear-gradient(to right, red,orange,yellow,green,blue,indigo,violet);
+}
+Using Transparency
+
+CSS gradients also support transparency, which can be used to create fading effects.
+
+To add transparency, we use the rgba() function to define the color stops. The last parameter in the rgba() function can be a value from 0 to 1, and it defines the transparency of the color: 0 indicates full transparency, 1 indicates full color (no transparency).
+
+The following example shows a linear gradient that starts from the left. It starts fully transparent, transitioning to full color red:
+Example
+#grad {
+  background-image: linear-gradient(to right, rgba(255,0,0,0), rgba(255,0,0,1));
+}
+Repeating a linear-gradient
+
+The repeating-linear-gradient() function is used to repeat linear gradients:
+Example
+
+A repeating linear gradient:
+#grad {
+  background-image: repeating-linear-gradient(red, yellow 10%, green 20%);
+}
+CSS Radial Gradients
+
+A radial gradient is defined by its center.
+
+To create a radial gradient you must also define at least two color stops.
+Syntax
+background-image: radial-gradient(shape size at position, start-color, ..., last-color);
+
+By default, shape is ellipse, size is farthest-corner, and position is center.
+
+Radial Gradient - Evenly Spaced Color Stops (this is default)
+
+The following example shows a radial gradient with evenly spaced color stops:
+Example
+#grad {
+  background-image: radial-gradient(red, yellow, green);
+}
+
+Radial Gradient - Differently Spaced Color Stops
+
+The following example shows a radial gradient with differently spaced color stops:
+Example
+#grad {
+  background-image: radial-gradient(red 5%, yellow 15%, green 60%);
+}
+Set Shape
+
+The shape parameter defines the shape. It can take the value circle or ellipse. The default value is ellipse.
+
+The following example shows a radial gradient with the shape of a circle:
+Example
+#grad {
+  background-image: radial-gradient(circle, red, yellow, green);
+}
+Use of Different Size Keywords
+
+The size parameter defines the size of the gradient. It can take four values:
+
+    closest-side
+    farthest-side
+    closest-corner
+    farthest-corner
+
+Example
+
+A radial gradient with different size keywords:
+#grad1 {
+  background-image: radial-gradient(closest-side at 60% 55%, red, yellow, black);
+}
+
+#grad2 {
+  background-image: radial-gradient(farthest-side at 60% 55%, red, yellow, black);
+}
+Repeating a radial-gradient
+
+The repeating-radial-gradient() function is used to repeat radial gradients:
+Example
+
+A repeating radial gradient:
+#grad {
+  background-image: repeating-radial-gradient(red, yellow 10%, green 15%);
+} 

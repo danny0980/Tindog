@@ -1,0 +1,80 @@
+Table Borders
+
+To specify table borders in CSS, use the border property.
+
+The example below specifies a black border for <table>, <th>, and <td> elements:
+Example
+table, th, td {
+  border: 1px solid black;
+} 
+
+Collapse Table Borders
+
+The border-collapse property sets whether the table borders should be collapsed into a single border:
+Example
+table {
+  border-collapse: collapse;
+}
+
+table, th, td {
+  border: 1px solid black;
+} 
+
+Table Width and Height
+
+Width and height of a table are defined by the width and height properties.
+
+The example below sets the width of the table to 100%, and the height of the <th> elements to 50px:
+Example
+table {
+  width: 100%;
+}
+
+th {
+  height: 50px;
+} 
+
+Horizontal Alignment
+
+The text-align property sets the horizontal alignment (like left, right, or center) of the content in <th> or <td>.
+
+By default, the content of <th> elements are center-aligned and the content of <td> elements are left-aligned.
+
+The following example left-aligns the text in <th> elements:
+Example
+th {
+  text-align: left;
+} 
+
+Table Color
+
+The example below specifies the background color and text color of <th> elements:
+First Name 	Last Name 	Savings
+Peter    	Griffin         $100
+Lois 	        Griffin         $150
+Joe 	        Swanson         $300
+Example
+th {
+  background-color: #4CAF50;
+  color: white;
+} 
+
+Responsive Table
+
+A responsive table will display a horizontal scroll bar if the screen is too small to display the full content:
+First Name 	Last Name 	Points 	Points 	Points 	Points 	Points 	Points 	Points 	Points 	Points 	Points 	Points 	Points
+Jill 	Smith 	50 	50 	50 	50 	50 	50 	50 	50 	50 	50 	50 	50
+Eve 	Jackson 	94 	94 	94 	94 	94 	94 	94 	94 	94 	94 	94 	94
+Adam 	Johnson 	67 	67 	67 	67 	67 	67 	67 	67 	67 	67 	67 	67
+
+Add a container element (like <div>) with overflow-x:auto around the <table> element to make it responsive:
+Example
+<div style="overflow-x:auto;">
+
+<table>
+... table content ...
+</table>
+
+</div> 
+
+

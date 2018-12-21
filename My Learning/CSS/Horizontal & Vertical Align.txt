@@ -1,0 +1,84 @@
+Center Align Elements
+
+To horizontally center a block element (like <div>), use margin: auto;
+
+Setting the width of the element will prevent it from stretching out to the edges of its container.
+
+The element will then take up the specified width, and the remaining space will be split equally between the two margins:
+
+This div element is centered.
+Example
+.center {
+  margin: auto;
+  width: 50%;
+  border: 3px solid green;
+  padding: 10px;
+} 
+
+Center Align Text
+
+To just center the text inside an element, use text-align: center;
+
+This text is centered.
+Example
+.center {
+  text-align: center;
+  border: 3px solid green;
+} Center an Image
+
+To center an image, set left and right margin to auto and make it into a block element:
+Paris
+Example
+img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 40%;
+} 
+
+Left and Right Align - Using position
+
+One method for aligning elements is to use position: absolute;:
+
+In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since.
+Example
+.right {
+  position: absolute;
+  right: 0px;
+  width: 300px;
+  border: 3px solid #73AD21;
+  padding: 10px;
+} 
+
+Left and Right Align - Using float
+
+Another method for aligning elements is to use the float property:
+Example
+.right {
+  float: right;
+  width: 300px;
+  border: 3px solid #73AD21;
+  padding: 10px;
+} 
+
+The clearfix Hack
+Without Clearfix
+With Clearfix
+
+Then we can add overflow: auto; to the containing element to fix this problem:
+Example
+.clearfix {
+  overflow: auto;
+} 
+
+Center Vertically - Using padding
+
+There are many ways to center an element vertically in CSS. A simple solution is to use top and bottom padding:
+
+I am vertically centered.
+Example
+.center {
+  padding: 70px 0;
+  border: 3px solid green;
+} 
+

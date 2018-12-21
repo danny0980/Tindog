@@ -1,0 +1,66 @@
+CSS Overflow
+
+The overflow property specifies whether to clip content or to add scrollbars when the content of an element is too big to fit in a specified area.
+
+The overflow property has the following values:
+
+    visible - Default. The overflow is not clipped. It renders outside the element's box
+    hidden - The overflow is clipped, and the rest of the content will be invisible
+    scroll - The overflow is clipped, but a scrollbar is added to see the rest of the content
+    auto - If overflow is clipped, a scrollbar should be added to see the rest of the content
+
+Note: The overflow property only works for block elements with a specified height.
+
+Note: In OS X Lion (on Mac), scrollbars are hidden by default and only shown when being used (even though "overflow:scroll" is set).
+overflow: visible
+
+By default, the overflow is visible, meaning that it is not clipped and it renders outside the element's box:
+You can use the overflow property when you want to have better control of the layout. The overflow property specifies what happens if content overflows an element's box.
+Example
+div {
+  width: 200px;
+  height: 50px;
+  background-color: #eee;
+  overflow: visible;
+} 
+
+overflow: hidden
+
+With the hidden value, the overflow is clipped, and the rest of the content is hidden:
+You can use the overflow property when you want to have better control of the layout. The overflow property specifies what happens if content overflows an element's box.
+Example
+div {
+  overflow: hidden;
+} 
+
+overflow: scroll
+
+Setting the value to scroll, the overflow is clipped and a scrollbar is added to scroll inside the box. Note that this will add a scrollbar both horizontally and vertically (even if you do not need it):
+You can use the overflow property when you want to have better control of the layout. The overflow property specifies what happens if content overflows an element's box.
+Example
+div {
+  overflow: scroll;
+} 
+
+overflow: auto
+
+The auto value is similar to scroll, only it add scrollbars when necessary:
+You can use the overflow property when you want to have better control of the layout. The overflow property specifies what happens if content overflows an element's box.
+Example
+div {
+  overflow: auto;
+} 
+
+overflow-x and overflow-y
+
+The overflow-x and overflow-y properties specifies whether to change the overflow of content just horizontally or vertically (or both):
+
+overflow-x specifies what to do with the left/right edges of the content.
+overflow-y specifies what to do with the top/bottom edges of the content.
+You can use the overflow property when you want to have better control of the layout. The overflow property specifies what happens if content overflows an element's box.
+Example
+div {
+  overflow-x: hidden; /* Hide horizontal scrollbar */
+  overflow-y: scroll; /* Add vertical scrollbar */
+} 
+

@@ -1,0 +1,40 @@
+Text Color
+
+The color property is used to set the color of the text. The color is specified by:
+
+    a color name - like "red"
+    a HEX value - like "#ff0000"
+    an RGB value - like "rgb(255,0,0)"
+
+Look at CSS Color Values for a complete list of possible color values.
+
+The default text color for a page is defined in the body selector.
+Example
+body {
+  color: blue;
+}
+
+h1 {
+  color: green;
+} 
+
+Text Alignment
+
+The text-align property is used to set the horizontal alignment of a text.
+
+A text can be left or right aligned, centered, or justified.
+
+The following example shows center aligned, and left and right aligned text (left alignment is default if text direction is left-to-right, and right alignment is default if text direction is right-to-left):
+Example
+h1 {
+  text-align: center;
+}
+
+h2 {
+  text-align: left;
+}
+
+h3 {
+  text-align: right;
+} 
+

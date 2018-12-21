@@ -1,0 +1,92 @@
+CSS Outline
+
+An outline is a line that is drawn around elements, OUTSIDE the borders, to make the element "stand out".
+
+CSS has the following outline properties:
+
+    outline-style
+    outline-color
+    outline-width
+    outline-offset
+    outline
+
+Note: Outline differs from borders! Unlike border, the outline is drawn outside the element's border, and may overlap other content. Also, the outline is NOT a part of the element's dimensions; the element's total width and height is not affected by the width of the outline.
+Outline Style
+
+The outline-style property specifies the style of the outline, and can have one of the following values:
+
+    dotted - Defines a dotted outline
+    dashed - Defines a dashed outline
+    solid - Defines a solid outline
+    double - Defines a double outline
+    groove - Defines a 3D grooved outline
+    ridge - Defines a 3D ridged outline
+    inset - Defines a 3D inset outline
+    outset - Defines a 3D outset outline
+    none - Defines no outline
+    hidden - Defines a hidden outline
+
+The following example shows the different outline-style values:
+
+A dotted outline.
+
+A dashed outline.
+
+A solid outline.
+
+A double outline.
+
+A groove outline. The effect depends on the outline-color value.
+
+A ridge outline. The effect depends on the outline-color value.
+
+An inset outline. The effect depends on the outline-color value.
+
+An outset outline. The effect depends on the outline-color value.
+Example
+p.dotted {outline-style: dotted;}
+p.dashed {outline-style: dashed;}
+p.solid {outline-style: solid;}
+p.double {outline-style: double;}
+p.groove {outline-style: groove;}
+p.ridge {outline-style: ridge;}
+p.inset {outline-style: inset;}
+p.outset {outline-style: outset;} 
+
+Outline Color
+
+The outline-color property is used to set the color of the outline.
+
+The color can be set by:
+
+    name - specify a color name, like "red"
+    RGB - specify a RGB value, like "rgb(255,0,0)"
+    Hex - specify a hex value, like "#ff0000"
+    invert - performs a color inversion (which ensures that the outline is visible, regardless of color background)
+
+The following example shows some different outlines with different colors. Also notice that these elements also have a thin black border inside the outline:
+
+A solid red outline.
+
+A double green outline.
+
+An outset yellow outline.
+Example
+p.ex1 {
+  border: 1px solid black;
+  outline-style: solid;
+  outline-color: red;
+}
+
+p.ex2 {
+  border: 1px solid black;
+  outline-style: double;
+  outline-color: green;
+}
+
+p.ex3 {
+  border: 1px solid black;
+  outline-style: outset;
+  outline-color: yellow;
+} 
+

@@ -1,0 +1,74 @@
+What are Pseudo-classes?
+
+A pseudo-class is used to define a special state of an element.
+
+For example, it can be used to:
+
+    Style an element when a user mouses over it
+    Style visited and unvisited links differently
+    Style an element when it gets focus
+
+Mouse Over Me
+
+Syntax
+
+The syntax of pseudo-classes:
+selector:pseudo-class {
+  property:value;
+}
+Anchor Pseudo-classes
+
+Links can be displayed in different ways:
+Example
+/* unvisited link */
+a:link {
+  color: #FF0000;
+}
+
+/* visited link */
+a:visited {
+  color: #00FF00;
+}
+
+/* mouse over link */
+a:hover {
+  color: #FF00FF;
+}
+
+/* selected link */
+a:active {
+  color: #0000FF;
+} 
+
+Pseudo-classes and CSS Classes
+
+Pseudo-classes can be combined with CSS classes:
+
+When you hover over the link in the example, it will change color:
+Example
+a.highlight:hover {
+  color: #ff0000;
+} 
+
+Hover on <div>
+
+An example of using the :hover pseudo-class on a <div> element:
+Example
+div:hover {
+  background-color: blue;
+} 
+
+Simple Tooltip Hover
+
+Hover over a <div> element to show a <p> element (like a tooltip):
+Hover over me to show the <p> element.
+Example
+p {
+  display: none;
+  background-color: yellow;
+  padding: 20px;
+}
+
+div:hover p {
+  display: block;
+} 

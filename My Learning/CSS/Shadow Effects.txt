@@ -1,0 +1,146 @@
+CSS Shadow Effects
+
+With CSS you can add shadow to text and to elements.
+
+In this chapter you will learn about the following properties:
+
+    text-shadow
+    box-shadow
+
+CSS Text Shadow
+
+The CSS text-shadow property applies shadow to text.
+
+In its simplest use, you only specify the horizontal shadow (2px) and the vertical shadow (2px):
+Text shadow effect!
+Example
+h1 {
+  text-shadow: 2px 2px;
+} 
+
+Next, add a color to the shadow:
+Text shadow effect!
+Example
+h1 {
+  text-shadow: 2px 2px red;
+}
+
+Then, add a blur effect to the shadow:
+Text shadow effect!
+Example
+h1 {
+  text-shadow: 2px 2px 5px red;
+}
+
+The following example shows a white text with black shadow:
+Text shadow effect!
+Example
+h1 {
+  color: white;
+  text-shadow: 2px 2px 4px #000000;
+}
+
+The following example shows a red neon glow shadow:
+Text shadow effect!
+Example
+h1 {
+  text-shadow: 0 0 3px #FF0000;
+}
+Multiple Shadows
+
+To add more than one shadow to the text, you can add a comma-separated list of shadows.
+
+The following example shows a red and blue neon glow shadow:
+Text shadow effect!
+Example
+h1 {
+  text-shadow: 0 0 3px #FF0000, 0 0 5px #0000FF;
+}
+
+The following example shows a white text with black, blue, and darkblue shadow:
+Text shadow effect!
+Example
+h1 {
+  color: white;
+  text-shadow: 1px 1px 2px black, 0 0 25px blue, 0 0 5px darkblue;
+}
+
+You can also use the text-shadow property to create a plain border around some text (without shadows):
+Border around text!
+Example
+h1 {
+  color: yellow;
+  text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;
+}
+CSS box-shadow Property
+
+The CSS box-shadow property applies shadow to elements.
+
+In its simplest use, you only specify the horizontal shadow and the vertical shadow:
+This is a yellow <div> element with a black box-shadow
+Example
+div {
+  box-shadow: 10px 10px;
+}
+
+Next, add a color to the shadow:
+This is a yellow <div> element with a grey box-shadow
+Example
+div {
+  box-shadow: 10px 10px grey;
+}
+
+Next, add a blur effect to the shadow:
+This is a yellow <div> element with a blurred, grey box-shadow
+Example
+div {
+  box-shadow: 10px 10px 5px grey;
+}
+
+You can also add shadows to the ::before and ::after pseudo-elements, to create an interesting effect:
+Example
+#boxshadow {
+  position: relative;
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, .5);
+  padding: 10px;
+  background: white;
+}
+
+#boxshadow img {
+  width: 100%;
+  border: 1px solid #8a4419;
+  border-style: inset;
+}
+
+#boxshadow::after {
+  content: '';
+  position: absolute;
+  z-index: -1; /* hide shadow behind image */
+  box-shadow: 0 15px 20px rgba(0, 0, 0, 0.3);
+  width: 70%;
+  left: 15%; /* one half of the remaining 30% */
+  height: 100px;
+  bottom: 0;
+}
+Cards
+
+An example of using the box-shadow property to create paper-like cards:
+1
+
+January 1, 2016
+Norway
+
+Hardanger, Norway
+Example
+div.card {
+  width: 250px;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+  text-align: center;
+} 
+
+CSS Shadow Properties
+
+The following table lists the CSS shadow properties:
+Property 	Description
+box-shadow 	Adds one or more shadows to an element
+text-shadow 	Adds one or more shadows to a text 

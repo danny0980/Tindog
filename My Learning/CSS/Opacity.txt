@@ -1,0 +1,130 @@
+Transparent Image
+
+The opacity property can take a value from 0.0 - 1.0. The lower value, the more transparent:
+Forest
+
+opacity 0.2
+Forest
+
+opacity 0.5
+Forest
+
+opacity 1
+(default)
+
+Note: IE8 and earlier use filter:alpha(opacity=x). The x can take a value from 0 - 100. A lower value makes the element more transparent.
+Example
+img {
+  opacity: 0.5;
+  filter: alpha(opacity=50); /* For IE8 and earlier */
+} 
+Transparent Hover Effect
+
+The opacity property is often used together with the :hover selector to change the opacity on mouse-over:
+Northern Lights
+Mountains
+Italy
+Example
+img {
+  opacity: 0.5;
+  filter: alpha(opacity=50); /* For IE8 and earlier */
+}
+
+img:hover {
+  opacity: 1.0;
+  filter: alpha(opacity=100); /* For IE8 and earlier */
+} 
+
+Example explained
+
+The first CSS block is similar to the code in Example 1. In addition, we have added what should happen when a user hovers over one of the images. In this case we want the image to NOT be transparent when the user hovers over it. The CSS for this is opacity:1;.
+
+When the mouse pointer moves away from the image, the image will be transparent again.
+
+An example of reversed hover effect:
+Northern Lights
+Mountains
+Italy
+Example
+img:hover {
+  opacity: 0.5;
+  filter: alpha(opacity=50); /* For IE8 and earlier */
+} 
+
+Transparent Box
+
+When using the opacity property to add transparency to the background of an element, all of its child elements inherit the same transparency. This can make the text inside a fully transparent element hard to read:
+
+opacity 1
+
+opacity 0.6
+
+opacity 0.3
+
+opacity 0.1
+Example
+div {
+  opacity: 0.3;
+  filter: alpha(opacity=30); /* For IE8 and earlier */
+} 
+
+Transparency using RGBA
+
+If you do not want to apply opacity to child elements, like in our example above, use RGBA color values. The following example sets the opacity for the background color and not the text:
+
+100% opacity
+
+60% opacity
+
+30% opacity
+
+10% opacity
+
+You learned from our CSS Colors Chapter, that you can use RGB as a color value. In addition to RGB, you can use an RGB color value with an alpha channel (RGBA) - which specifies the opacity for a color.
+
+An RGBA color value is specified with: rgba(red, green, blue, alpha). The alpha parameter is a number between 0.0 (fully transparent) and 1.0 (fully opaque).
+
+Tip: You will learn more about RGBA Colors in our CSS Colors Chapter.
+Example
+div {
+  background: rgba(76, 175, 80, 0.3) /* Green background with 30% opacity */
+} 
+
+Text in Transparent Box
+
+This is some text that is placed in the transparent box.
+Example
+<html>
+<head>
+<style>
+div.background {
+  background: url(klematis.jpg) repeat;
+  border: 2px solid black;
+}
+
+div.transbox {
+  margin: 30px;
+  background-color: #ffffff;
+  border: 1px solid black;
+  opacity: 0.6;
+  filter: alpha(opacity=60); /* For IE8 and earlier */
+}
+
+div.transbox p {
+  margin: 5%;
+  font-weight: bold;
+  color: #000000;
+}
+</style>
+</head>
+<body>
+
+<div class="background">
+  <div class="transbox">
+    <p>This is some text that is placed in the transparent box.</p>
+  </div>
+</div>
+
+</body>
+</html> 
+

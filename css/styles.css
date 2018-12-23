@@ -21,6 +21,11 @@ h3 {
 p {
   color: #8f8f8f;
 }
+.colordash{
+
+background-color: red;
+
+}
 
 .press-logo {
   width: 15%;
@@ -108,4 +113,31 @@ color: #fff;
   width: 20%;
   border-radius: 100%;
   margin: 10%;
+}
+
+/* Style the links inside the pill navigation menu */
+.pill-nav a {
+  display: inline-block;
+  color: black;
+  text-align: center;
+  padding: 14px;
+  text-decoration: none;
+  font-size: 17px;
+  border-radius: 5px;
+   background-color: white;
+}
+
+/* Change the color of links on mouse-over */
+.pill-nav a:hover {
+background-color: dodgerblue;
+  color: black;
+}
+
+/* Add a color to the active/current link */
+.pill-nav a.active {
+  background-color: dodgerblue;
+  color: white;
+}
+.pill-nav {
+   background-color: #ff4c68;
 }

@@ -268,7 +268,8 @@ export default function App() {
       )}
       <ToastViewport />
       {introOpen && (
-        <ErrorBoundary scope="view" label="the cinematic intro">
+        // The intro is optional: if it fails for any reason, skip straight into the app.
+        <ErrorBoundary scope="view" label="the cinematic intro" onError={() => closeIntro('play')}>
           <Suspense fallback={<div className="fixed inset-0 z-[80] bg-black" aria-label="Loading intro" role="status" />}>
             <CinematicIntro onExit={closeIntro} />
           </Suspense>

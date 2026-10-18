@@ -11,6 +11,8 @@ interface ErrorBoundaryProps {
   resetKey?: string | number
   /** Name shown in the fallback ("the Legends screen"). */
   label?: string
+  /** Called once an error is caught (e.g. to close an optional overlay instead of showing the fallback). */
+  onError?: (error: Error) => void
 }
 
 interface ErrorBoundaryState {
@@ -40,6 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`[ErrorBoundary:${this.props.scope ?? 'view'}]`, error, info.componentStack)
+    this.props.onError?.(error)
   }
 
   override componentDidMount(): void {

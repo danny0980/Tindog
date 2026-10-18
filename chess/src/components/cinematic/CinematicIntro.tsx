@@ -36,7 +36,9 @@ export default function CinematicIntro({ onExit }: CinematicIntroProps) {
   const [phase, setPhase] = useState<IntroPhase>('classic')
   const [caption, setCaption] = useState<{ key: number; text: string } | null>(null)
   const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
   const rendererRef = useRef<IntroRenderer | null>(null)
   const audioRef = useRef<IntroAudio | null>(null)
   const timeRef = useRef(0)
@@ -51,12 +53,18 @@ export default function CinematicIntro({ onExit }: CinematicIntroProps) {
     const renderer = new IntroRenderer(canvas, mobile)
     // Paint the textures off the critical path so the gate appears immediately.
     const id = window.setTimeout(() => {
-      renderer.prepare(mobile)
-      rendererRef.current = renderer
-      const rect = canvas.getBoundingClientRect()
-      renderer.resize(rect.width, rect.height)
-      renderer.render(0.01, 0)
-      setReady(true)
+      try {
+        renderer.prepare(mobile)
+        rendererRef.current = renderer
+        const rect = canvas.getBoundingClientRect()
+        renderer.resize(rect.width, rect.height)
+        renderer.render(0.01, 0)
+        setReady(true)
+      } catch (err) {
+        // A device that can't paint the intro still gets into the app.
+        console.error('[intro] could not prepare the cinematic', err)
+        setFailed(true)
+      }
     }, 30)
     const onResize = () => {
       const rect = canvas.getBoundingClientRect()
@@ -116,6 +124,11 @@ export default function CinematicIntro({ onExit }: CinematicIntroProps) {
     },
     [onExit],
   )
+
+  // If the intro can't be prepared, leave quietly for the board.
+  useEffect(() => {
+    if (failed) exit('play')
+  }, [exit, failed])
 
   const begin = useCallback(() => {
     const audio = createIntroAudio()
@@ -183,6 +196,10 @@ export default function CinematicIntro({ onExit }: CinematicIntroProps) {
 
       {stage === 'gate' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/55 px-6 text-center backdrop-blur-[2px]" data-intro-gate>
+          {/* Always-visible way into the app, even before the board is ready. */}
+          <button type="button" data-intro-close onClick={() => exit('play')} className="cine-btn safe-pt absolute top-3 right-3 text-xs" aria-label="Enter the app">
+            Enter the app <X className="size-4" />
+          </button>
           <div className="animate-cine-title font-display text-4xl font-black uppercase sm:text-6xl">Chronos Chess</div>
           <p className="max-w-md text-sm text-amber-100/80 sm:text-base">
             A quiet study game. A crack in time. A realm of obsidian and fire. <span className="text-white/60">Sound on for the full experience.</span>

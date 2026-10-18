@@ -24,6 +24,37 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Boot guard: if the app never starts (opened as a file, served without
+      building, or blocked by an old browser), explain how to open it instead
+      of leaving a blank page.
+    -->
+    <script>
+      (function () {
+        function help(reason) {
+          var root = document.getElementById('root')
+          if (!root || root.childElementCount > 0) return
+          root.innerHTML =
+            '<div dir="rtl" style="max-width:34rem;margin:12vh auto;padding:1.5rem;font:16px/1.6 system-ui,sans-serif;color:#e2e8f0;background:#151922;border:1px solid #2a3140;border-radius:1rem">' +
+            '<h1 style="margin:0 0 .5rem;font-size:1.3rem">♞ האפליקציה לא נטענה</h1>' +
+            '<p style="margin:0 0 .75rem">' + reason + '</p>' +
+            '<p style="margin:0 0 .25rem">כדי להיכנס, הריצו בתיקייה <b>chess</b>:</p>' +
+            '<pre dir="ltr" style="background:#0b0d12;padding:.75rem;border-radius:.5rem;overflow:auto">npm install\nnpm run dev</pre>' +
+            '<p style="margin:.5rem 0 0">ואז פתחו את הכתובת שמופיעה בטרמינל (בדרך כלל <span dir="ltr">http://localhost:5173</span>).</p>' +
+            '<p dir="ltr" style="margin:1rem 0 0;font-size:.85rem;color:#94a3b8;text-align:left">The app didn\'t start. Run <code>npm install</code> and <code>npm run dev</code> in the chess folder, then open the printed localhost URL.</p>' +
+            '</div>'
+        }
+        if (location.protocol === 'file:') {
+          help('פתחתם את הקובץ ישירות מהמחשב (file://). דפדפנים חוסמים אפליקציה כזאת כשהיא לא מוגשת משרת.')
+          return
+        }
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            help('הדף נפתח, אבל הקוד של האפליקציה לא רץ (למשל קבצי המקור הוגשו בלי build, או שגיאה בדפדפן).')
+          }, 8000)
+        })
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

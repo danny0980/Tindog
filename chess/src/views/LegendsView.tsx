@@ -1,5 +1,6 @@
-import { ArrowLeft, Hourglass, Swords, WandSparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, Hourglass, Map as MapIcon, Swords, WandSparkles } from 'lucide-react'
+import { Suspense, lazy, useEffect, useState } from 'react'
+import type { BattleOptions } from '../components/campaign/battleOptions'
 import { CampaignSelect } from '../components/legends/CampaignSelect'
 import { EpochSelector } from '../components/legends/EpochSelector'
 import { FreePlayPanel } from '../components/legends/FreePlayPanel'
@@ -11,10 +12,15 @@ import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { setThemeOverride } from '../stores/themeOverrideStore'
 import type { CampaignId, ChallengeOptions, LegendId } from '../types/legend'
+import type { BossId } from '../types/campaign'
 import type { LegendsScreen } from '../types/settings'
+
+// The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
+const GrandCampaign = lazy(() => import('../components/campaign/GrandCampaign'))
 
 interface LegendsViewProps {
   onChallenge: (legendId: LegendId, options: ChallengeOptions) => void
+  onChallengeBoss: (bossId: BossId, options: BattleOptions) => void
 }
 
 /** Default chapter for a campaign map: the next one to play, else the finale. */
@@ -28,11 +34,13 @@ const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: ty
   historical: { title: 'HISTORICAL TIMELINE', subtitle: 'Defeat each legend to open the next chapter of history', icon: Hourglass },
   fantasy: { title: 'FANTASY REALM', subtitle: 'Earn the elves’ trust, then storm the Obsidian Spire', icon: WandSparkles },
   freeplay: { title: 'FREE PLAY', subtitle: 'Quick battles against every legend you have defeated', icon: Swords },
+  grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon },
 }
 
 /** Chronos Chess hub: universe selector → campaign map + dossier, or free play. */
-export function LegendsView({ onChallenge }: LegendsViewProps) {
+export function LegendsView({ onChallenge, onChallengeBoss }: LegendsViewProps) {
   const progress = useStore(profileStore, (p) => p.legends)
+  const campaignProgress = useStore(profileStore, (p) => p.campaign)
   const screen = useStore(settingsStore, (s) => s.legendsScreen)
   const [selection, setSelection] = useState<Partial<Record<CampaignId, LegendId>>>({})
   const [freeSelected, setFreeSelected] = useState<LegendId | null>(() => LEGENDS.find((l) => progress.defeated[l.id])?.id ?? null)
@@ -43,9 +51,10 @@ export function LegendsView({ onChallenge }: LegendsViewProps) {
   const previewTheme = previewLegend ? getEpoch(getLegend(previewLegend).epoch).themeId : null
 
   // Preview the selected era/realm app-wide while browsing; the hub itself keeps your theme.
+  // (The Grand Campaign previews its selected boss's zone itself.)
   useEffect(() => {
-    setThemeOverride(previewTheme)
-  }, [previewTheme])
+    if (screen !== 'grand') setThemeOverride(previewTheme)
+  }, [previewTheme, screen])
   useEffect(() => () => setThemeOverride(null), [])
 
   const open = (next: LegendsScreen) => {
@@ -73,7 +82,19 @@ export function LegendsView({ onChallenge }: LegendsViewProps) {
         </div>
       </header>
 
-      {screen === 'select' && <CampaignSelect defeated={progress.defeated} onOpen={open} />}
+      {screen === 'select' && <CampaignSelect defeated={progress.defeated} campaign={campaignProgress} onOpen={open} />}
+
+      {screen === 'grand' && (
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-20" role="status" aria-label="Loading campaign">
+              <div className="size-10 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
+            </div>
+          }
+        >
+          <GrandCampaign onChallenge={onChallengeBoss} />
+        </Suspense>
+      )}
 
       {campaign && selected && (
         <>

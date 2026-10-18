@@ -1,12 +1,15 @@
 import { ChevronRight, Hourglass, Swords, WandSparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CAMPAIGNS, LEGENDS, campaignLegends, isCampaignComplete, isLegendUnlocked, nextChapter } from '../../data/legends'
+import type { CampaignProgress } from '../../types/campaign'
 import type { CampaignId, LegendId } from '../../types/legend'
+import { GrandCampaignCard } from '../campaign/GrandCampaignCard'
 import type { LegendsScreen } from '../../types/settings'
 import { LegendPortrait } from './LegendPortrait'
 
 interface CampaignSelectProps {
   defeated: Partial<Record<LegendId, string>>
+  campaign: CampaignProgress
   onOpen: (screen: LegendsScreen) => void
 }
 
@@ -24,10 +27,11 @@ const STYLE: Record<CampaignId, { icon: ReactNode; gradient: string; glow: strin
 }
 
 /** Universe switcher: pick a campaign path or jump into free play. */
-export function CampaignSelect({ defeated, onOpen }: CampaignSelectProps) {
+export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectProps) {
   const unlockedCount = LEGENDS.filter((l) => defeated[l.id]).length
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      <GrandCampaignCard progress={campaign} onOpen={() => onOpen('grand')} />
       {CAMPAIGNS.map((campaign) => {
         const legends = campaignLegends(campaign.id)
         const done = legends.filter((l) => defeated[l.id]).length

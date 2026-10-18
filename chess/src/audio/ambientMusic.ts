@@ -36,6 +36,9 @@ interface Texture {
  *  japanese — In-scale koto plucks and a breathy shakuhachi-style flute (feudal Japan)
  *  elven    — Lydian choir pads with cascading harp runs (Elven Kingdom)
  *  shadow   — dissonant low clusters, a heartbeat pulse and distant booms (Realm of Shadows)
+ *  nautical — rolling Dorian drones and slow plucked "shanty" figures (Age of Discovery)
+ *  cyber    — minor-key synthwave pads under a fast sawtooth arpeggio (Cyberpunk Neon)
+ *  cosmic   — vast suspended pads, a celestial choir and slow bell constellations (Cosmic Pantheon)
  */
 const TEXTURES: Record<MusicTexture, Texture> = {
   default: {
@@ -240,6 +243,77 @@ const TEXTURES: Record<MusicTexture, Texture> = {
     barSeconds: 10,
     bellWave: 'sine',
     pulse: { kind: 'heartbeat', everySec: 1.1 },
+    booms: true,
+  },
+  nautical: {
+    calm: [
+      [38, 45, 50, 57],
+      [36, 43, 48, 55],
+      [41, 48, 53, 57],
+      [43, 50, 55, 59],
+    ],
+    tense: [
+      [38, 45, 50, 56],
+      [37, 44, 49, 55],
+      [34, 41, 46, 53],
+      [33, 40, 45, 52],
+    ],
+    // D Dorian: D E F G A B C
+    scaleCalm: [62, 64, 65, 67, 69, 71, 72, 74],
+    scaleTense: [62, 63, 65, 67, 68, 70, 72, 74],
+    padWaves: ['sawtooth', 'triangle'],
+    padGain: 0.026,
+    cutoff: 1000,
+    barSeconds: 7,
+    bellWave: 'triangle',
+    pulse: { kind: 'pluck', everySec: 0.6 },
+  },
+  cyber: {
+    calm: [
+      [45, 52, 57, 60, 64],
+      [41, 48, 53, 57, 60],
+      [36, 43, 48, 52, 55],
+      [43, 50, 55, 59, 62],
+    ],
+    tense: [
+      [45, 52, 56, 60, 63],
+      [44, 51, 56, 59, 62],
+      [42, 49, 54, 57, 61],
+      [40, 47, 52, 56, 59],
+    ],
+    // A natural minor
+    scaleCalm: [69, 71, 72, 74, 76, 77, 79, 81],
+    scaleTense: [69, 70, 72, 75, 76, 77, 80, 81],
+    padWaves: ['sawtooth', 'square'],
+    padGain: 0.024,
+    cutoff: 1600,
+    barSeconds: 6,
+    bellWave: 'square',
+    pulse: { kind: 'arp', everySec: 0.125 },
+  },
+  cosmic: {
+    calm: [
+      [36, 43, 50, 55, 62],
+      [41, 48, 55, 60, 67],
+      [38, 45, 52, 57, 64],
+      [43, 50, 57, 62, 69],
+    ],
+    tense: [
+      [36, 42, 49, 54, 61],
+      [37, 44, 51, 56, 63],
+      [35, 42, 48, 54, 60],
+      [34, 41, 47, 53, 59],
+    ],
+    // C Lydian with high, sparse bells
+    scaleCalm: [79, 81, 83, 84, 86, 88, 90, 91],
+    scaleTense: [79, 80, 83, 85, 86, 89, 90],
+    padWaves: ['sine', 'sawtooth'],
+    padGain: 0.03,
+    cutoff: 1300,
+    barSeconds: 12,
+    bellWave: 'sine',
+    pulse: null,
+    padFormants: [600, 1040],
     booms: true,
   },
 }

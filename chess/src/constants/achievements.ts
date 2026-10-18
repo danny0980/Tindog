@@ -41,6 +41,16 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'master-of-time', title: 'Master of Time', description: 'Complete the Historical Timeline campaign.', icon: 'crown', reward: 500, tier: 'platinum' },
   { id: 'hero-of-the-realm', title: 'Hero of the Realm', description: 'Complete the Fantasy Realm campaign.', icon: 'wand', reward: 400, tier: 'platinum' },
   { id: 'walker-between-worlds', title: 'Walker Between Worlds', description: 'Fight legends in both the Historical and Fantasy campaigns.', icon: 'globe', reward: 75, tier: 'silver' },
+  // ── Grand Campaign ──
+  { id: 'first-conquest', title: 'First Conquest', description: 'Defeat your first Grand Campaign boss.', icon: 'map', reward: 50, tier: 'bronze' },
+  { id: 'keeper-of-history', title: 'Keeper of History', description: 'Clear the Historical Legends realm.', icon: 'scroll', reward: 300, tier: 'gold' },
+  { id: 'mythbreaker', title: 'Mythbreaker', description: 'Clear the Mythology & Fantasy realm.', icon: 'sparkles', reward: 400, tier: 'gold' },
+  { id: 'admiral-of-blades', title: 'Admiral of Blades', description: 'Clear the Age of Discovery & Blades realm.', icon: 'anchor', reward: 500, tier: 'gold' },
+  { id: 'system-override', title: 'System Override', description: 'Clear the Cyberpunk & Dystopia realm.', icon: 'cpu', reward: 600, tier: 'platinum' },
+  { id: 'lord-of-the-cosmos', title: 'Lord of the Cosmos', description: 'Defeat The Infinite and clear the Cosmic Pantheon.', icon: 'orbit', reward: 1000, tier: 'platinum' },
+  { id: 'relic-hunter', title: 'Relic Hunter', description: 'Collect five campaign relics.', icon: 'gem', reward: 150, tier: 'silver' },
+  { id: 'three-star-general', title: 'Three-Star General', description: 'Earn three stars against ten different bosses.', icon: 'star', reward: 200, tier: 'gold' },
+  { id: 'flawless-conqueror', title: 'Flawless Conqueror', description: 'Earn all 300 stars of the Grand Campaign.', icon: 'crown', reward: 2000, tier: 'platinum' },
 ]
 
 export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

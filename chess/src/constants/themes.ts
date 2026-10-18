@@ -27,6 +27,16 @@ const FISSURE = svg(
   `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='rgba(249,115,22,0.55)' stroke-width='0.9'><path d='M2 12 L12 16 L18 10 L28 18 L38 14'/><path d='M18 10 L20 2'/><path d='M12 16 L10 30 L20 36'/></svg>`,
 )
 
+/** Compass-rose and rhumb lines inked onto weathered sea-chart squares. */
+const SEA_CHART = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='rgba(120,72,30,0.16)' stroke-width='0.8'><path d='M0 40 L40 0M0 0 L40 40'/><circle cx='20' cy='20' r='5'/><path d='M20 12 L22 20 L20 28 L18 20Z' fill='rgba(120,72,30,0.12)'/></svg>`,
+)
+
+/** Scattered stars for the cosmic board. */
+const STARFIELD = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='rgba(255,255,255,0.55)'><circle cx='7' cy='9' r='0.7'/><circle cx='29' cy='6' r='0.5'/><circle cx='19' cy='22' r='0.9'/><circle cx='34' cy='31' r='0.6'/><circle cx='10' cy='33' r='0.45'/></svg>`,
+)
+
 export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
   {
     id: 'classic-wood',
@@ -168,6 +178,7 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     name: 'Cyberpunk Neon',
     description: 'A holographic grid humming in a rain-slick megacity.',
     price: 400,
+    musicTexture: 'cyber',
     material: 'synth',
     lightSquare: {
       background: 'linear-gradient(135deg, rgba(240,171,252,0.10), transparent 60%), #2a1650',
@@ -550,6 +561,78 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     particles: ['#f97316', '#fbbf24', '#a855f7', '#ef4444'],
     suggestedPieceSet: 'hellfire',
   },
+  {
+    id: 'storm-sea',
+    name: 'Storm Sea Chart',
+    description: 'Weathered sea charts on a deck of tarred planks, lashed with brass.',
+    price: 0,
+    campaignUnlock: 'discovery',
+    musicTexture: 'nautical',
+    material: 'wood',
+    lightSquare: {
+      background: `${SEA_CHART} center / 100% no-repeat, radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.25), transparent 70%), #e3cfa2`,
+    },
+    darkSquare: {
+      background: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 12px), linear-gradient(160deg, #1f5f66, #123c45)',
+    },
+    notationLight: '#7c4a1e',
+    notationDark: '#e3cfa2',
+    boardFrame: {
+      boxShadow: '0 0 0 3px #b08d57, 0 0 0 7px #3b2414, 0 0 0 8px #d9b26a, 0 30px 60px -20px rgba(0,0,0,0.85)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(250, 204, 21, 0.38)' },
+      selected: { backgroundColor: 'rgba(45, 212, 191, 0.5)', boxShadow: 'inset 0 0 12px rgba(45,212,191,0.6)' },
+      target: { background: 'radial-gradient(circle, rgba(13,148,136,0.75) 15%, transparent 21%)' },
+      captureTarget: { background: 'radial-gradient(circle, transparent 56%, rgba(180,83,9,0.85) 60%, transparent 70%)' },
+      check: { background: 'radial-gradient(circle, rgba(239,68,68,0.95) 0%, rgba(239,68,68,0.45) 42%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(217,178,106,0.95)' },
+      hint: { boxShadow: glowRing('rgba(45, 212, 191, 0.95)') },
+    },
+    accent: '#2dd4bf',
+    accent2: '#d9b26a',
+    background:
+      'radial-gradient(1200px 600px at 50% -10%, rgba(45,212,191,0.16), transparent 60%), repeating-linear-gradient(170deg, rgba(255,255,255,0.018) 0 2px, transparent 2px 22px), linear-gradient(180deg, #06232a, #03121a)',
+    chromeColor: '#06232a',
+    particles: ['#2dd4bf', '#d9b26a', '#e3cfa2', '#ffffff'],
+    suggestedPieceSet: 'brass',
+  },
+  {
+    id: 'nebula',
+    name: 'Nebula Throne',
+    description: 'Squares cut from starlight and violet nebulae — the board of the Star Gods.',
+    price: 0,
+    campaignUnlock: 'cosmic',
+    musicTexture: 'cosmic',
+    material: 'crystal',
+    lightSquare: {
+      background: `${STARFIELD} center / 100% no-repeat, radial-gradient(ellipse at 30% 25%, rgba(196,181,253,0.55), transparent 70%), #5b4a9b`,
+    },
+    darkSquare: {
+      background: `${STARFIELD} center / 100% no-repeat, radial-gradient(ellipse at 70% 80%, rgba(236,72,153,0.25), transparent 70%), #160f33`,
+    },
+    notationLight: '#ede9fe',
+    notationDark: '#c4b5fd',
+    boardFrame: {
+      boxShadow: '0 0 0 2px #c4b5fd, 0 0 34px rgba(167,139,250,0.55), 0 0 100px -10px rgba(236,72,153,0.45), 0 30px 60px -20px rgba(0,0,0,0.9)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(196, 181, 253, 0.32)', boxShadow: 'inset 0 0 14px rgba(196,181,253,0.6)' },
+      selected: { backgroundColor: 'rgba(236, 72, 153, 0.4)', boxShadow: 'inset 0 0 16px rgba(236,72,153,0.8)' },
+      target: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 12%, rgba(196,181,253,0.45) 19%, transparent 25%)' },
+      captureTarget: { background: 'radial-gradient(circle, transparent 56%, rgba(236,72,153,0.9) 60%, rgba(196,181,253,0.4) 68%, transparent 74%)' },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,72,153,0.7) 35%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(196,181,253,0.9), inset 0 0 18px rgba(196,181,253,0.6)' },
+      hint: { boxShadow: glowRing('rgba(250, 204, 21, 0.95)') },
+    },
+    accent: '#c4b5fd',
+    accent2: '#f472b6',
+    background:
+      'radial-gradient(1.5px 1.5px at 15% 25%, rgba(255,255,255,0.8), transparent), radial-gradient(1px 1px at 65% 15%, rgba(255,255,255,0.7), transparent), radial-gradient(2px 2px at 85% 70%, rgba(196,181,253,0.8), transparent), radial-gradient(900px 500px at 20% 0%, rgba(139,92,246,0.28), transparent 60%), radial-gradient(800px 500px at 100% 80%, rgba(236,72,153,0.18), transparent 60%), #05030f',
+    chromeColor: '#05030f',
+    particles: ['#c4b5fd', '#f472b6', '#ffffff', '#93c5fd', '#facc15'],
+    suggestedPieceSet: 'stardust',
+  },
 ]
 
 export const PIECE_SETS: ReadonlyArray<PieceSet> = [
@@ -657,6 +740,24 @@ export const PIECE_SETS: ReadonlyArray<PieceSet> = [
     white: { fill: '#e7e5e4', filter: 'drop-shadow(0 0 2px rgba(249,115,22,0.7)) drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
     black: { fill: '#1c1917', filter: 'drop-shadow(0 0 2px rgba(249,115,22,0.95)) drop-shadow(0 0 5px rgba(220,38,38,0.6))' },
   },
+  {
+    id: 'brass',
+    name: 'Brass & Tar',
+    description: 'Polished ship’s brass against tarred oak, from the Age of Discovery.',
+    price: 0,
+    campaignUnlock: 'discovery',
+    white: { fill: '#f2d38a', filter: 'drop-shadow(0 0 1.5px rgba(124,74,30,0.9)) drop-shadow(0 2px 2px rgba(0,0,0,0.5))' },
+    black: { fill: '#2b1a10', filter: 'drop-shadow(0 0 2px rgba(45,212,191,0.85)) drop-shadow(0 2px 2px rgba(0,0,0,0.6))' },
+  },
+  {
+    id: 'stardust',
+    name: 'Stardust',
+    description: 'Pieces of white starlight against the violet void, from the Cosmic Pantheon.',
+    price: 0,
+    campaignUnlock: 'cosmic',
+    white: { fill: '#ffffff', filter: 'drop-shadow(0 0 3px rgba(196,181,253,0.95)) drop-shadow(0 0 8px rgba(147,197,253,0.5))' },
+    black: { fill: '#3b0764', filter: 'drop-shadow(0 0 2px rgba(244,114,182,0.95)) drop-shadow(0 0 6px rgba(196,181,253,0.55))' },
+  },
 ]
 
 export const getBoardTheme = (id: BoardThemeId): BoardTheme =>
@@ -664,5 +765,5 @@ export const getBoardTheme = (id: BoardThemeId): BoardTheme =>
 
 export const getPieceSet = (id: PieceSetId): PieceSet => PIECE_SETS.find((p) => p.id === id) ?? (PIECE_SETS[0] as PieceSet)
 
-export const FREE_THEMES: BoardThemeId[] = BOARD_THEMES.filter((t) => t.price === 0 && !t.legendUnlock).map((t) => t.id)
-export const FREE_PIECE_SETS: PieceSetId[] = PIECE_SETS.filter((p) => p.price === 0 && !p.legendUnlock).map((p) => p.id)
+export const FREE_THEMES: BoardThemeId[] = BOARD_THEMES.filter((t) => t.price === 0 && !t.legendUnlock && !t.campaignUnlock).map((t) => t.id)
+export const FREE_PIECE_SETS: PieceSetId[] = PIECE_SETS.filter((p) => p.price === 0 && !p.legendUnlock && !p.campaignUnlock).map((p) => p.id)

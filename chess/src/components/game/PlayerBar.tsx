@@ -26,7 +26,7 @@ export function PlayerBar({ player, isTurn, thinking, captured, advantage, piece
         isTurn ? 'border-accent/35 bg-accent/[0.07]' : ''
       }`}
     >
-      <PlayerAvatar color={player.color} isEngine={player.isEngine} mood={player.mood} isTurn={isTurn} legendId={player.legendId} />
+      <PlayerAvatar color={player.color} isEngine={player.isEngine} mood={player.mood} isTurn={isTurn} portrait={player.character ? { spec: player.character.portrait, label: player.character.name } : null} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-semibold text-slate-100">{player.name}</span>

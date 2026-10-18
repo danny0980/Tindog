@@ -1,7 +1,7 @@
 import { Angry, Annoyed, Bot, Brain, Crown, Frown, Handshake, Laugh, Meh, Skull, Smile, SmilePlus, User, Zap } from 'lucide-react'
 import type { Color } from '../../types/chess'
-import type { LegendId } from '../../types/legend'
-import { LegendPortrait } from '../legends/LegendPortrait'
+import type { PortraitSpec } from '../../types/persona'
+import { PortraitEmblem } from '../legends/PortraitEmblem'
 import type { Mood } from '../../utils/mood'
 
 const MOODS: Record<Mood, { icon: typeof Smile; label: string; ring: string; badge: string; motion: string }> = {
@@ -23,18 +23,19 @@ interface PlayerAvatarProps {
   isEngine: boolean
   mood: Mood
   isTurn: boolean
-  legendId?: LegendId | null
+  /** Character portrait (legend or campaign boss) replacing the default avatar. */
+  portrait?: { spec: PortraitSpec; label: string } | null
 }
 
 /** Avatar that reacts to the game: tension pulses, advantage grins, defeat greys out. */
-export function PlayerAvatar({ color, isEngine, mood, isTurn, legendId = null }: PlayerAvatarProps) {
+export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }: PlayerAvatarProps) {
   const m = MOODS[mood]
   const Base = isEngine ? Bot : User
   const MoodIcon = m.icon ?? Meh
   return (
     <div className={`idle-pause relative shrink-0 ${m.motion}`} title={m.label}>
-      {legendId ? (
-        <LegendPortrait legendId={legendId} size="sm" ring={m.ring} className={mood === 'defeat' ? 'grayscale' : ''} />
+      {portrait ? (
+        <PortraitEmblem spec={portrait.spec} label={portrait.label} size="sm" ring={m.ring} className={mood === 'defeat' ? 'grayscale' : ''} />
       ) : (
         <div
           className={`relative flex size-11 items-center justify-center overflow-hidden rounded-xl ring-2 transition-all duration-500 ${m.ring} ${

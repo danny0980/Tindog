@@ -16,7 +16,8 @@ try {
     platform: 'node',
     // Vite-only globals used by app modules.
     transform: { define: { 'import.meta.env.BASE_URL': '"/"' } },
-    output: { file, format: 'esm' },
+    // Lazy realm rosters are dynamic imports; inline them into the single test bundle.
+    output: { file, format: 'esm', codeSplitting: false },
     logLevel: 'warn',
   })
   const run = spawnSync(process.execPath, [file], { stdio: 'inherit' })

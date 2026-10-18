@@ -16,7 +16,7 @@ export type EpochId = 'ancient' | 'scientific' | 'napoleonic' | 'modern' | 'viki
 export type LegendStrength = 'novice' | 'authentic' | 'mythic'
 
 /** Generative soundtrack flavour (see audio/ambientMusic.ts). */
-export type MusicTexture = 'default' | 'ancient' | 'baroque' | 'imperial' | 'modern' | 'nordic' | 'japanese' | 'elven' | 'shadow'
+export type MusicTexture = 'default' | 'ancient' | 'baroque' | 'imperial' | 'modern' | 'nordic' | 'japanese' | 'elven' | 'shadow' | 'nautical' | 'cyber' | 'cosmic'
 
 export type LegendIcon = 'eye' | 'apple' | 'flag' | 'atom' | 'axe' | 'swords' | 'leaf' | 'flame'
 

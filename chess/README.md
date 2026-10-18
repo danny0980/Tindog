@@ -1,10 +1,142 @@
-# ♞ Chess Arena: AAA Edition (v3.2 · Chronos Chess: Universes)
+# ♞ Chess Arena: AAA Edition (v4.0 · Grand Campaign)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 4.0: the Grand Campaign, 100 bosses across 5 realms
+
+Open **Legends → Grand Campaign** (the wide card at the top of the path selector). It is a node-based **world map** of five mega-realms with twenty bosses each:
+
+| Realm | Zones (5 bosses each) | Elo | Relics (#10 · #20) |
+|---|---|---|---|
+| I. Historical Legends | Ancient World · Middle Ages · Renaissance & Enlightenment · Modern Era | 800–1450 | Shield of Kings · Hourglass of Time |
+| II. Mythology & Fantasy | Halls of the Gods · The Silverwood · The Barrow Crypts · Dragonspine Caldera | 1150–1750 | Oberon's Fae Gold · Dragonheart Ember |
+| III. Age of Discovery & Blades | The Spanish Main · Tourney Fields · Uncharted Horizons · Shadows of Iga | 1500–2100 | Black Prince's Banner · Smoke Veil of Iga |
+| IV. Cyberpunk & Dystopia | The Undernet · Core Datavault · Iron Bastion · Neon Syndicate | 1850–2450 | EMP Spike · Firewall Core |
+| V. Cosmic Pantheon (endgame) | Citadel of Hours · The Hollow Between · Maw of Entropy · Throne of Stars | 2200–2800 | Starforged Crown · Singularity Core |
+
+How progression works:
+
+- **Unlocking.** Bosses unlock one at a time along each realm's road. A realm opens when the previous realm's overlord (#20) falls.
+- **Map nodes.** Each node shows the boss portrait, its number, a 1–3 star rating and its name. The road glows up to your frontier, and the next boss pulses. Milestone (#10) and overlord (#20) nodes are larger and carry a gem or crown badge.
+- **Cameos.** The eight hand-crafted Chronos legends appear as bosses: Cleopatra, Ragnar, Musashi, Newton, Napoleon and Einstein in Realm I, and Aerith and Malakor in Realm II. Their style, opening book and dialogue are kept, but their strength is re-scaled to the campaign Elo curve. Grand Campaign progress is tracked separately from the Chronos chapters.
+- **Stars (move efficiency).** These count your moves in a win:
+  - ★★★ for a win within par. Par is 22 moves at Elo 800, rising to 47 at Elo 2800.
+  - ★★ for a win within 1.6× par.
+  - ★ for any other win.
+  - A takeback caps the win at ★, unless the Shield of Kings absorbs it.
+- **Rewards.**
+  - First wins pay a bounty that scales with Elo (×2 for milestones, ×3 for overlords).
+  - Rematches pay a smaller bounty, plus 15 coins for each newly earned star.
+  - Clearing Discovery unlocks the **Storm Sea Chart** board and **Brass & Tar** pieces. Clearing the Cosmic Pantheon unlocks **Nebula Throne** and **Stardust**. These new themes come with new `nautical` and `cosmic` soundtrack textures. Cyberpunk Neon now plays a `cyber` synthwave texture.
+- **Achievements.** There are nine new ones: First Conquest, one per realm cleared, Relic Hunter, Three-Star General and Flawless Conqueror (all 300 stars).
+
+### Relics (equip before a battle)
+
+Relics are earned from milestone and overlord bosses. You have **2 slots**, or 3 once you own the Starforged Crown. Equip them in the boss dossier or the **Reliquary**. Battle relics are fixed for the whole fight, and Time Rush relics apply when a run starts.
+
+| Relic | Effect | Where it's applied |
+|---|---|---|
+| Shield of Kings | First takeback in the first 15 moves of a campaign battle is free: still rated, stars kept | `useGameController.undo` |
+| Hourglass of Time | Time Rush starts with +10 s | `useTimeRush.start` |
+| Oberon's Fae Gold | +25% campaign victory coins | `applyBossResult` |
+| Dragonheart Ember | +30 s on your clock in timed campaign battles | `startNewGame` |
+| Black Prince's Banner | Star targets 25% more generous | `starsFor` |
+| Smoke Veil of Iga | First Time Rush blunder costs no time and keeps the combo | `useTimeRush` grading |
+| EMP Spike | Bosses search 2 plies shallower and think 25% faster | `applyRelicsToProfile` |
+| Firewall Core | Rated campaign defeats cost at most 4 Elo | `applyMatch` (`eloLossCap`) |
+| Starforged Crown | Passive: third relic slot | `relicSlots` |
+| Singularity Core | Time Rush points +20% | `useTimeRush` |
+
+### The Archetype Engine
+
+None of the 100 AIs is hand-coded. Each boss is a short data row (name, title, archetype, opening book, icon, bio and three signature lines), and `buildRealmRoster()` derives the rest:
+
+- **Archetype** (`data/campaign/archetypes.ts`): The Berserker, Fortifier, Trickster, Calculator, Gambiteer, Sniper, Warlord and Maverick. Each archetype supplies:
+  - style weights for the MultiPV re-ranker
+  - extra tolerance, noise and think tempo
+  - a counter-tip
+  - in-character lines for the nine reaction triggers
+- **Elo → Stockfish.** `strengthForElo()` interpolates skill, depth, move time, tolerance and noise between calibration anchors from 800 to 2800. The archetype's "style slack" halves as Elo rises, so a 2800 Berserker still plays near-best chess.
+- **Elo per boss.** It comes from its position on the realm's ramp (`bossElo`). Par, rewards, rank and relic come from the position too.
+- **Era-specific opening books** (`data/campaign/books.ts`): ten books, from Old Masters, Romantic Gambits and Hypermodern to Engine Main Lines and the Celestial Canon. All 88 lines are replayed with chess.js in the tests.
+
+### Data pipeline & lazy loading
+
+```
+src/data/campaign/
+├── realms.ts        # eager: realm/zone metadata, Elo ramps, relic milestones, id helpers (~1 kB)
+├── relics.ts        # eager: relic definitions, slot rules, effect constants
+├── archetypes.ts    # archetypes + strengthForElo + buildProfile        ┐ shared lazy chunk,
+├── books.ts         # era opening books                                 │ fetched with the
+├── build.ts         # seeds → Boss (profile, quotes, portrait, rewards)  ┘ first roster
+├── loader.ts        # loadRealmRoster() / getCachedBoss() + subscribable rosterStore
+└── rosters/         # chronicle · mythic · discovery · cyber · cosmic — one chunk each (≈2.5 kB gzip)
+src/data/personas.ts           # Legend | Boss → Persona (what the play screen stages)
+src/utils/campaign.ts          # pure: unlocks, stars, applyBossResult, relic toggles, counters
+src/hooks/useCampaignRoster.ts # useRealmRoster / useBoss
+src/components/campaign/       # GrandCampaign (lazy), WorldMap, BossDossier, Reliquary,
+                               # GrandCampaignCard, CampaignBattleStrip, RelicTile, StarRow
+src/components/legends/PortraitEmblem.tsx + portraitIcons.ts   # shared character emblems
+```
+
+A realm's roster is only downloaded when its map is opened. The play screen, dialogue bubbles, portraits and arrival card now render a generic **`Persona`**, so legends and bosses share one code path. Campaign progress is stored in `profile.campaign` and sanitised on load. Unknown ids, impossible star counts and unowned equipped relics are dropped.
+
+Measured with `vite build`:
+- The eager bundle grew by about 15 kB gzip. Roughly 6 kB of that is the ~80 lucide portrait icons, which live in the shared `ui-vendor` chunk.
+- The campaign screen loads ~6 kB gzip on first open.
+- Each realm roster is 2.4–2.7 kB gzip.
+
+A boss battle does not survive a page reload, since games are not persisted. A fresh session starts outside the campaign.
+
+### Integration guide: testing the Grand Campaign locally
+
+```bash
+cd chess
+npm install
+npm run check            # typecheck + lint + data validation + legends tests + campaign tests
+npm run test:campaign    # 100-boss registry, archetypes, books, stars, relics, storage, lazy loader
+npm run dev              # Legends → Grand Campaign
+```
+
+1. **Map and lazy loading.** Open Legends and pick the Grand Campaign card. In DevTools → Network, the `chronicle-*.js` chunk loads; switching realm tabs loads the others on demand. Tap a locked node: the dossier explains which boss opens it.
+2. **First battle.** Choose Hammurabi (#1), pick a side and a clock, then press **Battle**. You'll see:
+   - the arrival card and his intro line
+   - the papyrus board
+   - a book reply (he answers 1.e4 with 1…d6)
+   - the **Grand Campaign strip** with the star targets (in one-handed mode it's in the Moves sheet)
+
+   **Resign** to see the campaign block in the game-over modal ("Hammurabi holds the line"), then use **World map** to return.
+3. **Seed progress to see later realms, stars and relics.** Paste this into the console, then reload:
+
+   ```js
+   const p = JSON.parse(localStorage.getItem('chess-arena:profile:v1') ?? '{"version":1}')
+   const d = new Date().toISOString()
+   const slugs = ['hammurabi','sun-tzu','alexander','hannibal','cleopatra','charlemagne','ragnar','saladin','genghis-khan','joan-of-arc','leonardo','machiavelli','elizabeth-i','musashi','newton','napoleon','ada-lovelace','tesla','marie-curie','einstein']
+   p.campaign = {
+     bosses: Object.fromEntries(slugs.map((s, i) => [`chronicle.${s}`, { stars: (i % 3) + 1, wins: 1, losses: 0, draws: 0, bestMoves: 25, firstClear: d }])),
+     relics: ['shield-of-kings', 'hourglass-of-time'], equipped: ['shield-of-kings'], realmsCleared: ['chronicle'],
+   }
+   localStorage.setItem('chess-arena:profile:v1', JSON.stringify(p))
+   ```
+
+   After the reload:
+   - Realm I is complete (39 ★) and Mythology & Fantasy is open.
+   - Hermes is the next boss.
+   - The Reliquary shows two relics.
+   - Equip both and press Undo early in a battle: the toast says the Shield absorbed it and the game stays rated.
+   - Then start a Time Rush and confirm the countdown starts at 2:10.
+4. **Relic effects in battle.** Pick a timed control with the Dragonheart Ember equipped (seed `'dragonheart-ember'` into `relics`) and your clock starts 30 s ahead. The EMP Spike and Firewall Core are covered by `npm run test:campaign`.
+5. **Archetypes.** Start Commander Ironjaw (Cyber #11, a Berserker) and Major Tessaract (#13, a Fortifier). Ironjaw throws pawns at your king; Tessaract castles and trades. The test suite measures this on a fixed position: Ironjaw chooses …g5 every time and Tessaract never does.
+6. **Mobile checks.** Use DevTools device mode, or a device via `npm run cap:sync`:
+   - **390×844:** the map scrolls vertically and auto-centres on your frontier. Tapping a node opens the dossier as a bottom sheet. The realm tabs scroll sideways.
+   - **One-handed mode:** the battle fits the screen without scrolling.
+   - **844×390 landscape** (and ≥1024 px desktop): the map and dossier sit side by side, with the dossier sticky.
 
 ---
 

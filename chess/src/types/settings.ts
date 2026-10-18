@@ -1,4 +1,5 @@
 import type { GameSettings } from './chess'
+import type { GrandRealmId } from './campaign'
 import type { CampaignId } from './legend'
 import type { BoardThemeId, PieceSetId, SoundMaterial } from './theme'
 
@@ -42,6 +43,8 @@ export interface AppSettings {
   game: GameSettings
   /** Last screen visited in the Legends hub (campaign select, a campaign map or free play). */
   legendsScreen: LegendsScreen
+  /** Realm last opened on the Grand Campaign world map. */
+  grandRealm: GrandRealmId
 }
 
-export type LegendsScreen = 'select' | CampaignId | 'freeplay'
+export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand'

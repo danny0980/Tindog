@@ -1,20 +1,19 @@
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getLegend } from '../../data/legends'
 import { useStore } from '../../hooks/useStore'
 import { clearDialogue, dialogueStore } from '../../stores/dialogueStore'
-import type { LegendId } from '../../types/legend'
 
 const VISIBLE_MS = 5600
 const CHAR_MS = 22
 
 /**
- * Speech bubble for a legend's remarks. Overlays the board edge (absolute) so
- * it never shifts the layout — important in the fixed one-handed screen.
+ * Speech bubble for a character's remarks (legend or campaign boss). Overlays
+ * the board edge (absolute) so it never shifts the layout — important in the
+ * fixed one-handed screen.
  */
-export function LegendDialogue({ legendId, placement = 'below' }: { legendId: LegendId; placement?: 'below' | 'above' }) {
+export function LegendDialogue({ speakerKey, placement = 'below' }: { speakerKey: string; placement?: 'below' | 'above' }) {
   const line = useStore(dialogueStore, (d) => d)
-  const mine = line && line.legendId === legendId ? line : null
+  const mine = line && line.speakerKey === speakerKey ? line : null
   const [typed, setTyped] = useState({ id: 0, count: 0 })
 
   // Typewriter reveal, then auto-dismiss.
@@ -36,7 +35,6 @@ export function LegendDialogue({ legendId, placement = 'below' }: { legendId: Le
   }, [mine])
 
   if (!mine) return null
-  const legend = getLegend(legendId)
   const shown = typed.id === mine.id ? mine.text.slice(0, typed.count) : ''
   return (
     <div
@@ -49,7 +47,7 @@ export function LegendDialogue({ legendId, placement = 'below' }: { legendId: Le
           className={`absolute left-6 size-3 rotate-45 border-accent/40 bg-[rgb(14_16_22/0.95)] ${placement === 'below' ? '-top-1.5 border-t border-l' : '-bottom-1.5 border-r border-b'}`}
           aria-hidden="true"
         />
-        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">{legend.name}</div>
+        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">{mine.speaker}</div>
         <p className="mt-0.5 font-serif text-sm leading-snug text-slate-100 italic">
           “{shown}
           {shown.length < mine.text.length ? <span className="animate-pulse-soft">▍</span> : '”'}

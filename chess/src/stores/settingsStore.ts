@@ -1,5 +1,6 @@
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
+import { GRAND_REALM_IDS } from '../data/campaign/realms'
 import { LEGEND_IDS } from '../data/legends'
 import type { GameSettings } from '../types/chess'
 import type { LegendId } from '../types/legend'
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showCoordinates: true,
   game: DEFAULT_GAME_SETTINGS,
   legendsScreen: 'select',
+  grandRealm: 'chronicle',
 }
 
 const TIME_IDS = [...TIME_CONTROLS.map((t) => t.id), 'custom']
@@ -60,6 +62,9 @@ function sanitizeGame(raw: unknown): GameSettings {
     customIncrementSeconds: num(g.customIncrementSeconds, d.customIncrementSeconds, 0, 60),
     legendId: typeof g.legendId === 'string' && (LEGEND_IDS as readonly string[]).includes(g.legendId) ? (g.legendId as LegendId) : null,
     legendStrength: oneOf(g.legendStrength, ['novice', 'authentic', 'mythic'], d.legendStrength),
+    // Games are not restored across reloads, and boss rosters load lazily — a
+    // fresh session always starts outside a campaign battle.
+    bossId: null,
   }
 }
 
@@ -96,7 +101,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     showLegalMoves: bool(s.showLegalMoves, d.showLegalMoves),
     showCoordinates: bool(s.showCoordinates, d.showCoordinates),
     game: sanitizeGame(s.game),
-    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay'], d.legendsScreen),
+    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand'], d.legendsScreen),
+    grandRealm: oneOf(s.grandRealm, GRAND_REALM_IDS, d.grandRealm),
   }
 }
 

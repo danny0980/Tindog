@@ -7,7 +7,10 @@ import { useGameController } from './hooks/useGameController'
 import { useLayoutMode } from './hooks/useLayoutMode'
 import { useStore } from './hooks/useStore'
 import { profileStore } from './stores/profileStore'
+import { updateSettings } from './stores/settingsStore'
 import type { MatchRecord } from './types/profile'
+import type { BattleOptions } from './components/campaign/battleOptions'
+import type { BossId } from './types/campaign'
 import type { ChallengeOptions, LegendId } from './types/legend'
 import { setThemeOverride } from './stores/themeOverrideStore'
 import type { AppView } from './types/ui'
@@ -63,6 +66,7 @@ export default function App() {
         ...game.gameSettings,
         mode: 'ai',
         legendId,
+        bossId: null,
         legendStrength: options.strength,
         playerColor: options.color,
         timeControlId: options.timeControlId,
@@ -74,8 +78,30 @@ export default function App() {
     [game, navigate],
   )
 
+  // Grand Campaign: launch a boss battle from the world map (its realm chunk is already loaded).
+  const challengeBoss = useCallback(
+    (bossId: BossId, options: BattleOptions) => {
+      game.startNewGame({
+        ...game.gameSettings,
+        mode: 'ai',
+        bossId,
+        legendId: null,
+        legendStrength: 'authentic',
+        playerColor: options.color,
+        timeControlId: options.timeControlId,
+      })
+      navigate('play')
+    },
+    [game, navigate],
+  )
+
+  const openCampaignMap = useCallback(() => {
+    updateSettings({ legendsScreen: 'grand' })
+    navigate('legends')
+  }, [navigate])
+
   // While a legend battle is on screen, the whole app wears that epoch's theme.
-  const epochTheme = view === 'play' ? (game.epoch?.themeId ?? null) : null
+  const epochTheme = view === 'play' ? (game.stage?.themeId ?? null) : null
   useEffect(() => {
     if (view !== 'legends') setThemeOverride(epochTheme)
   }, [epochTheme, view])
@@ -105,10 +131,11 @@ export default function App() {
             newGameOpen={newGameOpen}
             onNewGameOpenChange={setNewGameOpen}
             onOpenSettings={() => setSettingsOpen(true)}
+            onOpenCampaign={openCampaignMap}
           />
         </div>
         <Suspense fallback={<ViewFallback />}>
-          {view === 'legends' && <LegendsView onChallenge={challengeLegend} />}
+          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}

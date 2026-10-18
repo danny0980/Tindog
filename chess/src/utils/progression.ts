@@ -8,6 +8,7 @@ import type { AchievementDef, MatchRecord, PlayerProfile } from '../types/profil
 import type { Puzzle } from '../types/puzzle'
 import type { QuestEvents } from '../types/quest'
 import { CAMPAIGNS, EPOCHS, getCampaign, getEpoch, getLegend, isCampaignComplete, strengthInfo } from '../data/legends'
+import type { BossId, GrandRealmId } from '../types/campaign'
 import type { LegendId, LegendStrength } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { localDateKey, previousDateKey } from './date'
@@ -53,7 +54,11 @@ export interface MatchInput {
   opening: string | null
   /** Historical legend opponent, if any (its rating replaces the difficulty's). */
   legendId?: LegendId | null
+  /** Grand Campaign boss, if any. */
+  bossId?: BossId | null
   opponentElo?: number
+  /** Firewall Core relic: the most Elo a rated defeat may cost. */
+  eloLossCap?: number
 }
 
 export interface MatchOutcome {
@@ -106,6 +111,7 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
     accuracy: null,
     opening: input.opening,
     legendId: input.legendId ?? null,
+    bossId: input.bossId ?? null,
   }
 
   if (!isAi || input.humanColor === null || input.difficulty === null) {
@@ -125,7 +131,8 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
 
   // Elo (only rated games — takebacks make a game casual).
   const opponentElo = input.opponentElo ?? DIFFICULTY_CONFIGS[difficulty].elo
-  const delta = input.rated ? eloDelta(profile.elo, opponentElo, score, profile.stats.games) : null
+  const rawDelta = input.rated ? eloDelta(profile.elo, opponentElo, score, profile.stats.games) : null
+  const delta = rawDelta !== null && input.eloLossCap !== undefined ? Math.max(-input.eloLossCap, rawDelta) : rawDelta
   const elo = Math.max(100, profile.elo + (delta ?? 0))
 
   // Coins.
@@ -258,6 +265,12 @@ export function legendUnlockFor(item: ShopItem): LegendId | null {
   return PIECE_SETS.find((p) => p.id === item.id)?.legendUnlock ?? null
 }
 
+/** Realm items are earned by clearing that Grand Campaign realm, never bought. */
+export function campaignUnlockFor(item: ShopItem): GrandRealmId | null {
+  if (item.kind === 'theme') return BOARD_THEMES.find((t) => t.id === item.id)?.campaignUnlock ?? null
+  return PIECE_SETS.find((p) => p.id === item.id)?.campaignUnlock ?? null
+}
+
 export function itemPrice(item: ShopItem): number {
   if (item.kind === 'theme') return BOARD_THEMES.find((t) => t.id === item.id)?.price ?? 0
   return PIECE_SETS.find((p) => p.id === item.id)?.price ?? 0
@@ -273,7 +286,7 @@ export function purchase(
   now: Date = new Date(),
 ): { ok: boolean; profile: PlayerProfile; unlocked: AchievementDef[] } {
   const price = itemPrice(item)
-  if (legendUnlockFor(item) || ownsItem(profile, item) || profile.coins < price) return { ok: false, profile, unlocked: [] }
+  if (legendUnlockFor(item) || campaignUnlockFor(item) || ownsItem(profile, item) || profile.coins < price) return { ok: false, profile, unlocked: [] }
   const next: PlayerProfile = {
     ...profile,
     coins: profile.coins - price,

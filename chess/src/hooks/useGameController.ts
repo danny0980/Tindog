@@ -2,9 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ambientMusic, resolveMaterial, sfx } from '../audio'
 import { DIFFICULTIES, PERSONALITIES, resolveTimeControl, standardOpponent } from '../constants/game'
 import { getBoardTheme, getPieceSet } from '../constants/themes'
-import { applyStrength, getEpoch, getLegend, legendElo, strengthInfo } from '../data/legends'
-import { legendSay } from '../stores/dialogueStore'
-import type { LegendId } from '../types/legend'
+import { getCachedBoss, loadRealmRoster, rosterStore } from '../data/campaign/loader'
+import { realmOfBoss } from '../data/campaign/realms'
+import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, applyRelicsToProfile } from '../data/campaign/relics'
+import { getLegend, strengthInfo } from '../data/legends'
+import { bossPersona, legendPersona } from '../data/personas'
+import { personaSay } from '../stores/dialogueStore'
+import type { GrandRealmId, RelicDef, RelicId, StarCount } from '../types/campaign'
+import type { Persona, PortraitSpec } from '../types/persona'
+import { applyBossResult } from '../utils/campaign'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
@@ -37,8 +43,8 @@ export interface PlayerInfo {
   subtitle: string
   isEngine: boolean
   mood: Mood
-  /** Set when this side is a historical legend (portrait + dialogue). */
-  legendId: LegendId | null
+  /** Set when this side is a character (legend or campaign boss): portrait + dialogue routing. */
+  character: { key: string; name: string; portrait: PortraitSpec } | null
 }
 
 export interface GameEndSummary {
@@ -52,7 +58,20 @@ export interface GameEndSummary {
   rated: boolean
   /** Chronos campaign outcome when the opponent was a legend. */
   legend: { name: string; firstDefeat: boolean; coins: number; rewards: string[] } | null
+  /** Grand Campaign outcome when the opponent was a boss. */
+  campaign: {
+    bossName: string
+    stars: StarCount
+    previousStars: StarCount
+    firstClear: boolean
+    coins: number
+    relic: RelicDef | null
+    realmCleared: GrandRealmId | null
+    rewards: string[]
+  } | null
 }
+
+const characterOf = (p: Persona): PlayerInfo['character'] => ({ key: p.key, name: p.name, portrait: p.portrait })
 
 function announceAchievements(unlocked: AchievementDef[], delay: number): void {
   unlocked.forEach((a, i) =>
@@ -75,16 +94,32 @@ export function useGameController({ active }: { active: boolean }) {
   const [review, setReview] = useState<MatchRecord | null>(null)
   const [celebration, setCelebration] = useState(0)
   const [analysisRequestedFor, setAnalysisRequestedFor] = useState<string | null>(null)
+  // Grand Campaign: relics snapshotted at the start of a boss battle.
+  const [battleRelics, setBattleRelics] = useState<RelicId[]>([])
+  const [shieldUsed, setShieldUsed] = useState(false)
 
   const game = useChessGame()
   const visible = usePageVisible()
   const isAiMode = gameSettings.mode === 'ai' && review === null
-  // Chronos Chess: a legend opponent brings their epoch's board, pieces and sound.
-  const legend = isAiMode && gameSettings.legendId ? getLegend(gameSettings.legendId) : null
+  // Character battles: a Chronos legend or a Grand Campaign boss brings its own
+  // board, pieces, soundtrack, portrait and dialogue (one Persona code path).
+  // Boss rosters load lazily; subscribing re-renders once the realm chunk arrives.
+  const boss = useStore(rosterStore, () => (isAiMode && gameSettings.bossId ? getCachedBoss(gameSettings.bossId) : null))
+  const legend = isAiMode && !gameSettings.bossId && gameSettings.legendId ? getLegend(gameSettings.legendId) : null
+  const reviewBoss = useStore(rosterStore, () => (review?.bossId ? getCachedBoss(review.bossId) : null))
   const reviewLegend = review?.legendId ? getLegend(review.legendId) : null
-  const epoch = legend || reviewLegend ? getEpoch((legend ?? reviewLegend)?.epoch ?? 'ancient') : null
-  const theme = getBoardTheme(epoch?.themeId ?? settings.boardTheme)
-  const pieceSet = getPieceSet(epoch?.pieceSetId ?? settings.pieceSet)
+  const persona = useMemo<Persona | null>(
+    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : null),
+    [boss, gameSettings.legendStrength, legend],
+  )
+  const reviewPersona = useMemo<Persona | null>(
+    () => (reviewBoss ? bossPersona(reviewBoss) : reviewLegend ? legendPersona(reviewLegend, 'authentic') : null),
+    [reviewBoss, reviewLegend],
+  )
+  /** Whoever sets the scene (theme, pieces, music): the live opponent or the reviewed one. */
+  const stage = persona ?? reviewPersona
+  const theme = getBoardTheme(stage?.themeId ?? settings.boardTheme)
+  const pieceSet = getPieceSet(stage?.pieceSetId ?? settings.pieceSet)
   const material = resolveMaterial(settings.soundMaterial, theme)
   const isPlaying = game.status.kind === 'playing' && review === null
   const aiColor = opposite(humanColor)
@@ -93,8 +128,13 @@ export function useGameController({ active }: { active: boolean }) {
   const difficultyLabel = DIFFICULTIES.find((d) => d.id === gameSettings.difficulty)?.label ?? ''
   const personality = PERSONALITIES.find((p) => p.id === gameSettings.personality) ?? PERSONALITIES[0]
   const opponent = useMemo(
-    () => (legend ? applyStrength(legend.profile, gameSettings.legendStrength) : standardOpponent(gameSettings.difficulty, gameSettings.personality)),
-    [gameSettings.difficulty, gameSettings.legendStrength, gameSettings.personality, legend],
+    () =>
+      boss && persona
+        ? applyRelicsToProfile(persona.profile, battleRelics)
+        : persona
+          ? persona.profile
+          : standardOpponent(gameSettings.difficulty, gameSettings.personality),
+    [battleRelics, boss, gameSettings.difficulty, gameSettings.personality, persona],
   )
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
@@ -134,10 +174,10 @@ export function useGameController({ active }: { active: boolean }) {
     (color: Color): string => {
       if (gameSettings.mode !== 'ai') return color === 'w' ? 'White' : 'Black'
       if (color === humanColor) return profileStore.get().name
-      if (legend) return legend.name
+      if (persona) return persona.name
       return `Stockfish (${difficultyLabel}${personality && personality.id !== 'balanced' ? `, ${personality.name}` : ''})`
     },
-    [difficultyLabel, gameSettings.mode, humanColor, legend, personality],
+    [difficultyLabel, gameSettings.mode, humanColor, persona, personality],
   )
 
   const finishGame = useCallback(
@@ -159,8 +199,8 @@ export function useGameController({ active }: { active: boolean }) {
       const matchInput: MatchInput = {
         mode: gameSettings.mode,
         opponent: ai ? playerNames(aiColor) : 'Local game',
-        difficulty: ai ? (legend?.difficulty ?? gameSettings.difficulty) : null,
-        personality: ai && !legend ? gameSettings.personality : null,
+        difficulty: ai ? (persona?.difficulty ?? gameSettings.difficulty) : null,
+        personality: ai && !persona ? gameSettings.personality : null,
         humanColor: ai ? humanColor : null,
         result,
         pgn,
@@ -169,7 +209,9 @@ export function useGameController({ active }: { active: boolean }) {
         rated: ai && !casual,
         opening: openingName,
         legendId: legend?.id ?? null,
-        ...(legend ? { opponentElo: legendElo(legend, gameSettings.legendStrength) } : {}),
+        bossId: boss?.id ?? null,
+        ...(persona ? { opponentElo: persona.elo } : {}),
+        ...(boss && battleRelics.includes('firewall-core') ? { eloLossCap: FIREWALL_ELO_CAP } : {}),
       }
       const out = applyMatch(profileStore.get(), matchInput)
       profileStore.set(out.profile)
@@ -190,8 +232,31 @@ export function useGameController({ active }: { active: boolean }) {
         profileStore.set(lr.profile)
         legendSummary = { name: legend.name, firstDefeat: lr.firstDefeat, coins: lr.coins, rewards: lr.rewards }
         unlocked = [...unlocked, ...lr.unlocked]
-        legendSay(legend, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
       }
+
+      // Grand Campaign: stars, bounty, relics and realm progression.
+      let campaignSummary: GameEndSummary['campaign'] = null
+      if (boss && outcome) {
+        const br = applyBossResult(profileStore.get(), boss, {
+          outcome,
+          humanMoves: history.filter((m) => m.color === humanColor).length,
+          clean: !casual,
+          relics: battleRelics,
+        })
+        profileStore.set(br.profile)
+        campaignSummary = {
+          bossName: boss.name,
+          stars: br.stars,
+          previousStars: br.previousStars,
+          firstClear: br.firstClear,
+          coins: br.coins,
+          relic: br.relic,
+          realmCleared: br.realmCleared,
+          rewards: br.rewards,
+        }
+        unlocked = [...unlocked, ...br.unlocked]
+      }
+      if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
       trackQuestEvents(matchQuestEvents(matchInput), 1400 + unlocked.length * 1100)
       setSummary({
         result,
@@ -203,6 +268,7 @@ export function useGameController({ active }: { active: boolean }) {
         matchId: out.record.id,
         rated: out.record.rated,
         legend: legendSummary,
+        campaign: campaignSummary,
       })
       setGameOverDismissed(false)
 
@@ -211,10 +277,10 @@ export function useGameController({ active }: { active: boolean }) {
       else if (!ai || outcome === 'win') sfx.victory()
       else sfx.defeat()
       if (ai ? outcome === 'win' : result.kind !== 'draw') setCelebration((c) => c + 1)
-      if (out.coins > 0 || legendSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
+      if (out.coins > 0 || legendSummary?.coins || campaignSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, casual, game, gameId, gameSettings, humanColor, legend, playerNames, timeControl],
+    [aiColor, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, legend, persona, playerNames, timeControl],
   )
 
   const handleFlag = useCallback(
@@ -251,11 +317,11 @@ export function useGameController({ active }: { active: boolean }) {
       timeMachine.goTo(null)
       sfx.move(material, move, givesCheck(move))
 
-      // In-character reactions from a legend opponent.
-      if (legend) {
-        const byLegend = move.color === aiColor
-        if (givesCheck(move)) legendSay(legend, byLegend ? 'checkGiven' : 'inCheck', 0.8)
-        else if (move.captured) legendSay(legend, byLegend ? 'legendCapture' : 'playerCapture', byLegend ? 0.5 : 0.4)
+      // In-character reactions from a legend or boss opponent.
+      if (persona) {
+        const byOpponent = move.color === aiColor
+        if (givesCheck(move)) personaSay(persona, byOpponent ? 'checkGiven' : 'inCheck', 0.8)
+        else if (move.captured) personaSay(persona, byOpponent ? 'legendCapture' : 'playerCapture', byOpponent ? 0.5 : 0.4)
       }
 
       const detected = detectOpening(game.getLiveHistory())
@@ -268,7 +334,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (result) finishGame(result)
       return move
     },
-    [aiColor, clock, finishGame, game, legend, material, timeMachine],
+    [aiColor, clock, finishGame, game, material, persona, timeMachine],
   )
 
   const isAiTurn = isAiMode && isPlaying && game.turn === aiColor
@@ -281,7 +347,7 @@ export function useGameController({ active }: { active: boolean }) {
     getFen: game.getFen,
     getHistory: game.getLiveHistory,
     onMove: applyMove,
-    onThink: legend ? () => legendSay(legend, 'thinking', 0.12) : undefined,
+    onThink: persona ? () => personaSay(persona, 'thinking', 0.12) : undefined,
   })
   const aiThinking = isAiTurn && playEngine.status === 'ready'
 
@@ -301,24 +367,24 @@ export function useGameController({ active }: { active: boolean }) {
     if (lowTimeSecond !== null && lowTimeSecond > 0) sfx.lowTime()
   }, [lowTimeSecond])
 
-  // ── Legend reactions to the flow of the game ──────────────────────────────
-  const legendAdvantage = legend && evaluation && isPlaying && timeMachine.isLive ? (aiColor === 'w' ? evaluation.cp : -evaluation.cp) : null
+  // ── Character reactions to the flow of the game ───────────────────────────
+  const legendAdvantage = persona && evaluation && isPlaying && timeMachine.isLive ? (aiColor === 'w' ? evaluation.cp : -evaluation.cp) : null
   const advantageBand = legendAdvantage === null ? null : legendAdvantage > 250 ? 'up' : legendAdvantage < -250 ? 'down' : 'even'
   const bandRef = useRef<string | null>(null)
   useEffect(() => {
     const previous = bandRef.current
     bandRef.current = advantageBand
-    if (!legend || advantageBand === null || previous === null || previous === advantageBand) return
-    if (advantageBand === 'up') legendSay(legend, 'advantage', 0.9)
-    else if (advantageBand === 'down') legendSay(legend, 'disadvantage', 0.9)
-  }, [advantageBand, legend])
+    if (!persona || advantageBand === null || previous === null || previous === advantageBand) return
+    if (advantageBand === 'up') personaSay(persona, 'advantage', 0.9)
+    else if (advantageBand === 'down') personaSay(persona, 'disadvantage', 0.9)
+  }, [advantageBand, persona])
 
-  const playerToMove = Boolean(legend) && isPlaying && game.turn === humanColor && active && visible
+  const playerToMove = Boolean(persona) && isPlaying && game.turn === humanColor && active && visible
   useEffect(() => {
-    if (!playerToMove || !legend) return
-    const id = window.setTimeout(() => legendSay(legend, 'playerSlow'), 25_000)
+    if (!playerToMove || !persona) return
+    const id = window.setTimeout(() => personaSay(persona, 'playerSlow'), 25_000)
     return () => window.clearTimeout(id)
-  }, [game.fen, legend, playerToMove])
+  }, [game.fen, persona, playerToMove])
 
   // ── Commands ───────────────────────────────────────────────────────────────
   const movableColor: Color | null =
@@ -341,10 +407,17 @@ export function useGameController({ active }: { active: boolean }) {
     if (restoreTo) clock.restore(restoreTo)
     timeMachine.goTo(null)
     if (isAiMode && !casual) {
-      setCasual(true)
-      showToast('info', 'Casual game', 'Takebacks make this game unrated.', 2600)
+      // Shield of Kings: one free takeback early in a campaign battle.
+      const shieldReady = Boolean(boss) && battleRelics.includes('shield-of-kings') && !shieldUsed && Math.ceil(game.history.length / 2) <= SHIELD_MOVE_LIMIT
+      if (shieldReady) {
+        setShieldUsed(true)
+        showToast('info', 'Shield of Kings', 'The relic absorbed this takeback — the battle stays rated.', 2800)
+      } else {
+        setCasual(true)
+        showToast('info', 'Casual game', boss ? 'Takebacks make this battle unrated and cap it at one star.' : 'Takebacks make this game unrated.', 2800)
+      }
     }
-  }, [casual, clock, game, isAiMode, playEngine, timeMachine, undoPlies])
+  }, [battleRelics, boss, casual, clock, game, isAiMode, playEngine, shieldUsed, timeMachine, undoPlies])
 
   const resign = useCallback(() => {
     if (!isPlaying) return
@@ -367,7 +440,17 @@ export function useGameController({ active }: { active: boolean }) {
       setOrientation(next.mode === 'ai' ? color : 'w')
       game.reset()
       clockSnapshotsRef.current = []
-      clock.reset(resolveTimeControl(next))
+      const tc = resolveTimeControl(next)
+      clock.reset(tc)
+      // Campaign relics are fixed for the whole battle.
+      const challengerBoss = next.mode === 'ai' && next.bossId ? getCachedBoss(next.bossId) : null
+      const campaign = profileStore.get().campaign
+      const relics = challengerBoss ? activeRelics(campaign.relics, campaign.equipped) : []
+      setBattleRelics(relics)
+      setShieldUsed(false)
+      if (relics.includes('dragonheart-ember') && tc.initialMs > 0) {
+        clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: tc.initialMs + EMBER_BONUS_MS })
+      }
       lastOpeningRef.current = null
       setCasual(false)
       setSummary(null)
@@ -375,10 +458,14 @@ export function useGameController({ active }: { active: boolean }) {
       setGameOverDismissed(false)
       setAnalysisRequestedFor(null)
       setGameId((id) => id + 1)
-      if (next.mode === 'ai' && next.legendId) {
-        const challenger = getLegend(next.legendId)
+      const challenger = challengerBoss
+        ? bossPersona(challengerBoss)
+        : next.mode === 'ai' && next.legendId
+          ? legendPersona(getLegend(next.legendId), next.legendStrength)
+          : null
+      if (challenger) {
         sfx.timeTravel()
-        window.setTimeout(() => legendSay(challenger, 'intro'), 1700)
+        window.setTimeout(() => personaSay(challenger, 'intro'), 1700)
       } else {
         sfx.notify()
       }
@@ -395,6 +482,8 @@ export function useGameController({ active }: { active: boolean }) {
         return
       }
       setReview(match)
+      // Campaign reviews show the boss once its realm chunk arrives.
+      if (match.bossId) void loadRealmRoster(realmOfBoss(match.bossId))
       setOrientation(match.humanColor ?? 'w')
       setSummary(null)
       setGameOverDismissed(true)
@@ -452,8 +541,8 @@ export function useGameController({ active }: { active: boolean }) {
       if (review) {
         const isHuman = review.mode === 'ai' && review.humanColor === color
         const isEngine = review.mode === 'ai' && !isHuman
-        if (isEngine && reviewLegend) {
-          return { color, name: reviewLegend.name, subtitle: reviewLegend.title, isEngine, mood, legendId: reviewLegend.id }
+        if (isEngine && reviewPersona) {
+          return { color, name: reviewPersona.name, subtitle: reviewPersona.title, isEngine, mood, character: characterOf(reviewPersona) }
         }
         return {
           color,
@@ -461,17 +550,17 @@ export function useGameController({ active }: { active: boolean }) {
           subtitle: isEngine ? review.opponent.replace(/^Stockfish \(|\)$/g, '') : review.mode === 'ai' ? 'Review' : 'Local player',
           isEngine,
           mood,
-          legendId: null,
+          character: null,
         }
       }
-      if (legend && color === aiColor) {
+      if (persona && color === aiColor) {
         const strength = gameSettings.legendStrength
-        const tier = strength === 'authentic' ? '' : ` · ${strengthInfo(strength).label}`
-        return { color, name: legend.name, subtitle: `${legend.title} · ~${legendElo(legend, strength)}${tier}`, isEngine: true, mood, legendId: legend.id }
+        const tier = boss || strength === 'authentic' ? '' : ` · ${strengthInfo(strength).label}`
+        return { color, name: persona.name, subtitle: `${persona.title} · ~${persona.elo}${tier}`, isEngine: true, mood, character: characterOf(persona) }
       }
       if (isAiMode && color === aiColor) {
         return {
-          legendId: null,
+          character: null,
           color,
           name: 'Stockfish',
           subtitle: `${difficultyLabel} · ${personality?.name ?? 'Balanced'}`,
@@ -481,12 +570,12 @@ export function useGameController({ active }: { active: boolean }) {
       }
       if (isAiMode) {
         const profile = profileStore.get()
-        return { color, name: profile.name, subtitle: `${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood, legendId: null }
+        return { color, name: profile.name, subtitle: `${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood, character: null }
       }
-      return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood, legendId: null }
+      return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood, character: null }
     }
     return { w: info('w'), b: info('b') }
-  }, [aiColor, aiThinking, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, legend, personality, review, reviewLegend])
+  }, [aiColor, aiThinking, boss, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, persona, personality, review, reviewPersona])
 
   const bestMoveArrow =
     !timeMachine.isLive && analysis.state.status === 'done' && evaluation?.bestMove
@@ -499,8 +588,12 @@ export function useGameController({ active }: { active: boolean }) {
     theme,
     pieceSet,
     legend,
-    epoch,
-    opponentName: legend?.name ?? 'Stockfish',
+    boss,
+    persona,
+    stage,
+    battleRelics,
+    shieldUsed,
+    opponentName: persona?.name ?? 'Stockfish',
     timeControl,
     humanColor,
     orientation,

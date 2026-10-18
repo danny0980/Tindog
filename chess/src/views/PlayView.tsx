@@ -5,6 +5,7 @@ import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
 import { BoardHologram } from '../components/board/BoardHologram'
 import { ChessBoard } from '../components/board/ChessBoard'
 import { EvalBar } from '../components/board/EvalBar'
+import { CampaignBattleStrip } from '../components/campaign/CampaignBattleStrip'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
 import { ChessClock } from '../components/game/ChessClock'
 import { ControlPanel } from '../components/game/ControlPanel'
@@ -39,6 +40,8 @@ interface PlayViewProps {
   newGameOpen: boolean
   onNewGameOpenChange: (open: boolean) => void
   onOpenSettings: () => void
+  /** Opens the Grand Campaign world map. */
+  onOpenCampaign: () => void
 }
 
 function buildShareSummary(game: GameController): string {
@@ -59,7 +62,7 @@ function buildShareSummary(game: GameController): string {
 
 const SWIPE_LABELS: Record<SwipeDirection, string> = { left: 'Undo', right: 'Board flipped', up: 'Moves', down: 'Menu' }
 
-export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings }: PlayViewProps) {
+export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [movesOpen, setMovesOpen] = useState(false)
@@ -165,7 +168,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const arrows = game.bestMoveArrow ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
 
   const renderPlayer = (color: Color, hideClock = false) => {
-    const legendId = game.players[color].legendId
+    const character = game.players[color].character
     return (
       <div className="relative">
         <PlayerBar
@@ -178,8 +181,8 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           hideClock={hideClock}
           clock={{ enabled: game.clock.enabled, timeMs: game.clock.times[color], initialMs: game.timeControl.initialMs }}
         />
-        {/* Legend remarks float over the board edge next to their bar. */}
-        {legendId && <LegendDialogue legendId={legendId} placement={color === game.orientation ? 'above' : 'below'} />}
+        {/* Character remarks float over the board edge next to their bar. */}
+        {character && <LegendDialogue speakerKey={character.key} placement={color === game.orientation ? 'above' : 'below'} />}
       </div>
     )
   }
@@ -240,6 +243,16 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
       />
       <MoveHistory history={game.history} currentPly={timeMachine.displayPly} analysis={analysisMoves} onSelect={timeMachine.goTo} defaultOpen={defaultOpen} />
     </>
+  )
+
+  const campaignStrip = game.boss && !game.review && (
+    <CampaignBattleStrip
+      boss={game.boss}
+      relics={game.battleRelics}
+      movesPlayed={game.history.filter((m) => m.color === game.humanColor).length}
+      casual={game.casual}
+      shieldUsed={game.shieldUsed}
+    />
   )
 
   // The human's own colour sits at the bottom (the side being "held").
@@ -320,6 +333,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
                 opening={game.opening}
               />
             </div>
+            {campaignStrip}
             <ControlPanel
               canUndo={game.canUndo}
               canResign={game.canResign}
@@ -350,6 +364,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
               <span className="font-mono font-bold text-accent">{game.opening.eco}</span> {game.opening.name}
             </div>
           )}
+          {oneHanded && campaignStrip}
           {oneHanded && analysisHint}
           {reviewTools(true)}
         </div>
@@ -373,8 +388,8 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
 
       <GestureGuide open={showGuide} onClose={closeGuide} />
 
-      {game.legend && game.epoch && !settings.batterySaver && warpFor !== game.gameKey && game.history.length === 0 && active && (
-        <TimeWarpOverlay key={game.gameKey} epoch={game.epoch} legendId={game.legend.id} onDone={() => setWarpFor(game.gameKey)} />
+      {game.persona && !settings.batterySaver && warpFor !== game.gameKey && game.history.length === 0 && active && (
+        <TimeWarpOverlay key={game.gameKey} persona={game.persona} onDone={() => setWarpFor(game.gameKey)} />
       )}
 
       <ConfettiCanvas burst={game.celebration} colors={game.theme.particles} disabled={settings.batterySaver} />
@@ -403,6 +418,11 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         isAiMode={game.isAiMode}
         moveCount={total}
         onNewGame={openNewGame}
+        onRematch={() => game.startNewGame(game.gameSettings)}
+        onOpenCampaign={() => {
+          game.dismissGameOver()
+          onOpenCampaign()
+        }}
         onReview={game.dismissGameOver}
         onAnalyze={game.requestAnalysis}
         onShare={() => void share()}

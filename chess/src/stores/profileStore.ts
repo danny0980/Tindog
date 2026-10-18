@@ -3,7 +3,10 @@ import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../const
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from '../types/chess'
 import type { EloPoint, MatchRecord, PlayerProfile } from '../types/profile'
 import type { QuestMetric } from '../types/quest'
+import { GRAND_REALM_IDS, isBossId } from '../data/campaign/realms'
+import { isRelicId } from '../data/campaign/relics'
 import { EPOCH_IDS, LEGEND_IDS } from '../data/legends'
+import type { BossId, BossRecord, CampaignProgress, GrandRealmId, StarCount } from '../types/campaign'
 import type { EpochId, LegendId, LegendProgress } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { createPersistentStore } from '../utils/store'
@@ -37,6 +40,7 @@ export function createDefaultProfile(): PlayerProfile {
     quests: { date: '', progress: {}, claimed: [], bonusClaimed: false, perfectDays: 0 },
     rush: { bestScore: 0, bestRound: 0, runs: 0, totalScore: 0 },
     legends: { defeated: {}, wins: {}, losses: {}, draws: {}, epochsVisited: [] },
+    campaign: { bosses: {}, relics: [], equipped: [], realmsCleared: [] },
   }
 }
 
@@ -59,6 +63,37 @@ function sanitizeLegends(raw: unknown): LegendProgress {
     losses: legendRecord(l.losses, isCount),
     draws: legendRecord(l.draws, isCount),
     epochsVisited: arrayOf(l.epochsVisited, isEpochId),
+  }
+}
+
+function sanitizeBossRecord(raw: unknown): BossRecord | null {
+  if (!isRecord(raw)) return null
+  const stars = num(raw.stars, 0, 0, 3)
+  return {
+    stars: Math.round(stars) as StarCount,
+    wins: num(raw.wins, 0, 0),
+    losses: num(raw.losses, 0, 0),
+    draws: num(raw.draws, 0, 0),
+    bestMoves: typeof raw.bestMoves === 'number' && Number.isFinite(raw.bestMoves) && raw.bestMoves > 0 ? raw.bestMoves : null,
+    firstClear: typeof raw.firstClear === 'string' ? raw.firstClear : null,
+  }
+}
+
+const isRealmId = (v: unknown): v is GrandRealmId => typeof v === 'string' && (GRAND_REALM_IDS as readonly string[]).includes(v)
+
+function sanitizeCampaign(raw: unknown): CampaignProgress {
+  const c = asRecord(raw)
+  const bosses: Partial<Record<BossId, BossRecord>> = {}
+  for (const [key, value] of Object.entries(asRecord(c.bosses))) {
+    const record = isBossId(key) ? sanitizeBossRecord(value) : null
+    if (isBossId(key) && record) bosses[key] = record
+  }
+  const relics = [...new Set(arrayOf(c.relics, isRelicId))]
+  return {
+    bosses,
+    relics,
+    equipped: [...new Set(arrayOf(c.equipped, isRelicId))].filter((id) => relics.includes(id)),
+    realmsCleared: [...new Set(arrayOf(c.realmsCleared, isRealmId))],
   }
 }
 
@@ -114,6 +149,7 @@ function sanitizeMatch(v: unknown): MatchRecord | null {
     accuracy: nullableNum(v.accuracy),
     opening: typeof v.opening === 'string' ? v.opening : null,
     legendId: isLegendId(v.legendId) ? v.legendId : null,
+    bossId: isBossId(v.bossId) ? v.bossId : null,
   }
 }
 
@@ -176,6 +212,7 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
       totalScore: num(rush.totalScore, 0, 0),
     },
     legends: sanitizeLegends(raw.legends),
+    campaign: sanitizeCampaign(raw.campaign),
   }
 }
 

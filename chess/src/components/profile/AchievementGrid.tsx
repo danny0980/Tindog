@@ -1,6 +1,4 @@
-import {
-  Apple, Atom, Axe, Brain, Globe, Leaf, WandSparkles, ChessKnight, Clock, Crown, Eye, Flag, Rocket, ScrollText, Flame, Gem, Handshake, Hourglass, Lock, Medal, Palette, Puzzle, Repeat, Search, Shield, Skull, Star, Swords, Target, Timer, TrendingUp, Trophy, Zap,
-} from 'lucide-react'
+import { Anchor, Apple, Atom, Axe, Brain, ChessKnight, Clock, Cpu, Crown, Eye, Flag, Flame, Gem, Globe, Handshake, Hourglass, Leaf, Lock, Map, Medal, Orbit, Palette, Puzzle, Repeat, Rocket, ScrollText, Search, Shield, Skull, Sparkles, Star, Swords, Target, Timer, TrendingUp, Trophy, WandSparkles, Zap } from 'lucide-react'
 import { ACHIEVEMENTS } from '../../constants/achievements'
 import type { AchievementIcon } from '../../types/profile'
 import { formatShortDate } from '../../utils/date'
@@ -38,6 +36,11 @@ const ACHIEVEMENT_ICONS: Record<AchievementIcon, typeof Trophy> = {
   leaf: Leaf,
   wand: WandSparkles,
   globe: Globe,
+  map: Map,
+  anchor: Anchor,
+  cpu: Cpu,
+  sparkles: Sparkles,
+  orbit: Orbit,
   scroll: ScrollText,
 }
 

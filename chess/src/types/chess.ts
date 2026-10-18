@@ -1,4 +1,5 @@
 import type { Color, Move, PieceSymbol, Square } from 'chess.js'
+import type { BossId } from './campaign'
 import type { LegendId, LegendStrength } from './legend'
 
 export type { Color, Move, PieceSymbol, Square }
@@ -39,6 +40,8 @@ export interface GameSettings {
   legendId: LegendId | null
   /** Free-play strength scaling for legend opponents. */
   legendStrength: LegendStrength
+  /** Grand Campaign boss opponent (AI mode); overrides legend, difficulty & personality. */
+  bossId: BossId | null
 }
 
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient'

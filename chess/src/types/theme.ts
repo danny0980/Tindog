@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import type { GrandRealmId } from './campaign'
 import type { LegendId, MusicTexture } from './legend'
 
 export type BoardThemeId =
@@ -16,6 +17,8 @@ export type BoardThemeId =
   | 'bamboo-gold'
   | 'elven-crystal'
   | 'obsidian-lava'
+  | 'storm-sea'
+  | 'nebula'
 
 export type PieceSetId =
   | 'standard'
@@ -30,6 +33,8 @@ export type PieceSetId =
   | 'lacquer'
   | 'moonsilver'
   | 'hellfire'
+  | 'brass'
+  | 'stardust'
 
 export type SoundMaterial = 'wood' | 'marble' | 'metal' | 'synth' | 'soft' | 'crystal' | 'ember'
 
@@ -68,6 +73,8 @@ export interface BoardTheme {
   suggestedPieceSet: PieceSetId
   /** Earned (not bought) by defeating this legend for the first time. */
   legendUnlock?: LegendId
+  /** Earned by clearing this Grand Campaign realm. */
+  campaignUnlock?: GrandRealmId
   /** Soundtrack flavour while this theme is shown. */
   musicTexture?: MusicTexture
 }
@@ -85,4 +92,5 @@ export interface PieceSet {
   white: PieceStyle
   black: PieceStyle
   legendUnlock?: LegendId
+  campaignUnlock?: GrandRealmId
 }

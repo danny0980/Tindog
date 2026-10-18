@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { resolveMaterial, sfx } from '../audio'
 import { RUSH_LEVELS, RUSH_MATE_BONUS, RUSH_MAX_TIME_MS, RUSH_ROUND_BONUS_MS, RUSH_START_MS } from '../constants/rush'
 import { getBoardTheme } from '../constants/themes'
+import { HOURGLASS_BONUS_MS, SINGULARITY_FACTOR, activeRelics } from '../data/campaign/relics'
 import { scoreToCp } from '../engine/scoring'
 import { profileStore } from '../stores/profileStore'
 import { trackQuestEvents } from '../stores/questActions'
@@ -10,6 +11,7 @@ import { settingsStore } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import type { MoveClassification } from '../types/analysis'
 import type { Move, MoveInput } from '../types/chess'
+import type { RelicId } from '../types/campaign'
 import type { RushEndReason, RushPhase, RushStats, ScorePopup } from '../types/rush'
 import { givesCheck, parseUciMove } from '../utils/chess'
 import { applyRushResult } from '../utils/progression'
@@ -81,6 +83,9 @@ export function useTimeRush(active: boolean) {
     round: 1,
     stats: EMPTY_STATS,
     popupId: 0,
+    /** Campaign relics equipped when the run started. */
+    relics: [] as RelicId[],
+    smokeUsed: false,
   })
 
   const sync = useCallback(() => setSnapshot(snapshotOf(chessRef.current)), [])
@@ -90,6 +95,9 @@ export function useTimeRush(active: boolean) {
     setPopups((prev) => [...prev.slice(-3), { id, points, label, tone }])
     window.setTimeout(() => setPopups((prev) => prev.filter((p) => p.id !== id)), POPUP_MS)
   }, [])
+
+  /** Points after relic bonuses (Singularity Core). */
+  const boost = useCallback((points: number) => Math.round(points * (run.current.relics.includes('singularity-core') ? SINGULARITY_FACTOR : 1)), [])
 
   const addScore = useCallback((points: number) => {
     run.current.score += points
@@ -133,11 +141,13 @@ export function useTimeRush(active: boolean) {
   }, [engine, sync])
 
   const start = useCallback(() => {
-    run.current = { ...run.current, combo: 0, score: 0, round: 1, stats: EMPTY_STATS }
+    const { relics: owned, equipped } = profileStore.get().campaign
+    const relics = activeRelics(owned, equipped)
+    run.current = { ...run.current, combo: 0, score: 0, round: 1, stats: EMPTY_STATS, relics, smokeUsed: false }
     setScore(0)
     setCombo(0)
     setRound(1)
-    setTimeLeft(RUSH_START_MS)
+    setTimeLeft(RUSH_START_MS + (relics.includes('hourglass-of-time') ? HOURGLASS_BONUS_MS : 0))
     setStats(EMPTY_STATS)
     setPopups([])
     setLastQuality(null)
@@ -187,7 +197,7 @@ export function useTimeRush(active: boolean) {
       sync()
 
       if (chess.isCheckmate()) {
-        const bonus = Math.round(RUSH_MATE_BONUS * run.current.round * (1 + Math.max(0, 10_000 - thinkMs) / 10_000))
+        const bonus = boost(RUSH_MATE_BONUS * run.current.round * (1 + Math.max(0, 10_000 - thinkMs) / 10_000))
         addScore(bonus)
         pushPopup(bonus, 'CHECKMATE!', 'bonus')
         sfx.victory()
@@ -200,7 +210,7 @@ export function useTimeRush(active: boolean) {
       }
       return true
     },
-    [addScore, nextRound, phase, pushPopup, sync],
+    [addScore, boost, nextRound, phase, pushPopup, sync],
   )
 
   // ── Engine reply + grading ─────────────────────────────────────────────────
@@ -220,7 +230,14 @@ export function useTimeRush(active: boolean) {
         const pending = r.pending
         r.pending = null
         if (pending) {
-          const graded = scoreRushMove({ ...pending, afterCp, combo: r.combo, round: r.round })
+          let graded = scoreRushMove({ ...pending, afterCp, combo: r.combo, round: r.round })
+          // Smoke Veil of Iga: the first blunder of a run costs no time and keeps the combo.
+          const veiled = graded.quality === 'blunder' && r.relics.includes('smoke-veil') && !r.smokeUsed
+          if (veiled) {
+            r.smokeUsed = true
+            graded = { ...graded, combo: r.combo, timeDeltaMs: Math.max(0, graded.timeDeltaMs), labels: [...graded.labels, 'SMOKE VEIL'] }
+          }
+          graded = { ...graded, points: boost(graded.points) }
           r.combo = graded.combo
           r.stats = {
             moves: r.stats.moves + 1,
@@ -267,7 +284,7 @@ export function useTimeRush(active: boolean) {
       cancelled = true
       stop()
     }
-  }, [active, addScore, addTime, engineStatus, finish, level, nextRound, phase, pushPopup, search, snapshot.fen, snapshot.turn, stop, sync])
+  }, [active, addScore, addTime, boost, engineStatus, finish, level, nextRound, phase, pushPopup, search, snapshot.fen, snapshot.turn, stop, sync])
 
   // ── Countdown (only on the player's turn) ──────────────────────────────────
   const ticking = phase === 'playing' && snapshot.turn === PLAYER && active && visible

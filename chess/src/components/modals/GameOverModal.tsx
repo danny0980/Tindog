@@ -1,4 +1,7 @@
-import { Coins, Crown, Eye, Handshake, Hourglass, Microscope, RotateCcw, Share2, Skull, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Coins, Crown, Eye, Handshake, Hourglass, Map as MapIcon, Microscope, RotateCcw, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { getGrandRealm } from '../../data/campaign/realms'
+import { RelicTile } from '../campaign/RelicTile'
+import { StarRow } from '../campaign/StarRow'
 import type { GameEndSummary } from '../../hooks/useGameController'
 import { describeResult } from '../../utils/chess'
 import { Button } from '../ui/Button'
@@ -10,12 +13,15 @@ interface GameOverModalProps {
   isAiMode: boolean
   moveCount: number
   onNewGame: () => void
+  /** Same opponent and settings again (campaign battles). */
+  onRematch: () => void
+  onOpenCampaign: () => void
   onReview: () => void
   onAnalyze: () => void
   onShare: () => void
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onReview, onAnalyze, onShare }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onReview, onAnalyze, onShare }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -34,7 +40,17 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
       size="sm"
       footer={
         <div className="space-y-2">
-          <Button variant="primary" className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
+          {summary.campaign ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="primary" onClick={onOpenCampaign} icon={<MapIcon className="size-4" />}>
+                World map
+              </Button>
+              <Button onClick={onRematch} icon={<Swords className="size-4" />}>
+                Rematch
+              </Button>
+            </div>
+          ) : null}
+          <Button variant={summary.campaign ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
             Analyze game
           </Button>
           <div className="grid grid-cols-3 gap-2">
@@ -96,6 +112,44 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               <span className="font-mono text-sm font-bold text-yellow-300">+{summary.legend.coins}</span>
             </div>
             {summary.legend.rewards.length > 0 && <div className="mt-1 text-xs text-slate-300">Unlocked: {summary.legend.rewards.join(' · ')}</div>}
+          </div>
+        )}
+
+        {summary.campaign && (
+          <div className="mt-3 w-full space-y-2 rounded-xl border border-accent/40 bg-accent/10 p-3 text-left">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
+                <MapIcon className="size-3.5" /> {summary.campaign.firstClear ? 'Boss defeated' : 'Grand Campaign'}
+              </div>
+              <StarRow stars={summary.campaign.stars} size="md" fresh={Math.max(0, summary.campaign.stars - summary.campaign.previousStars)} />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-white">
+                {summary.campaign.stars === 0
+                  ? `${summary.campaign.bossName} holds the line`
+                  : summary.campaign.firstClear
+                    ? `${summary.campaign.bossName} falls — the road opens!`
+                    : summary.campaign.stars > summary.campaign.previousStars
+                      ? `New best against ${summary.campaign.bossName}!`
+                      : `Another win over ${summary.campaign.bossName}`}
+              </span>
+              {summary.campaign.coins > 0 && <span className="font-mono text-sm font-bold text-yellow-300">+{summary.campaign.coins}</span>}
+            </div>
+            {summary.campaign.relic && (
+              <div className="flex items-center gap-2.5 rounded-lg bg-amber-300/10 p-2">
+                <RelicTile relic={summary.campaign.relic} size="md" />
+                <div className="min-w-0 text-xs">
+                  <div className="font-bold text-amber-200">Relic found: {summary.campaign.relic.name}</div>
+                  <div className="text-slate-300">{summary.campaign.relic.description}</div>
+                </div>
+              </div>
+            )}
+            {summary.campaign.realmCleared && (
+              <div className="text-xs font-semibold text-emerald-300">
+                {getGrandRealm(summary.campaign.realmCleared).name} cleared!
+                {summary.campaign.rewards.length > 0 ? ` Unlocked: ${summary.campaign.rewards.join(' · ')}` : ''}
+              </div>
+            )}
           </div>
         )}
 

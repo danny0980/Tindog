@@ -8,6 +8,8 @@ import { join } from 'node:path'
 // @ts-expect-error — plain .mjs helper shared with the Node scripts (no type declarations).
 import { buildManifest, classify, imageSize, listImages, pieceCode, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
 // @ts-expect-error — plain .mjs helper (no type declarations).
+import { decodePng, encodePng, sliceSheet } from '../scripts/sprite-slicer.mjs'
+// @ts-expect-error — plain .mjs helper (no type declarations).
 import { loadCatalog } from '../scripts/asset-catalog.mjs'
 import {
   EMPTY_MANIFEST,
@@ -184,6 +186,72 @@ check('an explicitly chosen art set applies everywhere', resolvePieceArt(art, { 
 check('a chosen set that no longer exists falls back', resolvePieceArt(art, { artPack: true, artPieces: 'gone', artBoard: null }, 'standard')?.id === 'standard')
 check('the art-pack switch turns everything off', resolvePieceArt(art, { artPack: false, artPieces: 'dark-fantasy', artBoard: 'wild-west' }, 'standard') === null && resolveBoardArt(art, { artPack: false, artPieces: null, artBoard: 'wild-west' }, 'classic-wood') === null)
 check('boards resolve the same way', resolveBoardArt(art, { artPack: true, artPieces: null, artBoard: null }, 'classic-wood')?.id === 'classic-wood' && resolveBoardArt(art, { artPack: true, artPieces: null, artBoard: 'wild-west' }, 'nebula')?.id === 'wild-west')
+
+// ── Cutting sprite sheets ───────────────────────────────────────────────────
+type Img = { width: number; height: number; data: Uint8ClampedArray }
+type Slice = { pieces?: Record<string, Img>; error?: string; note?: string }
+/** Row profile of each test silhouette: [height share, (t) → [left, right] as a share of the cell]. */
+const SHAPES: Record<string, [number, (t: number) => [number, number]]> = {
+  K: [1, (t) => (t < 0.12 ? [0.45, 0.55] : t < 0.6 ? [0.15, 0.85] : [0.1, 0.9])],
+  Q: [0.92, (t) => (t < 0.12 ? [0.25, 0.75] : t < 0.6 ? [0.18, 0.82] : [0.1, 0.9])],
+  R: [0.74, (t) => (t < 0.15 ? [0.12, 0.88] : t < 0.8 ? [0.25, 0.75] : [0.1, 0.9])],
+  B: [0.84, (t) => (t < 0.12 ? [0.46, 0.54] : t < 0.4 ? [0.32, 0.68] : t < 0.8 ? [0.3, 0.7] : [0.15, 0.85])],
+  N: [0.8, (t) => (t < 0.45 ? [0.05, 0.6] : t < 0.8 ? [0.35, 0.7] : [0.15, 0.85])],
+  P: [0.58, (t) => (t < 0.35 ? [0.37, 0.63] : t < 0.8 ? [0.3, 0.7] : [0.15, 0.85])],
+}
+/** A green-screen sheet with the pieces in `layout` (3 rows × 4), each tinted uniquely so the cut can be traced back. */
+function makeSheet(layout: string[]): { img: Img; tint: Record<string, number> } {
+  const cell = 60
+  const width = cell * 4
+  const height = cell * 3
+  const data = new Uint8ClampedArray(width * height * 4)
+  for (let i = 0; i < width * height; i++) data.set([12, 235, 40, 255], i * 4)
+  const tint: Record<string, number> = {}
+  layout.forEach((code, k) => {
+    const [share, row] = SHAPES[code.slice(1)] ?? SHAPES.P!
+    const base = code.startsWith('w') ? 215 : 30
+    tint[code] = base + k
+    const h = Math.round(cell * 0.85 * share)
+    const x0 = (k % 4) * cell
+    const y1 = Math.floor(k / 4) * cell + cell - 4
+    for (let y = 0; y < h; y++) {
+      const [l, r] = row(y / h)
+      for (let x = Math.round(l * cell * 0.9); x < Math.round(r * cell * 0.9); x++) data.set([base + k, base + k, base + k, 255], ((y1 - h + y) * width + x0 + x + 3) * 4)
+    }
+  })
+  return { img: { width, height, data }, tint }
+}
+const shuffled = ['bN', 'wP', 'bK', 'wR', 'wQ', 'bB', 'bP', 'wK', 'bR', 'wN', 'bQ', 'wB']
+const { img: sheetImg, tint } = makeSheet(shuffled)
+const roundTrip = decodePng(encodePng(sheetImg)) as Img
+check('PNG encode → decode is lossless', roundTrip.width === 240 && roundTrip.data.every((v, i) => v === sheetImg.data[i]))
+const sliced = sliceSheet(roundTrip) as Slice
+check('a shuffled green-screen sheet is cut into 12 pieces', Object.keys(sliced.pieces ?? {}).length === 12, sliced.error ?? sliced.note ?? '')
+const traced = Object.entries(sliced.pieces ?? {}).map(([code, im]) => {
+  let r = 0
+  let n = 0
+  for (let i = 0; i < im.data.length; i += 4) if ((im.data[i + 3] ?? 0) === 255) ((r += im.data[i] ?? 0), (n += 1))
+  return [code, Object.entries(tint).find(([, t]) => Math.abs(t - r / Math.max(1, n)) < 0.5)?.[0]]
+})
+const wrong = traced.filter(([code, from]) => code !== from)
+check('every piece is recognised wherever it sits on the sheet', wrong.length === 0, wrong.map(([c, f]) => `${c}←${f}`).join(' '))
+const anyGreen = Object.values(sliced.pieces ?? {}).some((im) => {
+  for (let i = 0; i < im.data.length; i += 4) if ((im.data[i + 3] ?? 0) > 0 && (im.data[i + 1] ?? 0) > (im.data[i] ?? 0) + 40) return true
+  return false
+})
+check('the green background is gone from every piece', !anyGreen)
+const pk = sliced.pieces?.wK
+const pp = sliced.pieces?.wP
+check('all pieces share one canvas (a pawn stays smaller than a king)', Boolean(pk && pp && pk.width === pp.width && pk.height === pp.height))
+const clear = makeSheet(shuffled).img
+for (let i = 0; i < clear.data.length; i += 4) if ((clear.data[i + 1] ?? 0) === 235) clear.data[i + 3] = 0
+check('an already-transparent sheet is cut the same way', Object.keys((sliceSheet(clear) as Slice).pieces ?? {}).length === 12)
+const checker: Img = { width: 64, height: 64, data: new Uint8ClampedArray(64 * 64 * 4) }
+for (let i = 0; i < 64 * 64; i++) {
+  const dark = (Math.floor((i % 64) / 8) + Math.floor(i / 64 / 8)) % 2 === 1
+  checker.data.set(dark ? [60, 30, 20, 255] : [200, 90, 40, 255], i * 4)
+}
+check('a board picture is not mistaken for a sprite sheet', /no background/.test((sliceSheet(checker) as Slice).error ?? ''))
 
 console.log(failures === 0 ? '\nAll art-pack checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

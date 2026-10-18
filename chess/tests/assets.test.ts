@@ -6,7 +6,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // @ts-expect-error — plain .mjs helper shared with the Node scripts (no type declarations).
-import { buildManifest, classify, imageSize, pieceCode, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
+import { buildManifest, classify, imageSize, listImages, pieceCode, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
+// @ts-expect-error — plain .mjs helper (no type declarations).
+import { loadCatalog } from '../scripts/asset-catalog.mjs'
 import {
   EMPTY_MANIFEST,
   type ArtManifest,
@@ -35,18 +37,40 @@ const canonical = (v: unknown): string =>
 
 type Hit = { kind: string; target: string } | null
 const cls = (p: string): Hit => classify(p) as Hit
+// The catalog is read from the game's own source (tests run from the chess folder).
+const catalog = loadCatalog(process.cwd()) as { people: Array<{ key: string }>; pieceSets: string[]; boardThemes: string[] }
+const flat = (p: string, size: { width: number; height: number } | null = null): string | null => (classify(p, catalog, size) as Hit)?.target ?? null
 
 // ── Recognising files ────────────────────────────────────────────────────────
 check('slugs strip accents, quotes and case', slugify('Hattori Hanzō') === 'hattori-hanzo' && slugify('Grace O’Malley') === 'grace-omalley' && slugify('  Queen  Elizabeth I ') === 'queen-elizabeth-i')
-check('piece codes from many naming styles', ['wK.png', 'w_k.png', 'White King.png', 'king-white.webp', 'WHITE-K.png'].every((f) => pieceCode(f) === 'wK') && pieceCode('black knight.png') === 'bN' && pieceCode('bn.png') === 'bN' && pieceCode('dark_pawn.png') === 'bP' && pieceCode('castle black.png') === 'bR' && pieceCode('logo.png') === null)
+check('piece codes from many naming styles', ['wK.png', 'w_k.png', 'White King.png', 'king-white.webp', 'WHITE-K.png'].every((f) => pieceCode(f) === 'wK') && pieceCode('black knight.png') === 'bN' && pieceCode('bn.png') === 'bN' && pieceCode('dark_pawn.png') === 'bP' && pieceCode('castle black.png') === 'bR' && pieceCode('logo.png') === null && pieceCode('b-analysis.png') === null && pieceCode('w-k.png') === 'wK')
 check('portraits folder → portraits/<name>', cls('Portraits/Ragnar Lothbrok.png')?.target === 'portraits/ragnar-lothbrok.png' && cls('bosses/Blackbeard portrait.jpg')?.target === 'portraits/blackbeard.jpg')
-check('loose top-level images are portraits', cls('Albert Einstein.webp')?.target === 'portraits/albert-einstein.webp')
+check('without the catalog, a loose unknown image is not guessed', cls('Albert Einstein.webp') === null)
 check('piece images → pieces/<set>/<code>', cls('Pieces/Dark Fantasy/White King.png')?.target === 'pieces/dark-fantasy/wK.png' && cls('pieces/neon/bp.png')?.target === 'pieces/neon/bP.png')
 check('a set folder without a "pieces" parent still works', cls('cyber-ninja/black_queen.png')?.target === 'pieces/cyber-ninja/bQ.png')
 check('sprite sheets → pieces/<set>/sheet', cls('pieces/steampunk/sheet.png')?.target === 'pieces/steampunk/sheet.png' && cls('Sprites/Aztec sprite sheet.png')?.target === 'pieces/aztec/sheet.png' && cls('pieces/Galactic.png')?.target === 'pieces/galactic/sheet.png')
 check('boards → boards/<theme>/<role>', cls('Boards/Ancient Greece/board.png')?.target === 'boards/ancient-greece/board.png' && cls('boards/wild-west/light.jpg')?.target === 'boards/wild-west/light.jpg' && cls('boards/Viking Age dark.png')?.target === 'boards/viking-age/dark.png' && cls('themes/nebula/frame.png')?.target === 'boards/nebula/frame.png')
 check('a theme folder without a "boards" parent still works', cls('mayan-civilization/board.png')?.target === 'boards/mayan-civilization/board.png')
 check('unplaceable files are skipped', cls('misc/random/logo.png') === null)
+// ── Flat folders: everything by name ────────────────────────────────────────
+check('the catalog reads characters, sets and themes from the game source', catalog.people.length >= 100 && catalog.pieceSets.includes('lacquer') && catalog.pieceSets.includes('aztec') && catalog.boardThemes.includes('oled-black') && catalog.boardThemes.includes('wild-west'))
+check('character names → portraits (case-insensitive, partial names)', [
+  ['Ragnar.png', 'portraits/ragnar-lothbrok.png'], ['NAPOLEON.png', 'portraits/napoleon-bonaparte.png'], ['cleopatra.png', 'portraits/cleopatra-vii.png'],
+  ['Blackbeard.png', 'portraits/blackbeard.png'], ['Ninja Leader.png', 'portraits/ninja-leader.png'], ['albert_einstein.png', 'portraits/albert-einstein.png'],
+  ['Queen Victoria.png', 'portraits/queen-victoria.png'], ['Abraham Lincoln.png', 'portraits/abraham-lincoln.png'], ['julius-caesar.png', 'portraits/julius-caesar.png'],
+  ['Sun Tzu.png', 'portraits/sun-tzu.png'], ['Alexander the Great.png', 'portraits/alexander-the-great.png'], ['Richard the Lionheart.png', 'portraits/richard-the-lionheart.png'],
+  ['Joan of Arc.png', 'portraits/joan-of-arc.png'], ['Saladin.png', 'portraits/saladin.png'], ['Genghis Khan.png', 'portraits/genghis-khan.png'],
+  ['Leonardo da Vinci.png', 'portraits/leonardo-da-vinci.png'], ['Miyamoto Musashi.png', 'portraits/miyamoto-musashi.png'], ['Queen Elizabeth I.png', 'portraits/queen-elizabeth-i.png'],
+  ['Hammurabi portrait.png', 'portraits/hammurabi.png'], ['Hattori Hanzō.png', 'portraits/hattori-hanzo.png'],
+].every(([f, t]) => flat(f ?? '') === t))
+check('piece-set names → sprite sheets', flat('standard.png') === 'pieces/standard/sheet.png' && flat('Obsidian.png') === 'pieces/obsidian/sheet.png' && flat('AZTEC.png') === 'pieces/aztec/sheet.png' && flat('lacquer sprite sheet.png') === 'pieces/lacquer/sheet.png' && flat('dark-fantasy.png') === 'pieces/dark-fantasy/sheet.png')
+check('board-theme names → boards (with light / dark / frame roles)', flat('classic-wood.png') === 'boards/classic-wood/board.png' && flat('OLED Black.png') === 'boards/oled-black/board.png' && flat('classic wood light.png') === 'boards/classic-wood/light.png' && flat('Wild West dark.png') === 'boards/wild-west/dark.png' && flat('nebula frame.png') === 'boards/nebula/frame.png')
+check('the longest name wins (obsidian set vs obsidian-marble board)', flat('obsidian-marble.png') === 'boards/obsidian-marble/board.png' && flat('chalk.png') === 'pieces/chalk/sheet.png' && flat('chalkboard.png') === 'boards/chalkboard/board.png')
+check('a name that is both a set and a theme: the image shape decides', flat('minimal.png', { width: 2048, height: 2048 }) === 'boards/minimal/board.png' && flat('minimal.png', { width: 1200, height: 400 }) === 'pieces/minimal/sheet.png')
+check('single pieces by name, set from the name or folder', flat('obsidian_bN.png') === 'pieces/obsidian/bN.png' && flat('Dark Fantasy White King.png') === 'pieces/dark-fantasy/wK.png' && flat('Aztec/black queen.png') === 'pieces/aztec/bQ.png')
+check('unknown names with a hint word', flat('Merlin portrait.png') === 'portraits/merlin.png' && flat('Coral Reef sprite sheet.png') === 'pieces/coral-reef/sheet.png' && flat('Frozen Lake board.png') === 'boards/frozen-lake/board.png')
+check('an unnamed image shaped like a sprite sheet is one; other unknowns are skipped', flat('IMG_2034.png', { width: 1200, height: 400 }) === 'pieces/img-2034/sheet.png' && flat('IMG_2035.png', { width: 800, height: 800 }) === null)
+
 check('sprite-sheet grids from aspect ratio', JSON.stringify(sheetGrid({ width: 1200, height: 400 })) === '{"cols":6,"rows":2}' && JSON.stringify(sheetGrid({ width: 400, height: 1200 })) === '{"cols":2,"rows":6}' && JSON.stringify(sheetGrid({ width: 2400, height: 200 })) === '{"cols":12,"rows":1}' && JSON.stringify(sheetGrid(null)) === '{"cols":6,"rows":2}')
 
 // ── Manifest from real files ────────────────────────────────────────────────
@@ -84,6 +108,16 @@ try {
   check('sprite sheet grid detected (2×6), override honoured (order)', m.pieceSets.steampunk?.sheet?.cols === 2 && m.pieceSets.steampunk.sheet.rows === 6 && m.pieceSets.aztec?.sheet?.order === 'KQBNRP')
   check('boards need board.png or light + dark', m.boards['ancient-greece']?.board === 'boards/ancient-greece/board.png' && m.boards['wild-west']?.light !== undefined && !m.boards['only-light'])
   check('the generated manifest survives sanitising unchanged', canonical(sanitizeManifest(JSON.parse(JSON.stringify(m)))) === canonical(m))
+  // A flat "chess app" folder: images at the top level, the app's own folders ignored.
+  put('flat/Ragnar.png', png(512, 512))
+  put('flat/aztec.png', png(1200, 400))
+  put('flat/classic-wood.png', png(2048, 2048))
+  put('flat/node_modules/pkg/logo.png', png(64, 64))
+  put('flat/public/assets/portraits/old.png', png(64, 64))
+  put('flat/src/icon.png', png(64, 64))
+  const flatFiles = listImages(join(dir, 'flat'), { skip: true }) as string[]
+  check('flat scan finds top-level images and skips node_modules / public / src', flatFiles.join() === 'Ragnar.png,aztec.png,classic-wood.png', flatFiles.join())
+  check('…and routes every one', flatFiles.map((f) => (classify(f, catalog, imageSize(join(dir, 'flat', f))) as Hit)?.target).join() === 'portraits/ragnar-lothbrok.png,pieces/aztec/sheet.png,boards/classic-wood/board.png')
   check('an empty or missing folder gives an empty manifest', JSON.stringify(buildManifest(join(dir, 'nope'))) === JSON.stringify(EMPTY_MANIFEST))
 } finally {
   rmSync(dir, { recursive: true, force: true })

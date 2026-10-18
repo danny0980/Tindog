@@ -1,60 +1,70 @@
-// Imports an art folder into the app: recognises portraits, piece sets (12
-// images or one sprite sheet) and board themes, copies them into
-// public/assets with standard names, and rebuilds the manifest.
+// Imports art into the game. Point it at any folder — even a flat pile of
+// images — and it sorts every file BY ITS NAME:
+//   characters (Blackbeard, Napoleon, Cleopatra, Ragnar, Ninja Leader …) → portraits
+//   piece set names (standard, obsidian, aztec, lacquer …) or "sprite sheet" → piece sets
+//   single pieces ("wK", "White King", "aztec_bN" …)                       → piece sets
+//   board themes (classic-wood, oled-black, wild-west …; "… light/dark/frame") → boards
+// Case, spaces, underscores and accents don't matter; folders are optional.
 //
-//   npm run assets:import -- "C:\Users\you\Downloads\my-art"
-//   npm run assets:import -- ./art --dry-run
-//
-// Folder names it understands (case and spaces don't matter):
-//   portraits/ bosses/ legends/ characters/     → one image per character, named after them
-//   pieces/<set name>/wK.png … bP.png            → 12 images ("white king", "w_k", "bn" also work)
-//   pieces/<set name>/sheet.png  or pieces/<set name>.png → one sprite sheet (6×2: K Q R B N P, White row first)
-//   boards/<theme name>/board.png | light.png + dark.png | frame.png
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+//   npm run assets:import                                   (scans the chess folder itself)
+//   npm run assets:import -- "C:\Users\you\Downloads\art"   (scans that folder)
+//   … add --dry-run to preview without copying anything.
+import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildManifest, classify, listImages } from './assets-lib.mjs'
+import { loadCatalog } from './asset-catalog.mjs'
+import { buildManifest, classify, imageSize, listImages } from './assets-lib.mjs'
 
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
 const source = args.find((a) => !a.startsWith('--'))
-if (!source) {
-  console.error('Usage: npm run assets:import -- "<path to your art folder>" [--dry-run]')
-  process.exit(1)
-}
-const from = resolve(source)
+const from = resolve(source ?? root)
 if (!existsSync(from)) {
   console.error(`[assets] Folder not found: ${from}`)
   process.exit(1)
 }
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const assetsDir = join(root, 'public', 'assets')
+const catalog = loadCatalog(root)
+console.log(`[assets] Scanning ${from}`)
+console.log(`[assets] Recognises ${catalog.people.length} characters, ${catalog.pieceSets.length} piece sets, ${catalog.boardThemes.length} board themes\n`)
 
-const counts = { portrait: 0, piece: 0, sheet: 0, board: 0 }
+/** Chosen source per destination: when two files map to the same place, the bigger (higher-quality) one wins. */
+const plan = new Map()
 const skipped = []
-const seen = new Map()
-for (const rel of listImages(from)) {
-  const hit = classify(rel)
+// The app's own folders (src, public, node_modules …) are never scanned.
+for (const rel of listImages(from, { skip: true })) {
+  const full = join(from, ...rel.split('/'))
+  const hit = classify(rel, catalog, imageSize(full))
   if (!hit) {
     skipped.push(rel)
     continue
   }
-  if (seen.has(hit.target)) {
-    console.warn(`[assets] ${rel} → ${hit.target} replaces ${seen.get(hit.target)}`)
-  }
-  seen.set(hit.target, rel)
+  const bytes = statSync(full).size
+  const prev = plan.get(hit.target)
+  if (prev) {
+    const keep = bytes > prev.bytes ? { rel, full, hit, bytes } : prev
+    console.warn(`[assets] two files for ${hit.target}: keeping "${keep.rel}" (the larger)`)
+    plan.set(hit.target, keep)
+  } else plan.set(hit.target, { rel, full, hit, bytes })
+}
+
+const counts = { portrait: 0, piece: 0, sheet: 0, board: 0 }
+for (const { rel, full, hit, bytes } of [...plan.values()].sort((a, b) => a.hit.target.localeCompare(b.hit.target))) {
   counts[hit.kind] += 1
+  const mb = bytes / 1048576
+  console.log(`  ${hit.kind.padEnd(8)} ${rel}  →  public/assets/${hit.target}${mb > 2 ? `  (${mb.toFixed(1)} MB — consider WebP / smaller)` : ''}`)
   if (!dryRun) {
     const dest = join(assetsDir, ...hit.target.split('/'))
     mkdirSync(dirname(dest), { recursive: true })
-    copyFileSync(join(from, ...rel.split('/')), dest)
+    copyFileSync(full, dest)
   }
-  console.log(`  ${hit.kind.padEnd(8)} ${rel}  →  public/assets/${hit.target}`)
 }
 
 console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets, ${counts.board} board images`)
 if (skipped.length > 0) {
-  console.log(`[assets] Not recognised (${skipped.length}) — move them into portraits/, pieces/<set>/ or boards/<theme>/ and run again:`)
+  console.log(`[assets] Not recognised (${skipped.length}). Rename each to include a character, piece-set or board-theme name`)
+  console.log('         (e.g. "Saladin.png", "aztec sprite sheet.png", "wild-west board.png") and run again:')
   for (const s of skipped) console.log(`  ? ${s}`)
 }
 if (!dryRun) {

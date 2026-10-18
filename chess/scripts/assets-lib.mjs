@@ -20,16 +20,25 @@ export function slugify(text) {
 
 export const isImage = (file) => IMAGE_EXTENSIONS.includes(extname(file).toLowerCase())
 
-/** Every image under `dir`, recursively (paths relative to `dir`). */
-export function listImages(dir) {
+/** Folders never scanned for art (the app's own code, builds and dependencies). */
+export const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ssr', '.git', 'public', 'src', 'android', 'ios', 'scripts', 'tests', 'coverage', '.vite', '.idea', '.vscode'])
+
+/** Every image under `dir`, recursively (paths relative to `dir`), skipping SKIP_DIRS when asked. */
+export function listImages(dir, { skip = false } = {}) {
   const out = []
   const walk = (current) => {
     for (const name of readdirSync(current)) {
       if (name.startsWith('.')) continue
       const full = join(current, name)
-      const st = statSync(full)
-      if (st.isDirectory()) walk(full)
-      else if (isImage(name)) out.push(relative(dir, full).split(sep).join('/'))
+      let st
+      try {
+        st = statSync(full)
+      } catch {
+        continue
+      }
+      if (st.isDirectory()) {
+        if (!(skip && SKIP_DIRS.has(name.toLowerCase()))) walk(full)
+      } else if (isImage(name)) out.push(relative(dir, full).split(sep).join('/'))
     }
   }
   walk(dir)
@@ -100,15 +109,16 @@ export function pieceCode(fileName) {
   const direct = /^([wb])([kqrbnp])$/.exec(compact)
   if (direct) return `${direct[1]}${direct[2].toUpperCase()}`
   const parts = base.split('-')
-  let color = null
   let type = null
-  for (const p of parts) {
-    if (!color && COLOR_WORDS[p]) color = COLOR_WORDS[p]
-    else if (!type && TYPE_WORDS[p]) type = TYPE_WORDS[p]
-  }
-  // "white-k" style
+  for (const p of parts) if (!type && TYPE_WORDS[p]) type = TYPE_WORDS[p]
+  // "white"/"black" beat "light"/"dark" (which also appear in set names like "dark-fantasy").
+  const strong = parts.find((p) => p === 'white' || p === 'black' || p === 'w' || p === 'b')
+  const weak = parts.find((p) => p === 'light' || p === 'dark')
+  const color = strong ? COLOR_WORDS[strong] : weak ? COLOR_WORDS[weak] : null
+  // "white-k" style — the type letter must be a different word than the colour ("b-analysis" is not a piece).
   if (color && !type) {
-    const letter = parts.find((p) => /^[kqrbnp]$/.test(p))
+    const colorAt = parts.indexOf(strong ?? weak ?? '')
+    const letter = parts.find((p, i) => i !== colorAt && /^[kqrbnp]$/.test(p))
     if (letter) type = letter.toUpperCase()
   }
   return color && type ? `${color}${type}` : null
@@ -125,53 +135,119 @@ const stripNoise = (slug) => {
   return s
 }
 
+/** Whole-word containment: does slug `hay` contain the slug `needle` as complete words? */
+const hasWords = (hay, needle) => Boolean(needle) && `-${hay}-`.includes(`-${needle}-`)
+
+/** Longest catalog entry contained (as whole words) in `slug`. */
+function longestMatch(slug, entries) {
+  let best = null
+  for (const e of entries) if (hasWords(slug, e) && (!best || e.length > best.length)) best = e
+  return best
+}
+
+/** The character a filename names (longest matching variant), if any. */
+function matchPerson(slug, people) {
+  let best = null
+  for (const p of people) {
+    for (const v of p.variants) if (hasWords(slug, v) && (!best || v.length > best.len)) best = { key: p.key, len: v.length }
+  }
+  return best
+}
+
+const COLOR_TYPE_WORDS = new Set(['w', 'b', 'white', 'black', 'light', 'dark', 'king', 'queen', 'rook', 'castle', 'tower', 'bishop', 'knight', 'horse', 'pawn', 'soldier'])
+const ROLE_WORDS = { light: 'light', white: 'light', dark: 'dark', black: 'dark', frame: 'frame', border: 'frame' }
+const SHEET_HINT = /(^|-)(sheet|sprite|sprites|spritesheet|pieces|piece-set|set|chessmen)(-|$)/
+const BOARD_HINT = /(^|-)(board|tile|tiles|texture|theme|chessboard)(-|$)/
+const PORTRAIT_HINT = /(^|-)(portrait|boss|legend|character|face|avatar|hero)(-|$)/
+
+/** A sprite sheet's shape: clearly wider or taller than square (6×2, 2×6, 12×1, 1×12). */
+const sheetShaped = (size) => Boolean(size && size.width && size.height && (size.width / size.height >= 2.4 || size.width / size.height <= 1 / 2.4))
+
+/** Board role from the words left after removing the theme name. */
+function boardRole(slug, theme) {
+  const rest = `-${slug}-`.replace(`-${theme}-`, '-').split('-').filter(Boolean)
+  for (const w of rest) if (ROLE_WORDS[w]) return ROLE_WORDS[w]
+  return 'board'
+}
+
 /**
  * Classifies one source image (path relative to the art folder) into where it
- * belongs in public/assets. Returns null for files it can't place.
+ * belongs in public/assets — by its NAME first, so a flat folder of files
+ * works: "Napoleon.png" → portrait, "obsidian wK.png" → piece, "Aztec.png" →
+ * sprite sheet, "classic-wood dark.png" → board tile. Folder names are only
+ * a fallback hint. `catalog` comes from asset-catalog.mjs; `size` (width /
+ * height) breaks set-vs-board ties and spots unnamed sprite sheets.
+ * Returns null for files it can't place.
  */
-export function classify(relPath) {
+export function classify(relPath, catalog = null, size = null) {
   const parts = relPath.split('/')
   const file = parts[parts.length - 1] ?? ''
   const ext = extname(file).toLowerCase()
   const base = slugify(file.slice(0, file.length - ext.length))
   const folders = parts.slice(0, -1).map(slugify)
-  const kindIndex = (re) => folders.findIndex((f) => re.test(f))
+  const cat = catalog ?? { people: [], pieceSets: [], boardThemes: [] }
+  if (!base) return null
 
-  const pieceAt = kindIndex(PIECE_FOLDERS)
-  const boardAt = kindIndex(BOARD_FOLDERS)
-  const portraitAt = kindIndex(PORTRAIT_FOLDERS)
-  const code = pieceCode(file)
+  // 1. A single piece: "wK", "white king", "obsidian_bN", "Aztec Black Queen" …
+  const words = base.split('-')
+  const codeWord = words.find((w) => /^[wb][kqrbnp]$/.test(w))
+  const code = pieceCode(file) ?? (codeWord ? `${codeWord[0]}${codeWord[1]?.toUpperCase()}` : null)
+  if (code) {
+    const rest = words.filter((w) => !COLOR_TYPE_WORDS.has(w) && w !== codeWord).join('-')
+    const folderSet = folders.length ? stripNoise(folders[folders.length - 1] ?? '') : ''
+    const known = longestMatch(base, cat.pieceSets) ?? (folderSet ? longestMatch(folderSet, cat.pieceSets) : null)
+    const set = known ?? (stripNoise(rest) || (folderSet && !PIECE_FOLDERS.test(folderSet) ? folderSet : '') || 'custom')
+    return { kind: 'piece', set, code, target: `pieces/${set}/${code}${ext}` }
+  }
 
-  // Pieces: <…>/pieces/<set>/<wK>.png, <…>/pieces/<set>/sheet.png or <…>/pieces/<set>.png (a sheet)
-  if (pieceAt >= 0 || (code && boardAt < 0 && portraitAt < 0)) {
-    const setFolder = folders[pieceAt + 1] ?? (pieceAt < 0 ? folders[folders.length - 1] : undefined)
-    if (code) {
-      const set = stripNoise(setFolder ?? 'custom')
-      return { kind: 'piece', set, code, target: `pieces/${set}/${code}${ext}` }
+  // 2. Known names: the longest match among board themes, piece sets and characters wins.
+  const theme = longestMatch(base, cat.boardThemes)
+  const set = longestMatch(base, cat.pieceSets)
+  const person = matchPerson(base, cat.people)
+  const tLen = theme ? theme.length + (BOARD_HINT.test(base) ? 100 : 0) : -1
+  let sLen = set ? set.length + (SHEET_HINT.test(base) ? 100 : 0) : -1
+  const pLen = person ? person.len + (PORTRAIT_HINT.test(base) ? 100 : 0) : -1
+  // Same name for a set and a theme (e.g. "minimal"): the image's shape decides.
+  if (theme && set && theme === set) sLen = sheetShaped(size) ? tLen + 1 : tLen - 1
+  const best = Math.max(tLen, sLen, pLen)
+  if (best >= 0) {
+    if (best === tLen && theme) {
+      const role = boardRole(base, theme)
+      return { kind: 'board', theme, role, target: `boards/${theme}/${role}${ext}` }
     }
-    const set = stripNoise(setFolder ?? base)
-    return set ? { kind: 'sheet', set, target: `pieces/${set}/sheet${ext}` } : null
+    if (best === sLen && set) return { kind: 'sheet', set, target: `pieces/${set}/sheet${ext}` }
+    if (person) return { kind: 'portrait', key: person.key, target: `portraits/${person.key}${ext}` }
   }
 
-  // Boards: <…>/boards/<theme>/(board|light|dark|frame).png or <…>/boards/<theme>[-light|-dark].png
-  if (boardAt >= 0) {
-    const themeFolder = folders[boardAt + 1]
-    const role = /(^|-)(light|white)(-|$)/.test(base) ? 'light' : /(^|-)(dark|black)(-|$)/.test(base) ? 'dark' : /(^|-)frame(-|$)/.test(base) ? 'frame' : 'board'
-    const theme = stripNoise(themeFolder ?? base.replace(/-(light|white|dark|black|frame)(-.*)?$/, ''))
-    return theme ? { kind: 'board', theme, role, target: `boards/${theme}/${role}${ext}` } : null
+  // 3. Unknown names with a hint word: "Galactic sprite sheet", "Wild West board", "Merlin portrait".
+  const stripped = stripNoise(base.replace(/-(light|white|dark|black|frame)$/, ''))
+  // A bare hint word ("sheet.png", "board.png") names nothing — the folder decides below.
+  const named = /^(sheet|sprite|sprites|spritesheet|pieces|piece|set|board|tile|tiles|texture|theme|portrait|light|dark|frame)$/.test(stripped) ? '' : stripped
+  if (SHEET_HINT.test(base) && named) return { kind: 'sheet', set: named, target: `pieces/${named}/sheet${ext}` }
+  if (BOARD_HINT.test(base) && named) {
+    const role = boardRole(base, named)
+    return { kind: 'board', theme: named, role, target: `boards/${named}/${role}${ext}` }
   }
+  if (PORTRAIT_HINT.test(base) && named) return { kind: 'portrait', key: stripNoise(base), target: `portraits/${stripNoise(base)}${ext}` }
 
-  // A theme folder without a "boards" parent: <…>/<theme>/(board|light|dark|frame).png
-  if (/^(board|light|dark|frame)$/.test(base) && folders.length > 0 && portraitAt < 0) {
-    const theme = stripNoise(folders[folders.length - 1] ?? '')
-    return theme ? { kind: 'board', theme, role: base, target: `boards/${theme}/${base}${ext}` } : null
+  // 4. Folder hints (portraits/, pieces/<set>/, boards/<theme>/ …).
+  const pieceAt = folders.findIndex((f) => PIECE_FOLDERS.test(f))
+  const boardAt = folders.findIndex((f) => BOARD_FOLDERS.test(f))
+  const portraitAt = folders.findIndex((f) => PORTRAIT_FOLDERS.test(f))
+  if (pieceAt >= 0) {
+    const s = stripNoise(folders[pieceAt + 1] ?? base)
+    return s ? { kind: 'sheet', set: s, target: `pieces/${s}/sheet${ext}` } : null
   }
+  if (boardAt >= 0 || (/^(board|light|dark|frame)$/.test(base) && folders.length > 0 && portraitAt < 0)) {
+    const t = stripNoise(folders[boardAt + 1] ?? (boardAt >= 0 ? base.replace(/-(light|white|dark|black|frame)(-.*)?$/, '') : (folders[folders.length - 1] ?? '')))
+    if (!t) return null
+    const role = boardRole(base, t)
+    return { kind: 'board', theme: t, role, target: `boards/${t}/${role}${ext}` }
+  }
+  if (portraitAt >= 0) return { kind: 'portrait', key: stripNoise(base), target: `portraits/${stripNoise(base)}${ext}` }
 
-  // Portraits: anything in a portraits/bosses/legends folder (or a loose image at the top level).
-  if (portraitAt >= 0 || folders.length === 0) {
-    const key = stripNoise(base)
-    return key ? { kind: 'portrait', key, target: `portraits/${key}${ext}` } : null
-  }
+  // 5. An unnamed image shaped like a sprite sheet is one.
+  if (sheetShaped(size) && stripNoise(base)) return { kind: 'sheet', set: stripNoise(base), target: `pieces/${stripNoise(base)}/sheet${ext}` }
   return null
 }
 

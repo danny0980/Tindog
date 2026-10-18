@@ -21,33 +21,29 @@ Anything missing or broken falls back to the built-in vector art.
 
 ```bash
 cd chess
-npm run assets:import -- "C:\Users\you\Downloads\my-art"      # add --dry-run to preview
+npm run assets:import                                         # images sitting in the chess folder itself
+npm run assets:import -- "C:\Users\you\Downloads\my-art"      # or any other folder
+npm run assets:import -- "C:\…\my-art" --dry-run              # preview without copying
 npm run dev
 ```
 
-The importer recognises your files and copies them into `chess/public/assets/` with standard names. It prints every file it placed and lists the ones it couldn't place. Folder and file names are matched loosely: case, spaces, accents and words like "portrait"/"sheet" don't matter.
+**Folders are optional.** The importer scans the folder recursively, skipping the app's own `node_modules`, `src`, `public`, `dist` …, and sorts every image **by its file name** (case, spaces, underscores and accents don't matter):
 
-```
-my-art/
-  Portraits/                 Ragnar Lothbrok.png, Blackbeard.jpg, Ninja Leader.webp …   (also: bosses/, legends/, characters/)
-  Pieces/
-    Dark Fantasy/            wK.png … bP.png   or  "White King.png", "black_knight.png", "bn.png" …
-    Steampunk.png            ← a sprite sheet (one image = one set)
-    Aztec/sheet.png          ← a sprite sheet in a folder
-  Boards/
-    Ancient Greece/board.png ← whole 8×8 board, a1 dark at bottom-left
-    Wild West/light.png + dark.png   (+ optional frame.png with a transparent centre)
-```
+| Name contains | Goes to | Examples |
+|---|---|---|
+| A character name | portraits | `Ragnar.png`, `NAPOLEON.png`, `cleopatra.png`, `Blackbeard.png`, `ninja_leader.png`, `Queen Elizabeth I.png` |
+| A piece-set name, or "sprite sheet" | piece set (sprite sheet) | `standard.png`, `Obsidian.png`, `aztec.png`, `lacquer sprite sheet.png` |
+| A single piece | piece set (12 images) | `wK.png`, `White King.png`, `obsidian_bN.png`, `Aztec Black Queen.png` |
+| A board-theme name | board | `classic-wood.png`, `OLED Black.png`, `wild west light.png`, `wild west dark.png`, `nebula frame.png` |
 
-**Sprite sheets** are read in **K Q R B N P** order, **White first**. The layout is detected from the shape:
-- 6 × 2 (default)
-- 2 × 6
-- 12 × 1
-- 1 × 12
+**Name matching details.**
+- **Where the names come from:** the known names are read from the game itself, so every legend and all 100 bosses are recognised. On top of that come built-in sets and themes, plus extra names: Queen Victoria, Abraham Lincoln, Julius Caesar, and new sets/themes such as `dark-fantasy`, `cyber-ninja`, `wild-west` and `ancient-greece` (`scripts/asset-catalog.mjs`).
+- **Conflicts:** the longest matching name wins (`obsidian-marble.png` is a board, `obsidian.png` is a piece set). When a name is both a set and a theme (`minimal`), the image's shape decides.
+- **Unknown names:** an unknown name with a hint word works too (`Merlin portrait.png`, `Coral Reef sprite sheet.png`, `Frozen Lake board.png`). So does a wide or tall image, which is treated as a sprite sheet.
+- **Leftovers:** anything else is listed as *Not recognised* with a suggestion. Rename it and run the importer again.
+- **Duplicates:** if two files map to the same place, the larger one is kept.
 
-For any other order, add `pieces/<set>/sheet.json`, for example `{ "cols": 6, "rows": 2, "order": "KQBNRP" }`.
-
-**Manifest.** `public/assets/manifest.json` is regenerated automatically before every `npm run dev` / `npm run build`. Run `npm run assets:scan` if you copy files in by hand.
+Folder layouts from 6.2 (`Portraits/`, `Pieces/<set>/`, `Boards/<theme>/`) still work as a fallback.
 
 ### 2. How the art is used
 - **Portraits** match the character's name loosely:

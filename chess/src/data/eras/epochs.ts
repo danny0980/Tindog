@@ -1,0 +1,66 @@
+// Historical eras of Chronos Chess. Each era supplies a board theme, a piece
+// set and (via the theme) a soundtrack texture.
+import type { Epoch } from '../../types/legend'
+
+export const HISTORICAL_EPOCHS: ReadonlyArray<Epoch> = [
+  {
+    id: 'ancient',
+    campaign: 'historical',
+    name: 'Ancient World',
+    span: '69–30 BCE',
+    year: -50,
+    tagline: 'Ptolemaic Egypt · the court of Alexandria',
+    themeId: 'papyrus-gold',
+    pieceSetId: 'lapis',
+  },
+  {
+    id: 'scientific',
+    campaign: 'historical',
+    name: 'Scientific Revolution',
+    span: '1643–1727',
+    year: 1687,
+    tagline: 'Cambridge · the year of the Principia',
+    themeId: 'blueprint',
+    pieceSetId: 'ink',
+  },
+  {
+    id: 'napoleonic',
+    campaign: 'historical',
+    name: 'Napoleonic Empire',
+    span: '1769–1821',
+    year: 1805,
+    tagline: 'Paris · the eve of Austerlitz',
+    themeId: 'imperial-velvet',
+    pieceSetId: 'imperial',
+  },
+  {
+    id: 'modern',
+    campaign: 'historical',
+    name: 'Modern Physics',
+    span: '1879–1955',
+    year: 1905,
+    tagline: 'Bern · the miraculous year',
+    themeId: 'chalkboard',
+    pieceSetId: 'chalk',
+  },
+  {
+    id: 'viking',
+    campaign: 'historical',
+    name: 'Viking Age',
+    span: '9th century',
+    year: 865,
+    tagline: 'Kattegat · the age of longships',
+    themeId: 'rune-oak',
+    pieceSetId: 'runestone',
+  },
+  {
+    id: 'feudal-japan',
+    campaign: 'historical',
+    name: 'Feudal Japan',
+    span: '1584–1645',
+    year: 1612,
+    tagline: 'Ganryū-jima · the way of the sword',
+    themeId: 'bamboo-gold',
+    pieceSetId: 'lacquer',
+  },
+]

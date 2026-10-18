@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getLegend } from '../../data/historicalLegends'
+import { getLegend } from '../../data/legends'
 import { useStore } from '../../hooks/useStore'
 import { clearDialogue, dialogueStore } from '../../stores/dialogueStore'
 import type { LegendId } from '../../types/legend'

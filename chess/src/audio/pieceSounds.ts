@@ -45,6 +45,21 @@ function impact(material: SoundMaterial, at: number, strength: number, pitch: nu
       })
       tone({ at, frequency: 110 * p, decay: 0.07, gain: 0.35 * strength })
       break
+    case 'crystal':
+      // Glassy chime: bright, slightly detuned high partials with a long shimmer.
+      tone({ at, frequency: 2093 * p, decay: 0.45, gain: 0.09 * strength, reverb: 0.5 })
+      tone({ at, frequency: 3136 * p, detune: 8, decay: 0.3, gain: 0.05 * strength, reverb: 0.5 })
+      tone({ at, frequency: 4186 * p, decay: 0.15, gain: 0.03 * strength })
+      noise({ at, duration: 0.02, gain: 0.2 * strength, filter: { type: 'highpass', frequency: 5000 } })
+      break
+    case 'ember':
+      // Heavy obsidian thud with a crackle of embers.
+      tone({ at, frequency: 95 * p, frequencyEnd: 45 * p, decay: 0.18, gain: 0.6 * strength })
+      noise({ at, duration: 0.07, gain: 0.35 * strength, filter: { type: 'lowpass', frequency: 700 } })
+      for (let i = 0; i < 3; i += 1) {
+        noise({ at: at + 0.03 + Math.random() * 0.12, duration: 0.012, gain: 0.12 * strength, filter: { type: 'highpass', frequency: 3500 } })
+      }
+      break
     case 'soft':
       tone({ at, frequency: 620 * p, decay: 0.07, gain: 0.2 * strength })
       noise({ at, duration: 0.03, gain: 0.18 * strength, filter: { type: 'lowpass', frequency: 1600 } })

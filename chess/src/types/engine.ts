@@ -67,6 +67,12 @@ export interface StyleWeights {
   fork?: number
   /** Preference for lower-ranked MultiPV lines — unorthodox choices. */
   creativity?: number
+  /** Pawn advances on the wing of the enemy king (pawn storms). */
+  pawnStorm?: number
+  /** Pawn moves that land on a square defended by another pawn (solid chains). */
+  pawnStructure?: number
+  /** Long-range bishop/rook/queen manoeuvres (distance travelled). */
+  longRange?: number
 }
 
 /** Everything the AI opponent needs to search and choose a move. */

@@ -5,7 +5,7 @@ import type { ColorChoice, GameMode, GameSettings, Personality } from '../../typ
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { LegendPortrait } from '../legends/LegendPortrait'
-import { LEGENDS, getEpoch } from '../../data/historicalLegends'
+import { LEGENDS, LEGEND_STRENGTHS, getEpoch } from '../../data/legends'
 import { useStore } from '../../hooks/useStore'
 import { profileStore } from '../../stores/profileStore'
 
@@ -95,7 +95,17 @@ function NewGameForm({ initialSettings, onStart }: Pick<NewGameModalProps, 'init
               </OptionCard>
             ))}
           </div>
-          <p className="mt-2 text-xs text-slate-500">Defeated legends can be re-challenged here. Tap again to clear.</p>
+          {draft.legendId && (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {LEGEND_STRENGTHS.map((s) => (
+                <OptionCard key={s.id} selected={draft.legendStrength === s.id} onClick={() => update('legendStrength', s.id)}>
+                  <div className="text-sm font-semibold">{s.label}</div>
+                  <div className="text-[10px] text-slate-400">{s.eloOffset === 0 ? 'campaign' : `${s.eloOffset > 0 ? '+' : ''}${s.eloOffset} Elo`}</div>
+                </OptionCard>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 text-xs text-slate-500">Defeated legends from both campaigns can be re-challenged here. Tap again to clear.</p>
         </Field>
       )}
 

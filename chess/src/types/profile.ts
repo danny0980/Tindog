@@ -101,6 +101,11 @@ export type AchievementIcon =
   | 'eye'
   | 'flag'
   | 'clock'
+  | 'axe'
+  | 'swords'
+  | 'leaf'
+  | 'wand'
+  | 'globe'
 
 export interface AchievementDef {
   id: string

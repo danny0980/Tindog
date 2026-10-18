@@ -40,6 +40,26 @@ function forkTargets(after: Chess, move: Move): number {
   return targets
 }
 
+/** Pawn advancing on the files around the enemy king (a pawn storm). */
+function isPawnStorm(move: Move, enemyKing: Square | undefined): boolean {
+  if (move.piece !== 'p' || !enemyKing) return false
+  const [file] = coords(move.to)
+  const [kingFile] = coords(enemyKing)
+  return Math.abs(file - kingFile) <= 2
+}
+
+/** Pawn landing on a square defended by one of our own pawns (a healthy chain). */
+function supportedByPawn(after: Chess, move: Move): boolean {
+  if (move.piece !== 'p') return false
+  return after.attackers(move.to, move.color).some((sq) => after.get(sq)?.type === 'p')
+}
+
+/** Distance travelled by a sliding piece, 0–1 (long diagonals score highest). */
+function longRangeValue(move: Move): number {
+  if (move.piece !== 'b' && move.piece !== 'r' && move.piece !== 'q') return 0
+  return chebyshev(move.from, move.to) / 7
+}
+
 /** Style score of one candidate move from the mover's perspective. `rank` is its MultiPV index (0 = best). */
 function styleScore(fen: string, uci: string, w: StyleWeights, rank: number, lines: number): number {
   const parsed = parseUciMove(uci)
@@ -80,6 +100,9 @@ function styleScore(fen: string, uci: string, w: StyleWeights, rank: number, lin
   if (w.sacrifice) score += (Math.min(3, sacrificeValue(chess, move)) / 3) * w.sacrifice
   if (w.fork) score += Math.max(0, forkTargets(chess, move) - 1) * w.fork
   if (w.creativity && lines > 1) score += (rank / (lines - 1)) * w.creativity
+  if (w.pawnStorm && isPawnStorm(move, enemyKing)) score += w.pawnStorm * (0.5 + Math.max(0, advance) * 3)
+  if (w.pawnStructure && supportedByPawn(chess, move)) score += w.pawnStructure
+  if (w.longRange) score += longRangeValue(move) * w.longRange
   return score
 }
 

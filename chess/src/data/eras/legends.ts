@@ -1,4 +1,4 @@
-// Chronos Chess: historical epochs and legendary opponents.
+// Chronos Chess — the Historical Timeline campaign (legends of the past).
 //
 // Each legend maps a historical persona onto engine behaviour:
 //  • strength  — Stockfish skill level, depth and think time
@@ -10,50 +10,12 @@
 // Dialogue is written in character for this game. A few lines playfully riff on
 // sayings popularly attributed to these figures; none are presented as
 // verified historical quotations.
-import type { Epoch, EpochId, Legend, LegendId } from '../types/legend'
+import type { Legend } from '../../types/legend'
 
-export const EPOCHS: ReadonlyArray<Epoch> = [
-  {
-    id: 'ancient',
-    name: 'Ancient World',
-    span: '69–30 BCE',
-    year: -50,
-    tagline: 'Ptolemaic Egypt · the court of Alexandria',
-    themeId: 'papyrus-gold',
-    pieceSetId: 'lapis',
-  },
-  {
-    id: 'scientific',
-    name: 'Scientific Revolution',
-    span: '1643–1727',
-    year: 1687,
-    tagline: 'Cambridge · the year of the Principia',
-    themeId: 'blueprint',
-    pieceSetId: 'ink',
-  },
-  {
-    id: 'napoleonic',
-    name: 'Napoleonic Empire',
-    span: '1769–1821',
-    year: 1805,
-    tagline: 'Paris · the eve of Austerlitz',
-    themeId: 'imperial-velvet',
-    pieceSetId: 'imperial',
-  },
-  {
-    id: 'modern',
-    name: 'Modern Physics',
-    span: '1879–1955',
-    year: 1905,
-    tagline: 'Bern · the miraculous year',
-    themeId: 'chalkboard',
-    pieceSetId: 'chalk',
-  },
-]
-
-export const LEGENDS: ReadonlyArray<Legend> = [
+export const HISTORICAL_LEGENDS: ReadonlyArray<Legend> = [
   {
     id: 'cleopatra',
+    campaign: 'historical',
     name: 'Cleopatra VII',
     shortName: 'Cleopatra',
     title: 'Queen of the Nile',
@@ -126,6 +88,7 @@ export const LEGENDS: ReadonlyArray<Legend> = [
   },
   {
     id: 'newton',
+    campaign: 'historical',
     name: 'Sir Isaac Newton',
     shortName: 'Newton',
     title: 'Natural Philosopher',
@@ -200,6 +163,7 @@ export const LEGENDS: ReadonlyArray<Legend> = [
   },
   {
     id: 'napoleon',
+    campaign: 'historical',
     name: 'Napoleon Bonaparte',
     shortName: 'Napoleon',
     title: 'Emperor of the French',
@@ -270,6 +234,7 @@ export const LEGENDS: ReadonlyArray<Legend> = [
   },
   {
     id: 'einstein',
+    campaign: 'historical',
     name: 'Albert Einstein',
     shortName: 'Einstein',
     title: 'Theoretical Physicist',
@@ -342,15 +307,140 @@ export const LEGENDS: ReadonlyArray<Legend> = [
       draw: ['A perfect symmetry. Very pleasing to a physicist.', 'Energy conserved — no winner, no loser.'],
     },
   },
+  {
+    id: 'ragnar',
+    campaign: 'historical',
+    name: 'Ragnar Lothbrok',
+    shortName: 'Ragnar',
+    title: 'Viking Sea-King',
+    epoch: 'viking',
+    lifespan: '9th century (legendary)',
+    bio: 'A Norse hero of the sagas, said to have raided Francia and England in the 9th century. How much of his story is history and how much is legend is still debated.',
+    playstyle: 'Berserker. He hurls his pawns at your king, trades pieces gladly when it keeps the initiative, and would rather attack than castle.',
+    signature: "King's Gambit · Grob (1.g4) · Latvian Gambit · Borg Defence (1…g5)",
+    elo: 2400,
+    difficulty: 'expert',
+    campaignOrder: 4,
+    profile: {
+      skillLevel: 18,
+      depth: 12,
+      moveTimeMs: 600,
+      minThinkMs: 450,
+      multiPv: 5,
+      toleranceCp: 120,
+      noise: 0.3,
+      weights: {
+        evaluation: 0.85,
+        check: 0.9,
+        capture: 0.25,
+        forcing: 0.4,
+        kingPressure: 1.5,
+        advance: 0.6,
+        castle: -0.2,
+        kingShelter: -0.4,
+        trade: 0.5,
+        center: 0.2,
+        development: 0.3,
+        quiet: -0.4,
+        earlyQueen: 0.3,
+        sacrifice: 0.8,
+        fork: 0.2,
+        creativity: 0.2,
+        pawnStorm: 1.6,
+      },
+      repertoire: {
+        w: ['e4 e5 f4', 'g4'],
+        b: ['d4 g5', 'e4 e5 Nf3 f5', 'd4 f5', 'c4 f5'],
+      },
+    },
+    stats: { aggression: 10, calculation: 6, creativity: 7, cunning: 5 },
+    firstWinReward: 1200,
+    repeatWinReward: 120,
+    achievementId: 'valhalla-can-wait',
+    portrait: { icon: 'axe', from: '#9a3412', to: '#1e3a5f', monogram: 'R' },
+    quotes: {
+      intro: [
+        'Another shore, another kingdom. Sharpen your pawns — mine are already rowing.',
+        'They told me your land was rich in kings. I came to see for myself.',
+      ],
+      thinking: ['The wind is turning. The pawns will go where the wind goes.', 'A shield wall is only wood. Wood burns.'],
+      playerSlow: ['Do you pray to your gods, or are you making a move?', 'Winter will come before your next move does.'],
+      legendCapture: ['Plunder!', 'That one will row my longship now.', 'Skål — to your fallen piece.'],
+      playerCapture: ['A fair trade. I would make it again.', 'Blood for blood. Good. Now we fight properly.'],
+      checkGiven: ['Your king hides behind his walls. Walls fall.', 'Check! Hear the drums?'],
+      inCheck: ['Ha! Finally a warrior worth the voyage.', 'You strike at the jarl himself? Bold.'],
+      advantage: ['The shield wall breaks! Forward, to the hall!', 'Your kingdom will make a fine new home.'],
+      disadvantage: ['A storm, that is all. Storms pass.', 'Even the gods lose battles. Not wars.'],
+      legendWins: ['Odin smiles today. Tell your skalds of this defeat.', 'Your king is my thrall. Come back with sharper steel.'],
+      legendLoses: ['Valhalla must wait. You have earned a place in my saga.', 'A worthy foe. I will drink to you tonight.'],
+      draw: ['Two longships, no winner. We feast together, then.', 'Neither of us breaks. The sea will decide another day.'],
+    },
+  },
+  {
+    id: 'musashi',
+    campaign: 'historical',
+    name: 'Miyamoto Musashi',
+    shortName: 'Musashi',
+    title: 'Kensei, Sword Saint',
+    epoch: 'feudal-japan',
+    lifespan: '1584–1645',
+    bio: 'Japanese swordsman, strategist and artist, celebrated as undefeated in his recorded duels and as the author of The Book of Five Rings (Go Rin no Sho), a treatise on strategy written near the end of his life.',
+    playstyle: 'The master tactician. Calm, exact and frighteningly quick: he takes the centre, coordinates every piece and strikes only when the cut is clean.',
+    signature: "King's Indian Attack · Catalan · Grünfeld Defence · Najdorf Sicilian",
+    elo: 2600,
+    difficulty: 'expert',
+    campaignOrder: 5,
+    profile: {
+      skillLevel: 20,
+      depth: 16,
+      moveTimeMs: 650,
+      minThinkMs: 350,
+      multiPv: 4,
+      toleranceCp: 20,
+      noise: 0.03,
+      weights: {
+        evaluation: 2.4,
+        check: 0.2,
+        capture: 0.1,
+        forcing: 0.1,
+        kingPressure: 0.4,
+        advance: 0.2,
+        castle: 0.8,
+        kingShelter: 0.3,
+        trade: 0.2,
+        center: 0.9,
+        development: 0.9,
+        quiet: 0.35,
+        earlyQueen: -0.5,
+        sacrifice: 0,
+        fork: 0.6,
+        creativity: 0,
+        longRange: 0.2,
+        pawnStructure: 0.3,
+      },
+      repertoire: {
+        w: ['Nf3 d5 g3', 'Nf3 Nf6 g3', 'd4 Nf6 c4 e6 g3'],
+        b: ['d4 Nf6 c4 g6 Nc3 d5', 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6', 'c4 Nf6'],
+      },
+    },
+    stats: { aggression: 6, calculation: 10, creativity: 7, cunning: 9 },
+    firstWinReward: 1500,
+    repeatWinReward: 150,
+    achievementId: 'book-of-five-rings',
+    portrait: { icon: 'swords', from: '#b91c1c', to: '#111827', monogram: 'M' },
+    quotes: {
+      intro: ['Bow. Then let the first move be honest.', 'Two swords, sixty-four squares. One of us will learn something today.'],
+      thinking: ['Do not look at the pieces. Look at the spaces between them.', 'The cut is already made. I am only waiting for it to land.'],
+      playerSlow: ['A hesitating blade is a broken blade.', 'In a duel, the slow hand writes its own epitaph.'],
+      legendCapture: ['Clean.', 'You left an opening. I do not leave openings.', 'One stroke.'],
+      playerCapture: ['Good. You have begun to see.', 'A fair strike. Remember how it felt.'],
+      checkGiven: ['Your king stands where my blade already is.', 'Check. Breathe — then answer.'],
+      inCheck: ['Ah. A worthy cut.', 'Even the sword saint must step aside sometimes.'],
+      advantage: ['The ground is mine. Now the end is only a matter of distance.', 'Your formation has no centre. Mine has nothing else.'],
+      disadvantage: ['Interesting. I must change my stance.', 'You fight well. I will fight better.'],
+      legendWins: ['Study the way of the board as you would the way of the sword — every day.', 'Today I win. Tomorrow you train.'],
+      legendLoses: ['The student surpasses the master. Write this in your own book.', 'I bow to you. That was the way of strategy.'],
+      draw: ['Two blades meet and neither breaks. There is honour in that.', 'Balance. Let us bow and part as equals.'],
+    },
+  },
 ]
-
-export const getLegend = (id: LegendId): Legend => LEGENDS.find((l) => l.id === id) ?? (LEGENDS[0] as Legend)
-export const getEpoch = (id: EpochId): Epoch => EPOCHS.find((e) => e.id === id) ?? (EPOCHS[0] as Epoch)
-export const LEGEND_IDS: readonly LegendId[] = LEGENDS.map((l) => l.id)
-export const EPOCH_IDS: readonly EpochId[] = EPOCHS.map((e) => e.id)
-
-/** A legend can be challenged once every legend before it in the campaign is defeated. */
-export function isLegendUnlocked(id: LegendId, defeated: Partial<Record<LegendId, string>>): boolean {
-  const legend = getLegend(id)
-  return LEGENDS.filter((l) => l.campaignOrder < legend.campaignOrder).every((l) => Boolean(defeated[l.id]))
-}

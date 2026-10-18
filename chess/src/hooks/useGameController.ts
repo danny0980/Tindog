@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ambientMusic, resolveMaterial, sfx } from '../audio'
 import { DIFFICULTIES, PERSONALITIES, resolveTimeControl, standardOpponent } from '../constants/game'
 import { getBoardTheme, getPieceSet } from '../constants/themes'
-import { getEpoch, getLegend } from '../data/historicalLegends'
+import { applyStrength, getEpoch, getLegend, legendElo, strengthInfo } from '../data/legends'
 import { legendSay } from '../stores/dialogueStore'
 import type { LegendId } from '../types/legend'
 import { profileStore } from '../stores/profileStore'
@@ -93,8 +93,8 @@ export function useGameController({ active }: { active: boolean }) {
   const difficultyLabel = DIFFICULTIES.find((d) => d.id === gameSettings.difficulty)?.label ?? ''
   const personality = PERSONALITIES.find((p) => p.id === gameSettings.personality) ?? PERSONALITIES[0]
   const opponent = useMemo(
-    () => (legend ? legend.profile : standardOpponent(gameSettings.difficulty, gameSettings.personality)),
-    [gameSettings.difficulty, gameSettings.personality, legend],
+    () => (legend ? applyStrength(legend.profile, gameSettings.legendStrength) : standardOpponent(gameSettings.difficulty, gameSettings.personality)),
+    [gameSettings.difficulty, gameSettings.legendStrength, gameSettings.personality, legend],
   )
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
@@ -169,7 +169,7 @@ export function useGameController({ active }: { active: boolean }) {
         rated: ai && !casual,
         opening: openingName,
         legendId: legend?.id ?? null,
-        ...(legend ? { opponentElo: legend.elo } : {}),
+        ...(legend ? { opponentElo: legendElo(legend, gameSettings.legendStrength) } : {}),
       }
       const out = applyMatch(profileStore.get(), matchInput)
       profileStore.set(out.profile)
@@ -179,7 +179,14 @@ export function useGameController({ active }: { active: boolean }) {
       let legendSummary: GameEndSummary['legend'] = null
       let unlocked = out.unlocked
       if (legend && outcome) {
-        const lr = applyLegendResult(profileStore.get(), legend.id, outcome, history.filter((m) => m.color === humanColor).length)
+        const lr = applyLegendResult(
+          profileStore.get(),
+          legend.id,
+          outcome,
+          history.filter((m) => m.color === humanColor).length,
+          new Date(),
+          gameSettings.legendStrength,
+        )
         profileStore.set(lr.profile)
         legendSummary = { name: legend.name, firstDefeat: lr.firstDefeat, coins: lr.coins, rewards: lr.rewards }
         unlocked = [...unlocked, ...lr.unlocked]
@@ -458,7 +465,9 @@ export function useGameController({ active }: { active: boolean }) {
         }
       }
       if (legend && color === aiColor) {
-        return { color, name: legend.name, subtitle: `${legend.title} · ~${legend.elo}`, isEngine: true, mood, legendId: legend.id }
+        const strength = gameSettings.legendStrength
+        const tier = strength === 'authentic' ? '' : ` · ${strengthInfo(strength).label}`
+        return { color, name: legend.name, subtitle: `${legend.title} · ~${legendElo(legend, strength)}${tier}`, isEngine: true, mood, legendId: legend.id }
       }
       if (isAiMode && color === aiColor) {
         return {
@@ -477,7 +486,7 @@ export function useGameController({ active }: { active: boolean }) {
       return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood, legendId: null }
     }
     return { w: info('w'), b: info('b') }
-  }, [aiColor, aiThinking, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, isAiMode, legend, personality, review, reviewLegend])
+  }, [aiColor, aiThinking, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, legend, personality, review, reviewLegend])
 
   const bestMoveArrow =
     !timeMachine.isLive && analysis.state.status === 'done' && evaluation?.bestMove

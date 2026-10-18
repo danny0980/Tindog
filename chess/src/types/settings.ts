@@ -1,4 +1,5 @@
 import type { GameSettings } from './chess'
+import type { CampaignId } from './legend'
 import type { BoardThemeId, PieceSetId, SoundMaterial } from './theme'
 
 export type HapticIntensity = 'off' | 'light' | 'medium' | 'heavy'
@@ -39,4 +40,8 @@ export interface AppSettings {
   showLegalMoves: boolean
   showCoordinates: boolean
   game: GameSettings
+  /** Last screen visited in the Legends hub (campaign select, a campaign map or free play). */
+  legendsScreen: LegendsScreen
 }
+
+export type LegendsScreen = 'select' | CampaignId | 'freeplay'

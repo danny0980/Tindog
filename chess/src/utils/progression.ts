@@ -7,8 +7,8 @@ import type { Color, Difficulty, GameMode, GameResult, Move, Outcome, Personalit
 import type { AchievementDef, MatchRecord, PlayerProfile } from '../types/profile'
 import type { Puzzle } from '../types/puzzle'
 import type { QuestEvents } from '../types/quest'
-import { LEGENDS, getEpoch, getLegend } from '../data/historicalLegends'
-import type { LegendId } from '../types/legend'
+import { CAMPAIGNS, EPOCHS, getCampaign, getEpoch, getLegend, isCampaignComplete, strengthInfo } from '../data/legends'
+import type { LegendId, LegendStrength } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { localDateKey, previousDateKey } from './date'
 
@@ -369,12 +369,15 @@ export function applyLegendResult(
   outcome: Outcome,
   humanMoves: number,
   now: Date = new Date(),
+  strength: LegendStrength = 'authentic',
 ): LegendResult {
   const legend = getLegend(legendId)
   const epoch = getEpoch(legend.epoch)
   const l = profile.legends
   const firstDefeat = outcome === 'win' && !l.defeated[legendId]
-  const coins = outcome === 'win' ? (firstDefeat ? legend.firstWinReward : legend.repeatWinReward) : 0
+  // First victories only happen in the campaign (authentic strength); rematches scale with strength.
+  const coins =
+    outcome === 'win' ? (firstDefeat ? legend.firstWinReward : Math.round(legend.repeatWinReward * strengthInfo(strength).rewardFactor)) : 0
   const bump = (rec: Partial<Record<LegendId, number>>, hit: boolean) => (hit ? { ...rec, [legendId]: (rec[legendId] ?? 0) + 1 } : rec)
 
   const legends = {
@@ -409,8 +412,11 @@ export function applyLegendResult(
   const ids: string[] = []
   if (outcome === 'win') ids.push(legend.achievementId)
   if (legendId === 'newton' && humanMoves >= 40) ids.push('calculated-by-newton')
-  if (legends.epochsVisited.length >= 4) ids.push('time-traveler')
-  if (LEGENDS.every((x) => legends.defeated[x.id])) ids.push('master-of-time')
+  const visited = new Set(legends.epochsVisited)
+  if (EPOCHS.filter((e) => e.campaign === 'historical').every((e) => visited.has(e.id))) ids.push('time-traveler')
+  if (CAMPAIGNS.every((c) => legends.epochsVisited.some((id) => getEpoch(id).campaign === c.id))) ids.push('walker-between-worlds')
+  const campaign = getCampaign(legend.campaign)
+  if (isCampaignComplete(campaign.id, legends.defeated)) ids.push(campaign.completionAchievement)
   const granted = grant(next, ids, now.toISOString())
   return { profile: granted.profile, coins, firstDefeat, unlocked: granted.unlocked, rewards }
 }

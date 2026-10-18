@@ -33,8 +33,14 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'calculated-by-newton', title: 'Calculated by Newton', description: 'Last 40 or more moves against Sir Isaac Newton.', icon: 'apple', reward: 60, tier: 'bronze' },
   { id: 'your-waterloo', title: 'Your Waterloo, Sire', description: 'Defeat Napoleon Bonaparte.', icon: 'flag', reward: 200, tier: 'gold' },
   { id: 'relativity-defeated', title: 'Relativity Defeated', description: 'Defeat Albert Einstein.', icon: 'atom', reward: 300, tier: 'platinum' },
-  { id: 'time-traveler', title: 'Time Traveler', description: 'Challenge a legend in every epoch.', icon: 'clock', reward: 75, tier: 'silver' },
-  { id: 'master-of-time', title: 'Master of Time', description: 'Defeat all four historical legends.', icon: 'crown', reward: 500, tier: 'platinum' },
+  { id: 'valhalla-can-wait', title: 'Valhalla Can Wait', description: 'Defeat Ragnar Lothbrok.', icon: 'axe', reward: 300, tier: 'gold' },
+  { id: 'book-of-five-rings', title: 'The Book of Five Rings', description: 'Defeat Miyamoto Musashi.', icon: 'swords', reward: 400, tier: 'platinum' },
+  { id: 'elven-accord', title: 'Elven Accord', description: 'Defeat Queen Aerith.', icon: 'leaf', reward: 150, tier: 'silver' },
+  { id: 'shadowbane', title: 'Shadowbane', description: 'Defeat Malakor the Dark Sorcerer.', icon: 'wand', reward: 300, tier: 'gold' },
+  { id: 'time-traveler', title: 'Time Traveler', description: 'Challenge a legend in every historical era.', icon: 'clock', reward: 75, tier: 'silver' },
+  { id: 'master-of-time', title: 'Master of Time', description: 'Complete the Historical Timeline campaign.', icon: 'crown', reward: 500, tier: 'platinum' },
+  { id: 'hero-of-the-realm', title: 'Hero of the Realm', description: 'Complete the Fantasy Realm campaign.', icon: 'wand', reward: 400, tier: 'platinum' },
+  { id: 'walker-between-worlds', title: 'Walker Between Worlds', description: 'Fight legends in both the Historical and Fantasy campaigns.', icon: 'globe', reward: 75, tier: 'silver' },
 ]
 
 export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

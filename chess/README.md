@@ -1,10 +1,103 @@
-# ♞ Chess Arena: AAA Edition (v3.1 · Chronos Chess)
+# ♞ Chess Arena: AAA Edition (v3.2 · Chronos Chess: Universes)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 3.2: Universes — Vikings, Samurai & the Fantasy Realm
+
+Chronos Chess now spans **two universes** with eight playable characters. The Legends tab opens on a **Campaign Select / Universe Switcher** with three paths:
+
+| Path | Chapters | Notes |
+|---|---|---|
+| **Historical Timeline** | Cleopatra → Newton → Napoleon → Einstein → **Ragnar Lothbrok** → **Miyamoto Musashi** | Six eras. Finishing it awards **Master of Time**. |
+| **Fantasy Realm** | **Queen Aerith** → **Malakor the Dark Sorcerer** | Its own progression, open from the start and independent of history. Finishing it awards **Hero of the Realm**. |
+| **Free Play / Quick Battle** | Any character you have defeated | Pick the strength, side and any time control, including custom minutes + increment. |
+
+The last screen you used (select, a campaign, or free play) is remembered.
+
+### The new characters
+
+| Character | Setting | Rating | How they play |
+|---|---|---|---|
+| **Ragnar Lothbrok** (V) | Viking Age, 865 AD | ~2400 | Berserker. A new **`pawnStorm`** weight pushes flank pawns at your king, with high tolerance and noise for risky trades. Book: King's Gambit, 1.g4, the Borg (1.d4 g5), the Dutch, and the Latvian. |
+| **Miyamoto Musashi** (VI) | Feudal Japan, 1612 | ~2600 | Precise and positional. Skill 20, depth 16, a 20 cp tolerance and a short think, so he calculates fast and rarely strays from the best line. Book: Réti / King's Indian Attack, the Catalan, the Najdorf and the Grünfeld. |
+| **Queen Aerith** (I) | Elven Kingdom | ~1600 | Defensive. **`pawnStructure`** rewards pawn-supported chains and **`longRange`** rewards bishops and queens on long open diagonals. A high `fork` weight hunts knight and bishop forks. Book: 1.b3 / 1.g3 fianchettos, the Caro-Kann, the Queen's Indian and the English Slav. |
+| **Malakor the Dark Sorcerer** (II) | Realm of Shadows | ~2200 | High risk. A large **`sacrifice`** weight and wide tolerance favour gambits and sacrifices. Book: the Blackmar–Diemer, King's and Evans Gambits, the Englund, the Latvian, Traxler and Budapest. |
+
+The data is split by universe:
+- `src/data/eras/`: `epochs.ts` and `legends.ts` for history.
+- `src/data/realms/`: `realms.ts` and `legends.ts` for fantasy.
+- `src/data/campaigns.ts`: the chapter order and completion trophies.
+- `src/data/legends.ts`: the single aggregator. It covers lookup, gating, strengths and labels.
+
+Adding a character means adding one data entry plus one chapter slot.
+
+### Strength (difficulty) for every character
+
+`applyStrength()` scales a character's profile but **keeps their style weights and opening book**. A Novice Ragnar still storms, just less accurately.
+
+| Strength | Rating | Engine | Rewards |
+|---|---|---|---|
+| **Novice** | −350 | skill −7, depth −4, faster, wider tolerance, more noise | ×0.5 |
+| **Authentic** | as listed | the character's own profile | ×1 |
+| **Mythic** | +200 | skill 20, depth +4, longer think, tighter tolerance | ×1.5 |
+
+Campaign battles are always **Authentic**. Free Play and *New game → vs Computer → Legend opponents* let you choose.
+
+### Themes & soundscapes
+
+| World | Board | Pieces | Piece sound | Soundtrack texture |
+|---|---|---|---|---|
+| Viking Age | Rune-Carved Oak (rune-etched planks, fur-brown frame) | Runestone | wood | `nordic`: low drones, a **war-drum** pulse, deep booms |
+| Feudal Japan | Bamboo & Gold Leaf (ink-wash strokes, gold leaf) | Urushi Lacquer | wood | `japanese`: In-scale **koto** plucks with a breathy **shakuhachi** flute |
+| Elven Kingdom | Elven Crystal (frosted crystal, leaf veins) | Moonsilver | **crystal** (new) | `elven`: **harp** arpeggios and a formant-filtered "choir" pad |
+| Realm of Shadows | Obsidian & Lava (cracked obsidian, glowing fissures) | Hellfire | **ember** (new) | `shadow`: a dark cinematic pad, **heartbeat** pulse and sub booms |
+
+As in 3.1, the four new boards and piece sets are unlocked by a character's **first defeat** and can't be bought. First-win bounties are Ragnar 1200, Musashi 1500, Aerith 600 and Malakor 1200. New trophies:
+- **Valhalla Can Wait**
+- **The Book of Five Rings**
+- **Elven Accord**
+- **Shadowbane**
+- **Hero of the Realm**
+- **Walker Between Worlds** (fight in both universes)
+
+**Time Traveler** now requires all six historical eras.
+
+### Integration guide: testing the universes locally
+
+```bash
+cd chess
+npm install
+npm run check        # typecheck + lint + data validation (44 repertoire lines replayed) + logic tests
+npm run dev          # Legends tab (hourglass icon)
+```
+
+1. **Universe selector.** The Legends tab opens on three cards: Historical Timeline, Fantasy Realm and Free Play. Each card shows your progress and the next chapter. Use **← Paths** to come back. Reloading returns you to the screen you left.
+2. **Fantasy is open from the start.** Choose Fantasy Realm and Aerith is unlocked. The board re-themes to Elven Crystal while she is selected. Malakor stays locked until Aerith falls, and his card reads "through the veil".
+3. **Seed progress to reach the new chapters.** Paste this into the browser console, then reload:
+
+   ```js
+   const now = new Date().toISOString()
+   const p = JSON.parse(localStorage.getItem('chess-arena:profile:v1') ?? '{"version":1}')
+   p.legends = { defeated: { cleopatra: now, newton: now, napoleon: now, einstein: now, ragnar: now, aerith: now }, wins: {}, losses: {}, draws: {}, epochsVisited: [] }
+   localStorage.setItem('chess-arena:profile:v1', JSON.stringify(p))
+   ```
+
+   Musashi and Malakor are then the next chapters, and six characters are playable in Free Play. As before, cosmetics and trophies come only from real wins; `npm run test:legends` covers the full win path.
+4. **Opening books to try.** Repertoire moves are played without the engine, so they are deterministic within a choice set:
+   - **Ragnar** (you play White): 1.d4 → 1…g5 or 1…f5. As White he opens 1.e4 (King's Gambit) or 1.g4.
+   - **Musashi** (you play White): 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 → **5…a6** (Najdorf).
+   - **Aerith** (you play Black): she opens 1.b3 or 1.g3.
+   - **Malakor** (you play White): 1.d4 → 1…e5 (Englund) or 1…Nf6 2.c4 e5 (Budapest).
+5. **Free Play.** Pick a defeated character, then set the strength, side and time control. Try **Custom** with the minute/increment sliders. The player bar shows e.g. "~2800 · Mythic". Locked characters show "Defeat in campaign".
+6. **Mobile.** Check these sizes in DevTools device mode, or on device via Capacitor:
+   - **390×844** and **375×667** in one-handed mode: the selector cards stack, the timeline scrolls horizontally, and battles fit without page scroll.
+   - **844×390** landscape: the battle uses the side rail with the character bar beside the board.
 
 ---
 
@@ -21,7 +114,7 @@ Travel through four epochs and play legendary historical figures, each with a di
 
 ### How a persona becomes a playing style
 
-Every legend has an `OpponentProfile` in `src/data/historicalLegends.ts`. The fields are:
+Every legend has an `OpponentProfile` in `src/data/eras/legends.ts` (fantasy characters: `src/data/realms/legends.ts`). The fields are:
 
 - **Strength:** Stockfish `skillLevel`, `depth`, `moveTimeMs`, and `minThinkMs` (a human-like pause).
 - **Candidates:** `multiPv`, the number of candidate lines Stockfish returns. `toleranceCp` sets how far below the best move a stylish choice may be.
@@ -305,7 +398,7 @@ chess/
     ├── audio/                     # procedural audio engine
     │   ├── AudioEngine.ts         #   context, buses, reverb, unlock/suspend
     │   ├── synth.ts               #   tone / noise voice primitives
-    │   ├── pieceSounds.ts         #   wood · marble · metal · synth · soft impacts
+    │   ├── pieceSounds.ts         #   wood · marble · metal · synth · soft · crystal · ember impacts
     │   ├── fanfares.ts            #   victory, defeat, draw, timeout, check…
     │   ├── ambientMusic.ts        #   adaptive generative soundtrack
     │   ├── haptics.ts             #   per-channel intensities · Capacitor Haptics / Vibration API
@@ -339,7 +432,8 @@ chess/
     │   ├── rush/                  #   RushHud, ScorePopups
     │   ├── quests/                #   QuestCard
     │   ├── settings/              #   AudioPanel (mixer), HapticsPanel (channels)
-    │   ├── legends/               #   EpochSelector (timeline), LegendDossier, LegendPortrait,
+    │   ├── legends/               #   CampaignSelect (universe switcher), EpochSelector (chapter map),
+    │   │                          #   FreePlayPanel, LegendDossier, LegendPortrait,
     │   │                          #   LegendDialogue (speech bubble), TimeWarpOverlay
     │   ├── analysis/              #   AnalysisPanel, EvalGraph, ClassificationBadge
     │   ├── modals/                #   NewGame, GameOver, Settings
@@ -350,7 +444,10 @@ chess/
     ├── views/                     # PlayView · LegendsView · RushView · PuzzlesView · QuestsView · ProfileView · ShopView
     ├── constants/                 # difficulty/personality tuning, themes, achievements, economy, quests, rush
     ├── data/                      # openings.ts (189 lines) · puzzles.ts (120 verified mates)
-    │                              # historicalLegends.ts (epochs, legends, profiles, repertoires, dialogue)
+    │   ├── eras/                  #   epochs.ts · legends.ts (6 historical characters)
+    │   ├── realms/                #   realms.ts · legends.ts (Aerith, Malakor)
+    │   ├── campaigns.ts           #   chapter order + completion trophies
+    │   └── legends.ts             #   aggregator: lookup, gating, strengths, labels
     ├── types/                     # chess, engine, analysis, theme, profile, settings, puzzle, quest, rush, ui
     ├── utils/                     # chess helpers, progression (Elo/coins/achievements),
     │                              # quests (daily selection/claims), rushScoring, status,

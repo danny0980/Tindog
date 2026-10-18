@@ -1,5 +1,5 @@
 import type { Color, Move, PieceSymbol, Square } from 'chess.js'
-import type { LegendId } from './legend'
+import type { LegendId, LegendStrength } from './legend'
 
 export type { Color, Move, PieceSymbol, Square }
 
@@ -37,6 +37,8 @@ export interface GameSettings {
   customIncrementSeconds: number
   /** Historical legend opponent (AI mode); overrides difficulty & personality. */
   legendId: LegendId | null
+  /** Free-play strength scaling for legend opponents. */
+  legendStrength: LegendStrength
 }
 
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient'

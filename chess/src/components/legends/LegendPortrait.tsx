@@ -1,8 +1,8 @@
-import { Apple, Atom, Eye, Flag, Lock } from 'lucide-react'
-import { getLegend } from '../../data/historicalLegends'
+import { Apple, Atom, Axe, Eye, Flag, Flame, Leaf, Lock, Swords } from 'lucide-react'
+import { getLegend } from '../../data/legends'
 import type { LegendIcon, LegendId } from '../../types/legend'
 
-const ICONS: Record<LegendIcon, typeof Atom> = { eye: Eye, apple: Apple, flag: Flag, atom: Atom }
+const ICONS: Record<LegendIcon, typeof Atom> = { eye: Eye, apple: Apple, flag: Flag, atom: Atom, axe: Axe, swords: Swords, leaf: Leaf, flame: Flame }
 
 const SIZES = {
   sm: { box: 'size-11 rounded-xl', icon: 'size-5', mono: 'text-[10px]' },

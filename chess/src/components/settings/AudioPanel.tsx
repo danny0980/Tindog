@@ -16,6 +16,8 @@ const MATERIALS: ReadonlyArray<{ id: SoundMaterialSetting; label: string; hint: 
   { id: 'metal', label: 'Metal', hint: 'Ringing bar' },
   { id: 'synth', label: 'Synth', hint: 'Neon blip' },
   { id: 'soft', label: 'Soft', hint: 'Gentle tap' },
+  { id: 'crystal', label: 'Crystal', hint: 'Elven glass chime' },
+  { id: 'ember', label: 'Ember', hint: 'Obsidian thud & sparks' },
 ]
 
 const unlock = () => audioEngine.unlock()

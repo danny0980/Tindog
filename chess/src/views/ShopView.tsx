@@ -8,7 +8,7 @@ import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import { type ShopItem, itemPrice, legendUnlockFor, ownsItem, purchase } from '../utils/progression'
-import { getLegend } from '../data/historicalLegends'
+import { getLegend } from '../data/legends'
 
 export function ShopView({ onOpenLegends }: { onOpenLegends: () => void }) {
   const profile = useStore(profileStore, (p) => p)

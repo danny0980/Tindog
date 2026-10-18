@@ -2,6 +2,31 @@ import type { BoardTheme, BoardThemeId, PieceSet, PieceSetId } from '../types/th
 
 const glowRing = (color: string) => `inset 0 0 0 3px ${color}, inset 0 0 18px ${color}`
 
+/** Inline SVG as a CSS url() — lets themes carry engraved motifs without image assets. */
+const svg = (markup: string) => `url("data:image/svg+xml,${encodeURIComponent(markup)}")`
+
+/** Runic strokes (algiz, tiwaz, and an ingwaz-style diamond) carved faintly into each square. */
+const RUNES = (stroke: string) =>
+  svg(
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='${stroke}' stroke-width='1.4' stroke-linecap='round'>` +
+      `<path d='M8 30V12M8 18l-4-5M8 18l4-5'/><path d='M30 30V12M26 16l4-4 4 4'/><path d='M20 25l-3 3 3 3 3-3z'/></svg>`,
+  )
+
+/** A single soft ink-wash brushstroke for the Feudal Japan board. */
+const INK_STROKE = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><path d='M4 30 C14 22, 26 34, 36 18' stroke='rgba(17,24,39,0.10)' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`,
+)
+
+/** Leaf-vein motif for the elven board. */
+const LEAF = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='rgba(134,239,172,0.22)' stroke-width='1'><path d='M8 32 C10 18, 22 8, 34 8 C32 20, 22 30, 8 32Z'/><path d='M8 32 L30 11'/></svg>`,
+)
+
+/** Glowing lava fissures for the shadow realm. */
+const FISSURE = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='rgba(249,115,22,0.55)' stroke-width='0.9'><path d='M2 12 L12 16 L18 10 L28 18 L38 14'/><path d='M18 10 L20 2'/><path d='M12 16 L10 30 L20 36'/></svg>`,
+)
+
 export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
   {
     id: 'classic-wood',
@@ -370,6 +395,161 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     particles: ['#f8fafc', '#fde68a', '#93c5fd', '#fca5a5'],
     suggestedPieceSet: 'chalk',
   },
+  // ── New eras & realms ──
+  {
+    id: 'rune-oak',
+    name: 'Rune-Carved Oak',
+    description: 'Ash and smoke-dark oak, carved with runes and trimmed in winter fur.',
+    price: 0,
+    legendUnlock: 'ragnar',
+    musicTexture: 'nordic',
+    material: 'wood',
+    lightSquare: {
+      background: `${RUNES('rgba(92,56,25,0.13)')} center / 62% no-repeat, repeating-linear-gradient(92deg, rgba(110,70,35,0.08) 0 2px, transparent 2px 8px), #d9c3a0`,
+    },
+    darkSquare: {
+      background: `${RUNES('rgba(232,214,180,0.11)')} center / 62% no-repeat, repeating-linear-gradient(88deg, rgba(0,0,0,0.12) 0 2px, transparent 2px 7px), #5c3d24`,
+    },
+    notationLight: '#6b4423',
+    notationDark: '#ead9bd',
+    boardFrame: {
+      // Iron rim, then a pale fur trim.
+      boxShadow: '0 0 0 3px #3f3f46, 0 0 0 9px #e7dcc8, 0 0 0 10px rgba(0,0,0,0.4), 0 30px 70px -20px rgba(0,0,0,0.85)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(125, 211, 252, 0.32)' },
+      selected: { backgroundColor: 'rgba(214, 185, 140, 0.6)' },
+      target: { background: 'radial-gradient(circle, rgba(30,20,10,0.5) 20%, transparent 23%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 57%, rgba(185,28,28,0.75) 60%, rgba(185,28,28,0.5) 70%, transparent 74%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,38,38,0.8) 30%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 4px rgba(125, 211, 252, 0.85)' },
+      hint: { boxShadow: glowRing('rgba(125, 211, 252, 0.95)') },
+    },
+    accent: '#d6b98c',
+    accent2: '#7dd3fc',
+    background:
+      'radial-gradient(1000px 600px at 15% -10%, rgba(125,211,252,0.14), transparent 60%), radial-gradient(900px 600px at 100% 30%, rgba(214,185,140,0.12), transparent 60%), linear-gradient(180deg, #0f1519, #0a0d10)',
+    chromeColor: '#0f1519',
+    particles: ['#d6b98c', '#e7dcc8', '#7dd3fc', '#ffffff'],
+    suggestedPieceSet: 'runestone',
+  },
+  {
+    id: 'bamboo-gold',
+    name: 'Bamboo & Gold Leaf',
+    description: 'Bamboo slats beside black lacquer flecked with gold leaf, framed in ink wash.',
+    price: 0,
+    legendUnlock: 'musashi',
+    musicTexture: 'japanese',
+    material: 'wood',
+    lightSquare: {
+      background: `${INK_STROKE} center / 100% no-repeat, repeating-linear-gradient(0deg, transparent 0 46%, rgba(120,110,40,0.22) 46% 50%, transparent 50% 100%), linear-gradient(90deg, #e7dfb2, #f1ead0 50%, #e2d8a6)`,
+    },
+    darkSquare: {
+      background:
+        'radial-gradient(circle at 25% 35%, rgba(212,167,44,0.55) 0 1.2px, transparent 2px), radial-gradient(circle at 70% 70%, rgba(212,167,44,0.45) 0 1px, transparent 2px), radial-gradient(circle at 60% 20%, rgba(212,167,44,0.35) 0 0.8px, transparent 1.5px), #1c1917',
+    },
+    notationLight: '#57534e',
+    notationDark: '#d4a72c',
+    boardFrame: { boxShadow: '0 0 0 2px #d4a72c, 0 0 0 7px #0c0a09, 0 0 0 8px rgba(212,167,44,0.5), 0 30px 60px -20px rgba(0,0,0,0.85)' },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(212, 167, 44, 0.38)' },
+      selected: { backgroundColor: 'rgba(239, 68, 68, 0.45)' },
+      target: { background: 'radial-gradient(circle, rgba(185,28,28,0.75) 15%, transparent 19%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 58%, rgba(185,28,28,0.8) 60%, rgba(185,28,28,0.8) 66%, transparent 69%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(220,38,38,0.85) 30%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(212, 167, 44, 0.9)' },
+      hint: { boxShadow: glowRing('rgba(239, 68, 68, 0.9)') },
+    },
+    accent: '#ef4444',
+    accent2: '#d4a72c',
+    // Minimal ink-wash: soft grey "clouds" of diluted ink on near-black paper.
+    background:
+      'radial-gradient(700px 300px at 20% 10%, rgba(229,231,235,0.07), transparent 70%), radial-gradient(600px 260px at 85% 60%, rgba(229,231,235,0.05), transparent 70%), radial-gradient(500px 200px at 40% 95%, rgba(239,68,68,0.06), transparent 70%), #0d0d0e',
+    chromeColor: '#0d0d0e',
+    particles: ['#ef4444', '#d4a72c', '#f5f5f4', '#fecaca'],
+    suggestedPieceSet: 'lacquer',
+  },
+  {
+    id: 'elven-crystal',
+    name: 'Elven Crystal',
+    description: 'Moonlit crystal and living jade, veined with glowing leaves.',
+    price: 0,
+    legendUnlock: 'aerith',
+    musicTexture: 'elven',
+    material: 'crystal',
+    lightSquare: {
+      background:
+        'conic-gradient(from 45deg at 50% 50%, rgba(255,255,255,0.35), rgba(186,230,253,0.15), rgba(255,255,255,0.35), rgba(196,181,253,0.2), rgba(255,255,255,0.35)), #c7e8e4',
+    },
+    darkSquare: {
+      background: `${LEAF} center / 85% no-repeat, radial-gradient(ellipse at 30% 25%, rgba(134,239,172,0.25), transparent 65%), linear-gradient(150deg, #0f766e, #134e4a)`,
+    },
+    notationLight: '#0f766e',
+    notationDark: '#bbf7d0',
+    boardFrame: {
+      boxShadow: '0 0 0 2px rgba(226,232,240,0.9), 0 0 24px rgba(134,239,172,0.55), 0 0 60px -10px rgba(196,181,253,0.6), 0 30px 60px -20px rgba(0,0,0,0.8)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(196, 181, 253, 0.38)', boxShadow: 'inset 0 0 12px rgba(255,255,255,0.45)' },
+      selected: { backgroundColor: 'rgba(134, 239, 172, 0.5)', boxShadow: 'inset 0 0 16px rgba(134,239,172,0.9)' },
+      target: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 12%, rgba(134,239,172,0.55) 19%, transparent 25%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 57%, rgba(196,181,253,0.95) 60%, rgba(196,181,253,0.45) 68%, transparent 74%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(244,63,94,0.7) 32%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(134,239,172,0.9), inset 0 0 18px rgba(134,239,172,0.6)' },
+      hint: { boxShadow: glowRing('rgba(196, 181, 253, 0.95)') },
+    },
+    accent: '#86efac',
+    accent2: '#c4b5fd',
+    background:
+      'radial-gradient(2px 2px at 20% 30%, rgba(190,242,100,0.8), transparent), radial-gradient(2px 2px at 70% 60%, rgba(196,181,253,0.8), transparent), radial-gradient(1.5px 1.5px at 40% 80%, rgba(255,255,255,0.7), transparent), radial-gradient(1000px 600px at 50% -10%, rgba(134,239,172,0.18), transparent 60%), linear-gradient(180deg, #06201d, #050d12)',
+    chromeColor: '#06201d',
+    particles: ['#86efac', '#c4b5fd', '#ffffff', '#bae6fd'],
+    suggestedPieceSet: 'moonsilver',
+  },
+  {
+    id: 'obsidian-lava',
+    name: 'Obsidian & Lava',
+    description: 'Volcanic glass split by rivers of molten rock.',
+    price: 0,
+    legendUnlock: 'malakor',
+    musicTexture: 'shadow',
+    material: 'ember',
+    lightSquare: {
+      background: `${FISSURE} center / 100% no-repeat, radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.08), transparent 70%), #6b605c`,
+    },
+    darkSquare: {
+      background: 'radial-gradient(ellipse at 50% 120%, rgba(249,115,22,0.35), transparent 60%), linear-gradient(140deg, #231d1f, #120d0f)',
+    },
+    notationLight: '#fdba74',
+    notationDark: '#f97316',
+    boardFrame: {
+      boxShadow: '0 0 0 2px #f97316, 0 0 30px rgba(249,115,22,0.55), 0 0 90px -10px rgba(168,85,247,0.45), 0 30px 60px -20px rgba(0,0,0,0.9)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(249, 115, 22, 0.32)', boxShadow: 'inset 0 0 14px rgba(249,115,22,0.6)' },
+      selected: { backgroundColor: 'rgba(168, 85, 247, 0.45)', boxShadow: 'inset 0 0 16px rgba(168,85,247,0.8)' },
+      target: { background: 'radial-gradient(circle, rgba(253,186,116,0.95) 13%, rgba(249,115,22,0.45) 19%, transparent 25%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 56%, rgba(249,115,22,0.95) 60%, rgba(220,38,38,0.5) 68%, transparent 74%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(168,85,247,0.85) 32%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(249,115,22,0.9), inset 0 0 18px rgba(249,115,22,0.6)' },
+      hint: { boxShadow: glowRing('rgba(168, 85, 247, 0.95)') },
+    },
+    accent: '#f97316',
+    accent2: '#a855f7',
+    background:
+      'radial-gradient(1200px 500px at 50% 120%, rgba(249,115,22,0.28), transparent 60%), radial-gradient(800px 500px at 100% -10%, rgba(168,85,247,0.18), transparent 60%), #070506',
+    chromeColor: '#070506',
+    particles: ['#f97316', '#fbbf24', '#a855f7', '#ef4444'],
+    suggestedPieceSet: 'hellfire',
+  },
 ]
 
 export const PIECE_SETS: ReadonlyArray<PieceSet> = [
@@ -440,6 +620,42 @@ export const PIECE_SETS: ReadonlyArray<PieceSet> = [
     legendUnlock: 'einstein',
     white: { fill: '#f8fafc', filter: 'drop-shadow(0 0 1.2px rgba(255,255,255,0.85))' },
     black: { fill: '#1b2420', filter: 'drop-shadow(0 0 1.5px rgba(248,250,252,0.9))' },
+  },
+  {
+    id: 'runestone',
+    name: 'Runestone',
+    description: 'Carved bone against iron-dark soapstone.',
+    price: 0,
+    legendUnlock: 'ragnar',
+    white: { fill: '#efe6d2', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
+    black: { fill: '#2d3436', filter: 'drop-shadow(0 0 1.5px rgba(214,185,140,0.75)) drop-shadow(0 2px 2px rgba(0,0,0,0.6))' },
+  },
+  {
+    id: 'lacquer',
+    name: 'Urushi Lacquer',
+    description: 'Ivory washi and vermilion lacquer, edged in gold.',
+    price: 0,
+    legendUnlock: 'musashi',
+    white: { fill: '#f8f4e8', filter: 'drop-shadow(0 0 1px rgba(212,167,44,0.8)) drop-shadow(0 2px 2px rgba(0,0,0,0.45))' },
+    black: { fill: '#b91c1c', filter: 'drop-shadow(0 0 1.5px rgba(212,167,44,0.85)) drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
+  },
+  {
+    id: 'moonsilver',
+    name: 'Moonsilver',
+    description: 'Silver touched by moonlight versus deep forest jade.',
+    price: 0,
+    legendUnlock: 'aerith',
+    white: { fill: '#f1f5f9', filter: 'drop-shadow(0 0 2px rgba(196,181,253,0.9)) drop-shadow(0 0 6px rgba(134,239,172,0.4))' },
+    black: { fill: '#064e3b', filter: 'drop-shadow(0 0 2px rgba(134,239,172,0.9)) drop-shadow(0 2px 2px rgba(0,0,0,0.5))' },
+  },
+  {
+    id: 'hellfire',
+    name: 'Hellfire',
+    description: 'Ash-white bone against obsidian rimmed in lava.',
+    price: 0,
+    legendUnlock: 'malakor',
+    white: { fill: '#e7e5e4', filter: 'drop-shadow(0 0 2px rgba(249,115,22,0.7)) drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
+    black: { fill: '#1c1917', filter: 'drop-shadow(0 0 2px rgba(249,115,22,0.95)) drop-shadow(0 0 5px rgba(220,38,38,0.6))' },
   },
 ]
 

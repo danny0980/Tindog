@@ -8,8 +8,7 @@ import { useLayoutMode } from './hooks/useLayoutMode'
 import { useStore } from './hooks/useStore'
 import { profileStore } from './stores/profileStore'
 import type { MatchRecord } from './types/profile'
-import type { ColorChoice } from './types/chess'
-import type { LegendId } from './types/legend'
+import type { ChallengeOptions, LegendId } from './types/legend'
 import { setThemeOverride } from './stores/themeOverrideStore'
 import type { AppView } from './types/ui'
 import { localDateKey } from './utils/date'
@@ -59,8 +58,17 @@ export default function App() {
 
   // Chronos Chess: launch a legend battle from the timeline.
   const challengeLegend = useCallback(
-    (legendId: LegendId, options: { color: ColorChoice; timeControlId: string }) => {
-      game.startNewGame({ ...game.gameSettings, mode: 'ai', legendId, playerColor: options.color, timeControlId: options.timeControlId })
+    (legendId: LegendId, options: ChallengeOptions) => {
+      game.startNewGame({
+        ...game.gameSettings,
+        mode: 'ai',
+        legendId,
+        legendStrength: options.strength,
+        playerColor: options.color,
+        timeControlId: options.timeControlId,
+        ...(options.customMinutes !== undefined ? { customMinutes: options.customMinutes } : {}),
+        ...(options.customIncrementSeconds !== undefined ? { customIncrementSeconds: options.customIncrementSeconds } : {}),
+      })
       navigate('play')
     },
     [game, navigate],

@@ -3,9 +3,9 @@ import { type ReactNode, useState } from 'react'
 import { getAchievement } from '../../constants/achievements'
 import { TIME_CONTROLS } from '../../constants/game'
 import { getBoardTheme, getPieceSet } from '../../constants/themes'
-import { LEGENDS, getEpoch, isLegendUnlocked } from '../../data/historicalLegends'
+import { epochLabel, getCampaign, getEpoch, getLegend, isLegendUnlocked } from '../../data/legends'
 import type { ColorChoice } from '../../types/chess'
-import type { Legend, LegendProgress } from '../../types/legend'
+import type { ChallengeOptions, Legend, LegendProgress } from '../../types/legend'
 import { formatShortDate } from '../../utils/date'
 import { ThemeSwatch } from '../shop/ThemeSwatch'
 import { Button } from '../ui/Button'
@@ -24,7 +24,7 @@ const DUEL_TIME_IDS = ['none', 'rapid-10-5', 'rapid-15-10', 'classical-30-20']
 interface LegendDossierProps {
   legend: Legend
   progress: LegendProgress
-  onChallenge: (options: { color: ColorChoice; timeControlId: string }) => void
+  onChallenge: (options: ChallengeOptions) => void
 }
 
 export function LegendDossier({ legend, progress, onChallenge }: LegendDossierProps) {
@@ -33,7 +33,9 @@ export function LegendDossier({ legend, progress, onChallenge }: LegendDossierPr
   const epoch = getEpoch(legend.epoch)
   const unlocked = isLegendUnlocked(legend.id, progress.defeated)
   const defeatedOn = progress.defeated[legend.id]
-  const previous = LEGENDS.find((l) => l.campaignOrder === legend.campaignOrder - 1)
+  const chapters = getCampaign(legend.campaign).chapters
+  const previousId = chapters[chapters.indexOf(legend.id) - 1]
+  const previous = previousId ? getLegend(previousId) : null
   const achievement = getAchievement(legend.achievementId)
   const record = `${progress.wins[legend.id] ?? 0}W · ${progress.draws[legend.id] ?? 0}D · ${progress.losses[legend.id] ?? 0}L`
 
@@ -139,15 +141,16 @@ export function LegendDossier({ legend, progress, onChallenge }: LegendDossierPr
                   onChange={setTimeControlId}
                 />
               </div>
-              <Button variant="primary" size="lg" className="mt-1 w-full" icon={<Hourglass className="size-5" />} onClick={() => onChallenge({ color, timeControlId })}>
-                Travel to {epoch.year < 0 ? `${Math.abs(epoch.year)} BCE` : epoch.year} & challenge
+              <Button variant="primary" size="lg" className="mt-1 w-full" icon={<Hourglass className="size-5" />} onClick={() => onChallenge({ color, timeControlId, strength: 'authentic' })}>
+                {epoch.year === null ? `Cross into the ${epoch.name} & challenge` : `Travel to ${epochLabel(epoch)} & challenge`}
               </Button>
             </>
           ) : (
             <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
               <Lock className="size-5 shrink-0 text-slate-500" />
               <span>
-                Defeat <span className="font-semibold text-white">{previous?.name ?? 'the previous legend'}</span> to open this chapter of history.
+                Defeat <span className="font-semibold text-white">{previous?.name ?? 'the previous legend'}</span> to open this chapter
+                {legend.campaign === 'fantasy' ? ' of the realm.' : ' of history.'}
               </span>
             </div>
           )}

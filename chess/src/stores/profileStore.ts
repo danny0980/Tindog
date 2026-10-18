@@ -3,7 +3,7 @@ import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../const
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from '../types/chess'
 import type { EloPoint, MatchRecord, PlayerProfile } from '../types/profile'
 import type { QuestMetric } from '../types/quest'
-import { EPOCH_IDS, LEGEND_IDS } from '../data/historicalLegends'
+import { EPOCH_IDS, LEGEND_IDS } from '../data/legends'
 import type { EpochId, LegendId, LegendProgress } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { createPersistentStore } from '../utils/store'

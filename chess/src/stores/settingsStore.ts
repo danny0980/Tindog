@@ -1,6 +1,6 @@
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
-import { LEGEND_IDS } from '../data/historicalLegends'
+import { LEGEND_IDS } from '../data/legends'
 import type { GameSettings } from '../types/chess'
 import type { LegendId } from '../types/legend'
 import type { AppSettings, HapticCategory, HapticIntensity, HapticSettings, SoundMaterialSetting } from '../types/settings'
@@ -9,7 +9,7 @@ import { asRecord, bool, num, oneOf, str } from '../utils/validate'
 
 export const HAPTIC_INTENSITIES: readonly HapticIntensity[] = ['off', 'light', 'medium', 'heavy']
 export const HAPTIC_CATEGORIES: readonly HapticCategory[] = ['pickup', 'move', 'capture', 'check', 'ui']
-const SOUND_MATERIALS: readonly SoundMaterialSetting[] = ['theme', 'wood', 'marble', 'metal', 'synth', 'soft']
+const SOUND_MATERIALS: readonly SoundMaterialSetting[] = ['theme', 'wood', 'marble', 'metal', 'synth', 'soft', 'crystal', 'ember']
 
 export const DEFAULT_HAPTICS: HapticSettings = {
   pickup: 'light',
@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showLegalMoves: true,
   showCoordinates: true,
   game: DEFAULT_GAME_SETTINGS,
+  legendsScreen: 'select',
 }
 
 const TIME_IDS = [...TIME_CONTROLS.map((t) => t.id), 'custom']
@@ -58,6 +59,7 @@ function sanitizeGame(raw: unknown): GameSettings {
     customMinutes: num(g.customMinutes, d.customMinutes, 0.5, 180),
     customIncrementSeconds: num(g.customIncrementSeconds, d.customIncrementSeconds, 0, 60),
     legendId: typeof g.legendId === 'string' && (LEGEND_IDS as readonly string[]).includes(g.legendId) ? (g.legendId as LegendId) : null,
+    legendStrength: oneOf(g.legendStrength, ['novice', 'authentic', 'mythic'], d.legendStrength),
   }
 }
 
@@ -94,6 +96,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     showLegalMoves: bool(s.showLegalMoves, d.showLegalMoves),
     showCoordinates: bool(s.showCoordinates, d.showCoordinates),
     game: sanitizeGame(s.game),
+    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay'], d.legendsScreen),
   }
 }
 

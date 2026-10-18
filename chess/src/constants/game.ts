@@ -118,6 +118,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   customMinutes: 5,
   customIncrementSeconds: 3,
   legendId: null,
+  legendStrength: 'authentic',
 }
 
 export const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 } as const

@@ -12,10 +12,26 @@ export type BoardThemeId =
   | 'blueprint'
   | 'imperial-velvet'
   | 'chalkboard'
+  | 'rune-oak'
+  | 'bamboo-gold'
+  | 'elven-crystal'
+  | 'obsidian-lava'
 
-export type PieceSetId = 'standard' | 'obsidian' | 'neon' | 'gilded' | 'lapis' | 'ink' | 'imperial' | 'chalk'
+export type PieceSetId =
+  | 'standard'
+  | 'obsidian'
+  | 'neon'
+  | 'gilded'
+  | 'lapis'
+  | 'ink'
+  | 'imperial'
+  | 'chalk'
+  | 'runestone'
+  | 'lacquer'
+  | 'moonsilver'
+  | 'hellfire'
 
-export type SoundMaterial = 'wood' | 'marble' | 'metal' | 'synth' | 'soft'
+export type SoundMaterial = 'wood' | 'marble' | 'metal' | 'synth' | 'soft' | 'crystal' | 'ember'
 
 export interface SquareHighlights {
   lastMove: CSSProperties

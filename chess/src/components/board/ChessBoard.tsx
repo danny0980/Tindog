@@ -264,7 +264,8 @@ export function ChessBoard({
   )
   const [capture, setCapture] = useState<{ id: number; square: Square } | null>(null)
   const prevFenRef = useRef<string | null>(null)
-  const { canvasRef: sparkCanvasRef, burst: burstSparks } = useParticleLayer(160, lowPower)
+  const reducedMotion = useMemo(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const { canvasRef: sparkCanvasRef, burst: burstSparks } = useParticleLayer(160, lowPower || reducedMotion)
   useEffect(() => {
     const square = captureSquare(prevFenRef.current, fen, lastMove)
     prevFenRef.current = fen

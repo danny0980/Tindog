@@ -22,6 +22,8 @@ export interface AppSettings {
   /** Art piece set and board chosen explicitly (null = follow the theme / battle). */
   artPieces: string | null
   artBoard: string | null
+  /** Art-pack player avatar (null = the default icon). */
+  playerAvatar: string | null
   // ── Audio mixer ──
   masterVolume: number
   sfxEnabled: boolean

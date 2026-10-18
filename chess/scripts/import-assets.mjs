@@ -4,6 +4,8 @@
 //   piece set names (standard, obsidian, aztec, lacquer …) or "sprite sheet" → piece sets
 //   single pieces ("wK", "White King", "aztec_bN" …)                       → piece sets
 //   board themes (classic-wood, oled-black, wild-west …; "… light/dark/frame") → boards
+//   "player-avatar-…"                                                        → player avatars
+//   "…-bg", "… background", "… screen", "world-map…" (victory, defeat, loading …) → screen backgrounds
 // Case, spaces, underscores and accents don't matter; folders are optional.
 //
 //   npm run assets:import                                   (scans the chess folder itself)
@@ -49,7 +51,7 @@ for (const rel of listImages(from, { skip: true })) {
   } else plan.set(hit.target, { rel, full, hit, bytes })
 }
 
-const counts = { portrait: 0, piece: 0, sheet: 0, board: 0 }
+const counts = { portrait: 0, piece: 0, sheet: 0, board: 0, avatar: 0, background: 0 }
 for (const { rel, full, hit, bytes } of [...plan.values()].sort((a, b) => a.hit.target.localeCompare(b.hit.target))) {
   counts[hit.kind] += 1
   const mb = bytes / 1048576
@@ -61,7 +63,7 @@ for (const { rel, full, hit, bytes } of [...plan.values()].sort((a, b) => a.hit.
   }
 }
 
-console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets, ${counts.board} board images`)
+console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets, ${counts.board} board images, ${counts.avatar} avatars, ${counts.background} backgrounds`)
 if (skipped.length > 0) {
   console.log(`[assets] Not recognised (${skipped.length}). Rename each to include a character, piece-set or board-theme name`)
   console.log('         (e.g. "Saladin.png", "aztec sprite sheet.png", "wild-west board.png") and run again:')
@@ -71,5 +73,5 @@ if (!dryRun) {
   mkdirSync(assetsDir, { recursive: true })
   const manifest = buildManifest(assetsDir)
   writeFileSync(join(assetsDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  console.log(`[assets] manifest: ${Object.keys(manifest.portraits).length} portraits, ${Object.keys(manifest.pieceSets).length} piece sets, ${Object.keys(manifest.boards).length} boards`)
+  console.log(`[assets] manifest: ${Object.keys(manifest.portraits).length} portraits, ${Object.keys(manifest.pieceSets).length} piece sets, ${Object.keys(manifest.boards).length} boards, ${Object.keys(manifest.avatars).length} avatars, ${Object.keys(manifest.backgrounds).length} backgrounds`)
 }

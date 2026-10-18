@@ -17,8 +17,11 @@ export function ArtPackPicker({ compact = false }: { compact?: boolean }) {
   const sets = Object.entries(manifest.pieceSets)
   const boards = Object.entries(manifest.boards)
   const portraits = Object.keys(manifest.portraits).length
+  const avatars = Object.entries(manifest.avatars)
+  const backgrounds = Object.keys(manifest.backgrounds).length
+  const playerAvatar = useStore(settingsStore, (s) => s.playerAvatar)
 
-  if (sets.length === 0 && boards.length === 0 && portraits === 0) {
+  if (sets.length === 0 && boards.length === 0 && portraits === 0 && avatars.length === 0 && backgrounds === 0) {
     return (
       <div className="flex items-start gap-3 rounded-xl bg-white/[0.04] p-3 text-xs text-slate-400" data-art-empty>
         <ImageOff className="mt-0.5 size-4 shrink-0" />
@@ -36,11 +39,27 @@ export function ArtPackPicker({ compact = false }: { compact?: boolean }) {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium text-white">Use the art pack</span>
           <span className="block text-xs text-slate-500">
-            {sets.length} piece sets · {boards.length} boards · {portraits} portraits
+            {sets.length} piece sets · {boards.length} boards · {portraits} portraits · {avatars.length} avatars · {backgrounds} backgrounds
           </span>
         </span>
         <input type="checkbox" className="size-5 accent-[var(--accent)]" checked={artPack} onChange={(e) => updateSettings({ artPack: e.target.checked })} data-art-toggle />
       </label>
+
+      {artPack && avatars.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Your avatar</div>
+          <div className={`grid gap-2 ${compact ? 'grid-cols-3 sm:grid-cols-4' : 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-7'}`}>
+            <Choice label="Default" active={playerAvatar === null} onClick={() => updateSettings({ playerAvatar: null })} id="avatar-default">
+              <span className="flex size-12 items-center justify-center rounded-xl bg-slate-200 text-xl text-slate-800">♙</span>
+            </Choice>
+            {avatars.map(([id, path]) => (
+              <Choice key={id} label={humanize(id)} active={playerAvatar === id} onClick={() => updateSettings({ playerAvatar: id })} id={`avatar-${id}`}>
+                <img src={assetUrl(path)} alt="" loading="lazy" className="size-12 rounded-xl object-cover" />
+              </Choice>
+            ))}
+          </div>
+        </div>
+      )}
 
       {artPack && sets.length > 0 && (
         <div>

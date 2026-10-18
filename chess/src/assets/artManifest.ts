@@ -36,9 +36,13 @@ export interface ArtManifest {
   portraits: Readonly<Record<string, string>>
   pieceSets: Readonly<Record<string, ArtPieceSet>>
   boards: Readonly<Record<string, ArtBoard>>
+  /** Player avatars ("knight", "mage" …). */
+  avatars: Readonly<Record<string, string>>
+  /** Full-screen art by purpose ("victory-screen", "loading-screen-space", "world-map-campaign" …). */
+  backgrounds: Readonly<Record<string, string>>
 }
 
-export const EMPTY_MANIFEST: ArtManifest = { version: 1, portraits: {}, pieceSets: {}, boards: {} }
+export const EMPTY_MANIFEST: ArtManifest = { version: 1, portraits: {}, pieceSets: {}, boards: {}, avatars: {}, backgrounds: {} }
 
 // ── Sanitising (the manifest is just a file on disk — never trust it blindly) ─
 
@@ -60,8 +64,12 @@ function sanitizeSheet(raw: unknown): PieceSheet | undefined {
 
 export function sanitizeManifest(raw: unknown): ArtManifest {
   if (!isRecord(raw)) return EMPTY_MANIFEST
-  const portraits: Record<string, string> = {}
-  for (const [k, v] of Object.entries(asRecord(raw.portraits))) if (isArtId(k) && isSafeAssetPath(v)) portraits[k] = v
+  const files = (field: unknown): Record<string, string> => {
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(asRecord(field))) if (isArtId(k) && isSafeAssetPath(v)) out[k] = v
+    return out
+  }
+  const portraits = files(raw.portraits)
   const pieceSets: Record<string, ArtPieceSet> = {}
   for (const [id, v] of Object.entries(asRecord(raw.pieceSets))) {
     if (!isArtId(id) || !isRecord(v)) continue
@@ -79,7 +87,7 @@ export function sanitizeManifest(raw: unknown): ArtManifest {
     for (const role of ['board', 'light', 'dark', 'frame'] as const) if (isSafeAssetPath(v[role])) b[role] = v[role]
     if (b.board || (b.light && b.dark)) boards[id] = b
   }
-  return { version: 1, portraits, pieceSets, boards }
+  return { version: 1, portraits, pieceSets, boards, avatars: files(raw.avatars), backgrounds: files(raw.backgrounds) }
 }
 
 // ── Store & loading ─────────────────────────────────────────────────────────
@@ -127,6 +135,9 @@ export const PORTRAIT_ALIASES: Readonly<Record<string, string>> = {
   'the-maid-of-orleans': 'joan-of-arc',
   'temujin': 'genghis-khan',
   'sir-isaac-newton': 'isaac-newton',
+  // The Chronos overlord is the campaign's final boss.
+  'chronos-overlord': 'the-infinite',
+  'overlord': 'the-infinite',
 }
 
 const TITLES = /^(the|sir|lady|queen|king|captain|high-king|lord|saint|st|emperor|empress|pharaoh|general|commander|colonel|major|madame|mr|dr)-/
@@ -193,6 +204,24 @@ export function sheetBackground(code: PieceCode, sheet: PieceSheet): { backgroun
     backgroundSize: `${sheet.cols * 100}% ${sheet.rows * 100}%`,
     backgroundPosition: `${x}% ${y}%`,
   }
+}
+
+/** Where full-screen art is used, and the words in a file name that claim each spot. */
+export type BackgroundSlot = 'victory' | 'defeat' | 'loading' | 'map' | 'realm'
+const SLOT_WORDS: Readonly<Record<BackgroundSlot, RegExp>> = {
+  victory: /(^|-)(victory|win|triumph)(-|$)/,
+  defeat: /(^|-)(defeat|lose|loss|game-over)(-|$)/,
+  loading: /(^|-)(loading|splash|load)(-|$)/,
+  map: /(^|-)(world-map|map|campaign)(-|$)/,
+  realm: /(^|-)(realm|chrono|chronos|legends|hub)(-|$)/,
+}
+
+/** Background files for a slot (several loading screens may share it). */
+export function backgroundsFor(manifest: ArtManifest, slot: BackgroundSlot): string[] {
+  return Object.entries(manifest.backgrounds)
+    .filter(([key]) => SLOT_WORDS[slot].test(key))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, path]) => path)
 }
 
 export interface ArtPreferences {

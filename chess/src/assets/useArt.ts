@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../hooks/useStore'
 import { settingsStore } from '../stores/settingsStore'
-import { type ArtBoard, type ArtPieceSet, artStore, assetUrl, portraitFor, resolveBoardArt, resolvePieceArt } from './artManifest'
+import { type ArtBoard, type ArtPieceSet, type BackgroundSlot, artStore, assetUrl, backgroundsFor, portraitFor, resolveBoardArt, resolvePieceArt } from './artManifest'
 
 export function usePieceArt(pieceSetId: string): { id: string; set: ArtPieceSet } | null {
   const manifest = useStore(artStore, (m) => m)
@@ -29,6 +29,22 @@ export function usePortraitArt(name: string | null): string | null {
   const artPack = useStore(settingsStore, (s) => s.artPack)
   if (!artPack || !name) return null
   const path = portraitFor(manifest, name)
+  return path ? assetUrl(path) : null
+}
+
+/** URLs of the art-pack backgrounds for a slot (empty when none or the art pack is off). */
+export function useBackgrounds(slot: BackgroundSlot): string[] {
+  const manifest = useStore(artStore, (m) => m)
+  const artPack = useStore(settingsStore, (s) => s.artPack)
+  return artPack ? backgroundsFor(manifest, slot).map(assetUrl) : []
+}
+
+/** URL of the player's chosen avatar art, or null. */
+export function useAvatarArt(): string | null {
+  const manifest = useStore(artStore, (m) => m)
+  const artPack = useStore(settingsStore, (s) => s.artPack)
+  const avatar = useStore(settingsStore, (s) => s.playerAvatar)
+  const path = artPack && avatar ? manifest.avatars[avatar] : undefined
   return path ? assetUrl(path) : null
 }
 

@@ -3,6 +3,7 @@ import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
+import { ArtBackdrop } from '../fx/ArtBackdrop'
 import type { PortraitSpec } from '../../types/persona'
 import { StarRow } from '../campaign/StarRow'
 import type { GameEndSummary } from '../../hooks/useGameController'
@@ -83,7 +84,9 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
         </div>
       }
     >
-      <div className="flex flex-col items-center py-3 text-center">
+      <div className="relative isolate flex flex-col items-center overflow-hidden rounded-2xl py-3 text-center">
+        {/* Art-pack victory / defeat backdrop (if installed). */}
+        {(won || lost || (!isAiMode && !isDraw)) && <ArtBackdrop slot={lost ? 'defeat' : 'victory'} opacity={0.4} />}
         {opponent ? (
           <div className="relative mb-4" data-gameover-portrait>
             <PortraitEmblem spec={opponent.spec} label={opponent.label} size="xl" defeated={won} className={lost ? '' : won ? 'grayscale-[0.4]' : ''} ring={won ? 'ring-amber-300' : lost ? 'ring-red-400' : 'ring-sky-300'} />

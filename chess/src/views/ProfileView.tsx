@@ -14,11 +14,13 @@ import { LegacyPanel } from '../components/profile/LegacyPanel'
 import { displayTitle } from '../data/titles'
 import { gauntletStore } from '../stores/gauntletStore'
 import { settingsStore } from '../stores/settingsStore'
+import { useAvatarArt } from '../assets/useArt'
 
 export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => void }) {
   const profile = useStore(profileStore, (p) => p)
   const gauntletBest = useStore(gauntletStore, (g) => g.record.bestStreak)
   const lowPower = useStore(settingsStore, (s) => s.batterySaver)
+  const avatarArt = useAvatarArt()
   const ctx = { profile, gauntletBest }
   const title = displayTitle(ctx)
   const { stats } = profile
@@ -38,7 +40,7 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
         <div className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full bg-accent/20 blur-3xl" aria-hidden="true" />
         <div className="relative flex flex-wrap items-center gap-5">
           <div className="idle-pause relative flex size-20 animate-float items-center justify-center rounded-3xl bg-gradient-to-br from-accent to-accent-2 font-display text-3xl font-extrabold text-ink-950 shadow-[0_20px_50px_-15px_var(--accent)]">
-            {profile.name.slice(0, 1).toUpperCase()}
+            {avatarArt ? <img src={avatarArt} alt="" className="absolute inset-0 size-full rounded-3xl object-cover" data-profile-avatar /> : profile.name.slice(0, 1).toUpperCase()}
             <Crown className="absolute -top-3 -right-2 size-7 rotate-12 text-amber-300 drop-shadow" />
           </div>
           <div className="min-w-0 flex-1">

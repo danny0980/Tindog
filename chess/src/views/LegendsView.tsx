@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
 import { runViewTransition } from '../utils/viewTransition'
+import { ArtBackdrop } from '../components/fx/ArtBackdrop'
 import type { ChallengeClock } from '../components/campaign/battleOptions'
 import type { BattleLaunch } from '../hooks/useGameController'
 import { CampaignSelect } from '../components/legends/CampaignSelect'
@@ -95,6 +96,7 @@ export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onF
         </div>
       </header>
 
+      {screen === 'select' && <ArtBackdrop slot="realm" fixed opacity={0.3} />}
       {screen === 'select' && <CampaignSelect defeated={progress.defeated} campaign={campaignProgress} onOpen={open} />}
 
       {screen === 'gauntlet' && (

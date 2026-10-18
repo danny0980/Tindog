@@ -26,6 +26,7 @@ import { getDailyPuzzles } from './utils/puzzles'
 import { claimableCount } from './utils/quests'
 import { PlayView } from './views/PlayView'
 import { FxDefs } from './components/fx/FxDefs'
+import { ArtBackdrop } from './components/fx/ArtBackdrop'
 import { loadArtManifest } from './assets/artManifest'
 import type { IntroExit } from './components/cinematic/CinematicIntro'
 import { navDirection, runViewTransition, supportsViewTransitions } from './utils/viewTransition'
@@ -45,7 +46,8 @@ const CinematicIntro = lazyWithRetry(() => import('./components/cinematic/Cinema
 
 function ViewFallback() {
   return (
-    <div className="flex flex-1 items-center justify-center py-20" role="status" aria-label="Loading">
+    <div className="relative isolate flex flex-1 items-center justify-center py-20" role="status" aria-label="Loading">
+      <ArtBackdrop slot="loading" fixed opacity={0.45} />
       <div className="size-10 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
     </div>
   )
@@ -276,7 +278,13 @@ export default function App() {
       {introOpen && (
         // The intro is optional: if it fails for any reason, skip straight into the app.
         <ErrorBoundary scope="view" label="the cinematic intro" onError={() => closeIntro('play')}>
-          <Suspense fallback={<div className="fixed inset-0 z-[80] bg-black" aria-label="Loading intro" role="status" />}>
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-[80] isolate bg-black" aria-label="Loading intro" role="status">
+                <ArtBackdrop slot="loading" opacity={0.6} />
+              </div>
+            }
+          >
             <CinematicIntro onExit={closeIntro} />
           </Suspense>
         </ErrorBoundary>

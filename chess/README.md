@@ -34,6 +34,8 @@ npm run dev
 | A character name | portraits | `Ragnar.png`, `NAPOLEON.png`, `cleopatra.png`, `Blackbeard.png`, `ninja_leader.png`, `Queen Elizabeth I.png` |
 | A piece-set name, or "sprite sheet" | piece set (sprite sheet) | `standard.png`, `Obsidian.png`, `aztec.png`, `lacquer sprite sheet.png` |
 | A single piece | piece set (12 images) | `wK.png`, `White King.png`, `obsidian_bN.png`, `Aztec Black Queen.png` |
+| `player-avatar-…` / `avatar …` | your player avatar (pick it in Settings → Display → Art pack) | `player-avatar-knight.png`, `player-avatar-mage.png` |
+| `…-bg`, `… background`, `… screen`, `world-map…` | screen backgrounds: **victory** / **defeat** card, **loading** screens (one picked at random), **world map** (Grand Campaign), **realm** / **chrono** (Legends hub) | `victory-screen-bg.png`, `defeat-screen-bg.png`, `loading-screen-space.png`, `world-map-campaign.png`, `chrono-realm-bg.png` |
 | A board-theme name | board | `classic-wood.png`, `OLED Black.png`, `wild west light.png`, `wild west dark.png`, `nebula frame.png` |
 
 **Name matching details.**

@@ -27,6 +27,7 @@ import { abandonIronman, startIronman } from '../../utils/ironman'
 import { runViewTransition } from '../../utils/viewTransition'
 import { BOUNTY_CLOCK, acceptBlessing, ambushWeather, buyWare, isBountyDone, isEventResolved, refreshWorld } from '../../utils/world'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { ArtBackdrop } from '../fx/ArtBackdrop'
 import type { MapMarker } from './WorldMap'
 import { type WorldItem, WorldBoard, WorldEventSheet } from './WorldBoard'
 import { Reliquary } from './Reliquary'
@@ -175,6 +176,7 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
 
   return (
     <div className="space-y-4">
+      <ArtBackdrop slot="map" fixed opacity={0.3} />
       {/* Overview */}
       <section className="glass flex flex-wrap items-center gap-x-5 gap-y-3 rounded-3xl p-4" aria-label="Campaign progress">
         <Metric icon={<Star className="size-4 fill-amber-300 text-amber-300" />} label="Stars" value={`${starCount(progress)}/${maxStars()}`} />

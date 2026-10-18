@@ -11,6 +11,7 @@ import { buildManifest, classify, imageSize, listImages, pieceCode, sheetGrid, s
 import { loadCatalog } from '../scripts/asset-catalog.mjs'
 import {
   EMPTY_MANIFEST,
+  backgroundsFor,
   type ArtManifest,
   type PieceSheet,
   isSafeAssetPath,
@@ -71,6 +72,11 @@ check('single pieces by name, set from the name or folder', flat('obsidian_bN.pn
 check('unknown names with a hint word', flat('Merlin portrait.png') === 'portraits/merlin.png' && flat('Coral Reef sprite sheet.png') === 'pieces/coral-reef/sheet.png' && flat('Frozen Lake board.png') === 'boards/frozen-lake/board.png')
 check('an unnamed image shaped like a sprite sheet is one; other unknowns are skipped', flat('IMG_2034.png', { width: 1200, height: 400 }) === 'pieces/img-2034/sheet.png' && flat('IMG_2035.png', { width: 800, height: 800 }) === null)
 
+check('screen art → backgrounds', flat('victory-screen-bg.png') === 'backgrounds/victory-screen.png' && flat('defeat-screen-bg.png') === 'backgrounds/defeat-screen.png' && flat('loading-screen-clash.png') === 'backgrounds/loading-screen-clash.png' && flat('loading-screen-space.png') === 'backgrounds/loading-screen-space.png' && flat('world-map-campaign.png') === 'backgrounds/world-map-campaign.png' && flat('chrono-realm-bg.png') === 'backgrounds/chrono-realm.png')
+check('player avatars → avatars', flat('player-avatar-knight.png') === 'avatars/knight.png' && flat('player-avatar-mage.png') === 'avatars/mage.png' && flat('Avatar Rogue.png') === 'avatars/rogue.png')
+check('the Chronos overlord portrait is recognised', flat('Chronos - Overlord Boss.png') === 'portraits/chronos-overlord.png')
+check('board / sheet hint words still win over "screen"-like words', flat('nebula frame.png') === 'boards/nebula/frame.png' && flat('wild west board.png') === 'boards/wild-west/board.png')
+
 check('sprite-sheet grids from aspect ratio', JSON.stringify(sheetGrid({ width: 1200, height: 400 })) === '{"cols":6,"rows":2}' && JSON.stringify(sheetGrid({ width: 400, height: 1200 })) === '{"cols":2,"rows":6}' && JSON.stringify(sheetGrid({ width: 2400, height: 200 })) === '{"cols":12,"rows":1}' && JSON.stringify(sheetGrid(null)) === '{"cols":6,"rows":2}')
 
 // ── Manifest from real files ────────────────────────────────────────────────
@@ -101,9 +107,11 @@ try {
   put('boards/wild-west/light.png', png(512, 512))
   put('boards/wild-west/dark.png', png(512, 512))
   put('boards/only-light/light.png', png(512, 512))
+  put('avatars/knight.png', png(256, 256))
+  put('backgrounds/victory-screen.png', png(1920, 1080))
   check('PNG size is read from the header', JSON.stringify(imageSize(join(dir, 'pieces', 'steampunk', 'sheet.png'))) === '{"width":400,"height":1200}')
   const m = buildManifest(dir) as ArtManifest
-  check('manifest lists portraits', m.portraits['ragnar-lothbrok'] === 'portraits/ragnar-lothbrok.png')
+  check('manifest lists portraits, avatars and backgrounds', m.portraits['ragnar-lothbrok'] === 'portraits/ragnar-lothbrok.png' && m.avatars.knight === 'avatars/knight.png' && m.backgrounds['victory-screen'] === 'backgrounds/victory-screen.png')
   check('a complete 12-image set is listed; an incomplete one is not', Object.keys(m.pieceSets['dark-fantasy']?.files ?? {}).length === 12 && !m.pieceSets['half-done'])
   check('sprite sheet grid detected (2×6), override honoured (order)', m.pieceSets.steampunk?.sheet?.cols === 2 && m.pieceSets.steampunk.sheet.rows === 6 && m.pieceSets.aztec?.sheet?.order === 'KQBNRP')
   check('boards need board.png or light + dark', m.boards['ancient-greece']?.board === 'boards/ancient-greece/board.png' && m.boards['wild-west']?.light !== undefined && !m.boards['only-light'])
@@ -150,6 +158,9 @@ check('every requested portrait that has a character finds it', [
 ].every(([n, f]) => names.includes(n ?? '') && expect(n ?? '', f ?? '')))
 check('short names match the full name ("napoleon", "einstein")', portraitFor({ ...EMPTY_MANIFEST, portraits: { napoleon: 'portraits/napoleon.png' } }, 'Napoleon Bonaparte') === 'portraits/napoleon.png' && portraitFor({ ...EMPTY_MANIFEST, portraits: { einstein: 'portraits/einstein.png' } }, 'Albert Einstein') === 'portraits/einstein.png')
 check('no false matches between different people', portraitFor(pack, 'Ada Lovelace') === null && portraitFor(pack, 'Charlemagne') === null && portraitFor(pack, 'Marie Curie') === null && portraitFor(pack, 'Locked') === null)
+check('"Chronos – Overlord Boss" is the final overlord', portraitFor({ ...EMPTY_MANIFEST, portraits: { 'chronos-overlord': 'portraits/chronos-overlord.png' } }, 'The Infinite') === 'portraits/chronos-overlord.png')
+const bgPack: ArtManifest = { ...EMPTY_MANIFEST, backgrounds: { 'victory-screen': 'backgrounds/v.png', 'defeat-screen': 'backgrounds/d.png', 'loading-screen-clash': 'backgrounds/l1.png', 'loading-screen-space': 'backgrounds/l2.png', 'world-map-campaign': 'backgrounds/m.png', 'chrono-realm': 'backgrounds/r.png' } }
+check('backgrounds fill their screen slots', backgroundsFor(bgPack, 'victory').join() === 'backgrounds/v.png' && backgroundsFor(bgPack, 'defeat').join() === 'backgrounds/d.png' && backgroundsFor(bgPack, 'loading').length === 2 && backgroundsFor(bgPack, 'map').join() === 'backgrounds/m.png' && backgroundsFor(bgPack, 'realm').join() === 'backgrounds/r.png')
 check('the most specific file wins ("albert-einstein" over "einstein")', portraitFor(pack, 'Albert Einstein') === 'portraits/albert-einstein.png')
 
 // ── Sprite sheets ───────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import { Angry, Annoyed, Bot, Brain, Crown, Frown, Handshake, Laugh, Meh, Skull, Smile, SmilePlus, User, Zap } from 'lucide-react'
+import { useState } from 'react'
+import { useAvatarArt } from '../../assets/useArt'
 import type { Color } from '../../types/chess'
 import type { PortraitSpec } from '../../types/persona'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
@@ -30,6 +32,10 @@ interface PlayerAvatarProps {
 /** Avatar that reacts to the game: tension pulses, advantage grins, defeat greys out. */
 export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }: PlayerAvatarProps) {
   const m = MOODS[mood]
+  // Your art-pack avatar (Settings → Art pack), for human players.
+  const avatar = useAvatarArt()
+  const [brokenAvatar, setBrokenAvatar] = useState<string | null>(null)
+  const showAvatar = !isEngine && avatar !== null && brokenAvatar !== avatar
   const Base = isEngine ? Bot : User
   const MoodIcon = m.icon ?? Meh
   return (
@@ -42,7 +48,11 @@ export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }:
             color === 'w' ? 'bg-gradient-to-br from-slate-50 to-slate-300 text-slate-800' : 'bg-gradient-to-br from-slate-700 to-slate-900 text-slate-100'
           } ${mood === 'defeat' ? 'grayscale' : ''}`}
         >
-          <Base className="size-6" aria-hidden="true" />
+          {showAvatar ? (
+            <img src={avatar ?? ''} alt="" draggable={false} onError={() => setBrokenAvatar(avatar)} className="absolute inset-0 size-full object-cover" data-player-avatar />
+          ) : (
+            <Base className="size-6" aria-hidden="true" />
+          )}
           {isEngine && (
             <span className="absolute inset-x-0 bottom-0 h-1 animate-shimmer bg-[linear-gradient(90deg,transparent,var(--accent),transparent)] bg-[length:200%_100%]" />
           )}

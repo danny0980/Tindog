@@ -8,6 +8,7 @@ import { slugify } from './assets-lib.mjs'
 
 /** Extra people with portraits but no character (yet), and handy aliases. */
 export const EXTRA_PEOPLE = [
+  'Chronos Overlord',
   'Queen Victoria', 'Abraham Lincoln', 'Julius Caesar', 'Ninja Leader', 'Edward Teach', 'Charles Darwin', 'George Washington',
   'Winston Churchill', 'Ramesses II', 'Tutankhamun', 'Attila the Hun', 'William the Conqueror', 'Spartacus', 'Boudica', 'Montezuma',
 ]

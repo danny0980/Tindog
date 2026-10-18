@@ -158,7 +158,12 @@ const COLOR_TYPE_WORDS = new Set(['w', 'b', 'white', 'black', 'light', 'dark', '
 const ROLE_WORDS = { light: 'light', white: 'light', dark: 'dark', black: 'dark', frame: 'frame', border: 'frame' }
 const SHEET_HINT = /(^|-)(sheet|sprite|sprites|spritesheet|pieces|piece-set|set|chessmen)(-|$)/
 const BOARD_HINT = /(^|-)(board|tile|tiles|texture|theme|chessboard)(-|$)/
-const PORTRAIT_HINT = /(^|-)(portrait|boss|legend|character|face|avatar|hero)(-|$)/
+const PORTRAIT_HINT = /(^|-)(portrait|boss|legend|character|face|hero)(-|$)/
+/** "player-avatar-knight", "avatar mage" → a player avatar. */
+const AVATAR_HINT = /(^|-)(player-avatar|avatar|player-icon)(-|$)/
+/** Full-screen art: "victory-screen-bg", "loading screen space", "world-map-campaign", "chrono realm background". */
+const BACKGROUND_HINT = /(^|-)(bg|background|backdrop|wallpaper|splash|screen|world-map|map)(-|$)/
+const stripBackground = (slug) => slug.replace(/(^|-)(bg|background|backdrop|wallpaper)(?=-|$)/g, '').replace(/^-+|-+$/g, '').replace(/--+/g, '-')
 
 /** A sprite sheet's shape: clearly wider or taller than square (6×2, 2×6, 12×1, 1×12). */
 const sheetShaped = (size) => Boolean(size && size.width && size.height && (size.width / size.height >= 2.4 || size.width / size.height <= 1 / 2.4))
@@ -200,7 +205,17 @@ export function classify(relPath, catalog = null, size = null) {
     return { kind: 'piece', set, code, target: `pieces/${set}/${code}${ext}` }
   }
 
-  // 2. Known names: the longest match among board themes, piece sets and characters wins.
+  // 2. Player avatars and full-screen backgrounds are named by purpose, not by character.
+  if (AVATAR_HINT.test(base)) {
+    const key = base.replace(/(^|-)(player-avatar|player-icon|avatar|player)(?=-|$)/g, '').replace(/^-+|-+$/g, '') || 'default'
+    return { kind: 'avatar', key, target: `avatars/${key}${ext}` }
+  }
+  if (BACKGROUND_HINT.test(base) && !BOARD_HINT.test(base) && !SHEET_HINT.test(base)) {
+    const key = stripBackground(base) || base
+    return { kind: 'background', key, target: `backgrounds/${key}${ext}` }
+  }
+
+  // 3. Known names: the longest match among board themes, piece sets and characters wins.
   const theme = longestMatch(base, cat.boardThemes)
   const set = longestMatch(base, cat.pieceSets)
   const person = matchPerson(base, cat.people)
@@ -219,7 +234,7 @@ export function classify(relPath, catalog = null, size = null) {
     if (person) return { kind: 'portrait', key: person.key, target: `portraits/${person.key}${ext}` }
   }
 
-  // 3. Unknown names with a hint word: "Galactic sprite sheet", "Wild West board", "Merlin portrait".
+  // 4. Unknown names with a hint word: "Galactic sprite sheet", "Wild West board", "Merlin portrait".
   const stripped = stripNoise(base.replace(/-(light|white|dark|black|frame)$/, ''))
   // A bare hint word ("sheet.png", "board.png") names nothing — the folder decides below.
   const named = /^(sheet|sprite|sprites|spritesheet|pieces|piece|set|board|tile|tiles|texture|theme|portrait|light|dark|frame)$/.test(stripped) ? '' : stripped
@@ -230,7 +245,7 @@ export function classify(relPath, catalog = null, size = null) {
   }
   if (PORTRAIT_HINT.test(base) && named) return { kind: 'portrait', key: stripNoise(base), target: `portraits/${stripNoise(base)}${ext}` }
 
-  // 4. Folder hints (portraits/, pieces/<set>/, boards/<theme>/ …).
+  // 5. Folder hints (portraits/, pieces/<set>/, boards/<theme>/ …).
   const pieceAt = folders.findIndex((f) => PIECE_FOLDERS.test(f))
   const boardAt = folders.findIndex((f) => BOARD_FOLDERS.test(f))
   const portraitAt = folders.findIndex((f) => PORTRAIT_FOLDERS.test(f))
@@ -246,7 +261,7 @@ export function classify(relPath, catalog = null, size = null) {
   }
   if (portraitAt >= 0) return { kind: 'portrait', key: stripNoise(base), target: `portraits/${stripNoise(base)}${ext}` }
 
-  // 5. An unnamed image shaped like a sprite sheet is one.
+  // 6. An unnamed image shaped like a sprite sheet is one.
   if (sheetShaped(size) && stripNoise(base)) return { kind: 'sheet', set: stripNoise(base), target: `pieces/${stripNoise(base)}/sheet${ext}` }
   return null
 }
@@ -255,7 +270,7 @@ export function classify(relPath, catalog = null, size = null) {
 
 /** Builds the manifest from the normalised public/assets layout. */
 export function buildManifest(assetsDir) {
-  const manifest = { version: 1, portraits: {}, pieceSets: {}, boards: {} }
+  const manifest = { version: 1, portraits: {}, pieceSets: {}, boards: {}, avatars: {}, backgrounds: {} }
   let files = []
   try {
     files = listImages(assetsDir)
@@ -265,8 +280,8 @@ export function buildManifest(assetsDir) {
   for (const rel of files) {
     const parts = rel.split('/')
     const [top, group, leaf] = parts
-    if (top === 'portraits' && parts.length === 2 && group) {
-      manifest.portraits[slugify(group.replace(/\.[a-z0-9]+$/i, ''))] = rel
+    if ((top === 'portraits' || top === 'avatars' || top === 'backgrounds') && parts.length === 2 && group) {
+      manifest[top][slugify(group.replace(/\.[a-z0-9]+$/i, ''))] = rel
     } else if (top === 'pieces' && parts.length === 3 && group && leaf) {
       const name = leaf.replace(/\.[a-z0-9]+$/i, '')
       const set = (manifest.pieceSets[group] ??= { files: {} })

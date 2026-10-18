@@ -1,5 +1,6 @@
 import type { BoardThemeId, PieceSetId } from './theme'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from './chess'
+import type { LegendId, LegendProgress } from './legend'
 import type { QuestProgress } from './quest'
 import type { RushRecord } from './rush'
 
@@ -22,6 +23,7 @@ export interface MatchRecord {
   coins: number
   accuracy: number | null
   opening: string | null
+  legendId: LegendId | null
 }
 
 export interface EloPoint {
@@ -67,6 +69,7 @@ export interface PlayerProfile {
   gamesAnalyzed: number
   quests: QuestProgress
   rush: RushRecord
+  legends: LegendProgress
 }
 
 export type AchievementIcon =
@@ -93,6 +96,11 @@ export type AchievementIcon =
   | 'search'
   | 'rocket'
   | 'scroll'
+  | 'atom'
+  | 'apple'
+  | 'eye'
+  | 'flag'
+  | 'clock'
 
 export interface AchievementDef {
   id: string

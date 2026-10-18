@@ -1,6 +1,8 @@
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
+import { LEGEND_IDS } from '../data/historicalLegends'
 import type { GameSettings } from '../types/chess'
+import type { LegendId } from '../types/legend'
 import type { AppSettings, HapticCategory, HapticIntensity, HapticSettings, SoundMaterialSetting } from '../types/settings'
 import { createPersistentStore } from '../utils/store'
 import { asRecord, bool, num, oneOf, str } from '../utils/validate'
@@ -55,6 +57,7 @@ function sanitizeGame(raw: unknown): GameSettings {
     timeControlId: oneOf(str(g.timeControlId, d.timeControlId), TIME_IDS, d.timeControlId),
     customMinutes: num(g.customMinutes, d.customMinutes, 0.5, 180),
     customIncrementSeconds: num(g.customIncrementSeconds, d.customIncrementSeconds, 0, 60),
+    legendId: typeof g.legendId === 'string' && (LEGEND_IDS as readonly string[]).includes(g.legendId) ? (g.legendId as LegendId) : null,
   }
 }
 

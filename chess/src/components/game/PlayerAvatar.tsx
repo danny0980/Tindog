@@ -1,5 +1,7 @@
 import { Angry, Annoyed, Bot, Brain, Crown, Frown, Handshake, Laugh, Meh, Skull, Smile, SmilePlus, User, Zap } from 'lucide-react'
 import type { Color } from '../../types/chess'
+import type { LegendId } from '../../types/legend'
+import { LegendPortrait } from '../legends/LegendPortrait'
 import type { Mood } from '../../utils/mood'
 
 const MOODS: Record<Mood, { icon: typeof Smile; label: string; ring: string; badge: string; motion: string }> = {
@@ -21,25 +23,30 @@ interface PlayerAvatarProps {
   isEngine: boolean
   mood: Mood
   isTurn: boolean
+  legendId?: LegendId | null
 }
 
 /** Avatar that reacts to the game: tension pulses, advantage grins, defeat greys out. */
-export function PlayerAvatar({ color, isEngine, mood, isTurn }: PlayerAvatarProps) {
+export function PlayerAvatar({ color, isEngine, mood, isTurn, legendId = null }: PlayerAvatarProps) {
   const m = MOODS[mood]
   const Base = isEngine ? Bot : User
   const MoodIcon = m.icon ?? Meh
   return (
     <div className={`idle-pause relative shrink-0 ${m.motion}`} title={m.label}>
-      <div
-        className={`relative flex size-11 items-center justify-center overflow-hidden rounded-xl ring-2 transition-all duration-500 ${m.ring} ${
-          color === 'w' ? 'bg-gradient-to-br from-slate-50 to-slate-300 text-slate-800' : 'bg-gradient-to-br from-slate-700 to-slate-900 text-slate-100'
-        } ${mood === 'defeat' ? 'grayscale' : ''}`}
-      >
-        <Base className="size-6" aria-hidden="true" />
-        {isEngine && (
-          <span className="absolute inset-x-0 bottom-0 h-1 animate-shimmer bg-[linear-gradient(90deg,transparent,var(--accent),transparent)] bg-[length:200%_100%]" />
-        )}
-      </div>
+      {legendId ? (
+        <LegendPortrait legendId={legendId} size="sm" ring={m.ring} className={mood === 'defeat' ? 'grayscale' : ''} />
+      ) : (
+        <div
+          className={`relative flex size-11 items-center justify-center overflow-hidden rounded-xl ring-2 transition-all duration-500 ${m.ring} ${
+            color === 'w' ? 'bg-gradient-to-br from-slate-50 to-slate-300 text-slate-800' : 'bg-gradient-to-br from-slate-700 to-slate-900 text-slate-100'
+          } ${mood === 'defeat' ? 'grayscale' : ''}`}
+        >
+          <Base className="size-6" aria-hidden="true" />
+          {isEngine && (
+            <span className="absolute inset-x-0 bottom-0 h-1 animate-shimmer bg-[linear-gradient(90deg,transparent,var(--accent),transparent)] bg-[length:200%_100%]" />
+          )}
+        </div>
+      )}
       <span
         className={`absolute -right-1.5 -bottom-1.5 flex size-5 items-center justify-center rounded-full text-white shadow-lg ring-2 ring-ink-900 transition-colors duration-300 ${m.badge}`}
         aria-label={m.label}

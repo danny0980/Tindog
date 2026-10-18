@@ -4,6 +4,7 @@ import { configureHaptics } from '../audio/haptics'
 import { getBoardTheme } from '../constants/themes'
 import { enginePool } from '../engine/enginePool'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
+import { themeOverrideStore } from '../stores/themeOverrideStore'
 import { showToast } from '../stores/toastStore'
 import { useStore } from './useStore'
 
@@ -56,7 +57,9 @@ export function useAppEnvironment(): { idle: boolean; visible: boolean } {
   const settings = useStore(settingsStore, (s) => s)
   const visible = usePageVisible()
   const idle = useIdle(45_000)
-  const theme = getBoardTheme(settings.boardTheme)
+  // An epoch (Chronos Chess) can temporarily override the saved theme app-wide.
+  const overrideTheme = useStore(themeOverrideStore, (t) => t)
+  const theme = getBoardTheme(overrideTheme ?? settings.boardTheme)
 
   // Theme variables drive Tailwind's `accent` colours and the page background.
   useEffect(() => {
@@ -65,6 +68,7 @@ export function useAppEnvironment(): { idle: boolean; visible: boolean } {
     root.style.setProperty('--accent-2', theme.accent2)
     root.style.setProperty('--app-bg', theme.background)
     root.dataset.theme = theme.id
+    ambientMusic.setTexture(theme.musicTexture ?? 'default')
     // Status bar / notch / Dynamic Island area blends into the theme (pure black for OLED).
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme.chromeColor)
   }, [theme])

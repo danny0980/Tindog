@@ -1,4 +1,4 @@
-import { Check, Coins, Lock, Sparkles } from 'lucide-react'
+import { Check, Coins, Hourglass, Lock, Sparkles } from 'lucide-react'
 import { sfx } from '../audio'
 import { ThemeSwatch } from '../components/shop/ThemeSwatch'
 import { Button } from '../components/ui/Button'
@@ -7,9 +7,10 @@ import { useStore } from '../hooks/useStore'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
-import { type ShopItem, itemPrice, ownsItem, purchase } from '../utils/progression'
+import { type ShopItem, itemPrice, legendUnlockFor, ownsItem, purchase } from '../utils/progression'
+import { getLegend } from '../data/historicalLegends'
 
-export function ShopView() {
+export function ShopView({ onOpenLegends }: { onOpenLegends: () => void }) {
   const profile = useStore(profileStore, (p) => p)
   const settings = useStore(settingsStore, (s) => s)
   const previewTheme = getBoardTheme(settings.boardTheme)
@@ -47,6 +48,13 @@ export function ShopView() {
           onClick={() => (item.kind === 'theme' ? updateSettings({ boardTheme: item.id }) : updateSettings({ pieceSet: item.id }))}
         >
           Equip
+        </Button>
+      )
+    const legendId = legendUnlockFor(item)
+    if (legendId)
+      return (
+        <Button size="sm" className="w-full" icon={<Hourglass className="size-4" />} onClick={onOpenLegends}>
+          Defeat {getLegend(legendId).shortName}
         </Button>
       )
     const price = itemPrice(item)
@@ -97,6 +105,7 @@ export function ShopView() {
                   <div className="flex items-center gap-1.5 text-sm font-bold text-white">
                     {theme.name}
                     {theme.price > 0 && <span className="rounded bg-white/10 px-1 text-[9px] font-black uppercase text-accent">Premium</span>}
+                    {theme.legendUnlock && <span className="rounded bg-white/10 px-1 text-[9px] font-black uppercase text-amber-300">Legend</span>}
                   </div>
                   <p className="line-clamp-2 text-xs text-slate-400">{theme.description}</p>
                   <p className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">{theme.material} sound set</p>

@@ -27,6 +27,14 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'rush-hour', title: 'Rush Hour', description: 'Score 5,000 points in a Time Rush run.', icon: 'rocket', reward: 75, tier: 'silver' },
   { id: 'arcade-legend', title: 'Arcade Legend', description: 'Score 20,000 points in a Time Rush run.', icon: 'rocket', reward: 250, tier: 'platinum' },
   { id: 'questor', title: 'Questor', description: 'Complete every daily quest in a single day.', icon: 'scroll', reward: 60, tier: 'silver' },
+  // ── Chronos Chess ──
+  { id: 'dethroned-the-nile', title: 'Dethroned the Nile', description: 'Defeat Cleopatra VII.', icon: 'eye', reward: 100, tier: 'silver' },
+  { id: 'gravity-defied', title: 'Gravity Defied', description: 'Defeat Sir Isaac Newton.', icon: 'apple', reward: 150, tier: 'gold' },
+  { id: 'calculated-by-newton', title: 'Calculated by Newton', description: 'Last 40 or more moves against Sir Isaac Newton.', icon: 'apple', reward: 60, tier: 'bronze' },
+  { id: 'your-waterloo', title: 'Your Waterloo, Sire', description: 'Defeat Napoleon Bonaparte.', icon: 'flag', reward: 200, tier: 'gold' },
+  { id: 'relativity-defeated', title: 'Relativity Defeated', description: 'Defeat Albert Einstein.', icon: 'atom', reward: 300, tier: 'platinum' },
+  { id: 'time-traveler', title: 'Time Traveler', description: 'Challenge a legend in every epoch.', icon: 'clock', reward: 75, tier: 'silver' },
+  { id: 'master-of-time', title: 'Master of Time', description: 'Defeat all four historical legends.', icon: 'crown', reward: 500, tier: 'platinum' },
 ]
 
 export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

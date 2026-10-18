@@ -4,7 +4,7 @@ import { colorName, describeResult } from './chess'
 export type StatusTone = 'neutral' | 'success' | 'danger'
 
 /** Compact one-line status used by the thumb dock. */
-export function statusSummary(status: GameStatus, opts: { aiThinking: boolean; isLive: boolean; engineLoading: boolean }): {
+export function statusSummary(status: GameStatus, opts: { aiThinking: boolean; isLive: boolean; engineLoading: boolean; opponentName?: string }): {
   title: string
   detail: string
   tone: StatusTone
@@ -14,11 +14,11 @@ export function statusSummary(status: GameStatus, opts: { aiThinking: boolean; i
     const { title, detail } = describeResult(status.result)
     return { title, detail, tone: status.result.kind === 'draw' ? 'neutral' : 'success' }
   }
-  if (opts.engineLoading) return { title: 'Loading Stockfish…', detail: 'Preparing the engine', tone: 'neutral' }
+  if (opts.engineLoading) return { title: `Summoning ${opts.opponentName ?? 'Stockfish'}…`, detail: 'Preparing the engine', tone: 'neutral' }
   if (status.inCheck) return { title: 'Check!', detail: `${colorName(status.turn)} must escape`, tone: 'danger' }
   return {
     title: `${colorName(status.turn)} to move`,
-    detail: opts.aiThinking ? 'Stockfish is thinking…' : 'Your move',
+    detail: opts.aiThinking ? `${opts.opponentName ?? 'Stockfish'} is thinking…` : 'Your move',
     tone: 'neutral',
   }
 }

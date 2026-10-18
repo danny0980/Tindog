@@ -214,6 +214,162 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     particles: ['#facc15', '#fde68a', '#f59e0b', '#f43f5e', '#ffffff'],
     suggestedPieceSet: 'gilded',
   },
+  // ── Epoch themes: earned by defeating historical legends (Chronos Chess) ──
+  {
+    id: 'papyrus-gold',
+    name: 'Papyrus & Gold',
+    description: 'Woven papyrus and lapis lazuli from the court of Alexandria.',
+    price: 0,
+    legendUnlock: 'cleopatra',
+    musicTexture: 'ancient',
+    material: 'marble',
+    lightSquare: {
+      background:
+        'repeating-linear-gradient(0deg, rgba(120,84,30,0.10) 0 1px, transparent 1px 6px), repeating-linear-gradient(90deg, rgba(120,84,30,0.08) 0 1px, transparent 1px 9px), linear-gradient(135deg, #f1dfaf, #e2c98a)',
+    },
+    // Sienna sandstone (not lapis) so the lapis-blue pieces stand out on every square.
+    darkSquare: {
+      background:
+        'radial-gradient(circle at 30% 30%, rgba(250,204,21,0.25) 0 1px, transparent 2px), radial-gradient(circle at 70% 65%, rgba(250,204,21,0.2) 0 1px, transparent 2px), linear-gradient(135deg, #a8743a, #7f5326)',
+    },
+    notationLight: '#8a6420',
+    notationDark: '#fde7a8',
+    boardFrame: {
+      boxShadow: '0 0 0 4px #c9a043, 0 0 0 7px #1d3570, 0 0 0 9px #e0b04a, 0 30px 70px -20px rgba(224,176,74,0.45)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(45, 212, 191, 0.38)' },
+      selected: { backgroundColor: 'rgba(224, 176, 74, 0.6)' },
+      target: { background: 'radial-gradient(circle, rgba(224,176,74,0.95) 16%, rgba(120,84,30,0.35) 22%, transparent 25%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 57%, rgba(45,212,191,0.85) 60%, rgba(45,212,191,0.5) 70%, transparent 74%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,38,38,0.75) 32%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 4px rgba(45, 212, 191, 0.85)' },
+      hint: { boxShadow: glowRing('rgba(224, 176, 74, 0.95)') },
+    },
+    accent: '#e0b04a',
+    accent2: '#2dd4bf',
+    background:
+      'radial-gradient(1100px 600px at 20% -10%, rgba(224,176,74,0.22), transparent 60%), radial-gradient(900px 600px at 110% 30%, rgba(45,212,191,0.12), transparent 60%), linear-gradient(180deg, #120c05, #0a0f1e)',
+    chromeColor: '#120c05',
+    particles: ['#e0b04a', '#fde68a', '#2dd4bf', '#1d4ed8', '#ffffff'],
+    suggestedPieceSet: 'lapis',
+  },
+  {
+    id: 'blueprint',
+    name: 'Principia Blueprint',
+    description: 'Inked geometry on navy drafting paper, as if plotted by Newton himself.',
+    price: 0,
+    legendUnlock: 'newton',
+    musicTexture: 'baroque',
+    material: 'wood',
+    lightSquare: {
+      background:
+        'linear-gradient(rgba(191,219,254,0.18) 1px, transparent 1px) 0 0 / 25% 25%, linear-gradient(90deg, rgba(191,219,254,0.18) 1px, transparent 1px) 0 0 / 25% 25%, #2d5a94',
+    },
+    darkSquare: {
+      background:
+        'linear-gradient(rgba(191,219,254,0.12) 1px, transparent 1px) 0 0 / 25% 25%, linear-gradient(90deg, rgba(191,219,254,0.12) 1px, transparent 1px) 0 0 / 25% 25%, #1b3a66',
+    },
+    notationLight: '#dbeafe',
+    notationDark: '#93c5fd',
+    boardFrame: {
+      boxShadow: '0 0 0 2px rgba(219,234,254,0.85), 0 0 0 7px #10284a, 0 0 0 8px rgba(219,234,254,0.4), 0 30px 70px -20px rgba(30,64,175,0.6)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(253, 230, 138, 0.28)', boxShadow: 'inset 0 0 0 2px rgba(253,230,138,0.6)' },
+      selected: { backgroundColor: 'rgba(253, 230, 138, 0.4)' },
+      target: { background: 'radial-gradient(circle, transparent 16%, rgba(253,230,138,0.95) 18%, rgba(253,230,138,0.95) 22%, transparent 24%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 60%, rgba(253,230,138,0.9) 62%, rgba(253,230,138,0.9) 66%, transparent 68%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(248,113,113,0.7) 35%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(253, 230, 138, 0.9)' },
+      hint: { boxShadow: glowRing('rgba(253, 230, 138, 0.95)') },
+    },
+    accent: '#93c5fd',
+    accent2: '#fde68a',
+    background:
+      'linear-gradient(rgba(147,197,253,0.05) 1px, transparent 1px) 0 0 / 100% 28px, linear-gradient(90deg, rgba(147,197,253,0.05) 1px, transparent 1px) 0 0 / 28px 100%, radial-gradient(900px 600px at 80% -10%, rgba(253,230,138,0.12), transparent 60%), #0a1628',
+    chromeColor: '#0a1628',
+    particles: ['#93c5fd', '#dbeafe', '#fde68a', '#ffffff'],
+    suggestedPieceSet: 'ink',
+  },
+  {
+    id: 'imperial-velvet',
+    name: 'Imperial Velvet',
+    description: 'Ivory and Napoleonic blue velvet, trimmed with laurel gold.',
+    price: 0,
+    legendUnlock: 'napoleon',
+    musicTexture: 'imperial',
+    material: 'metal',
+    lightSquare: { background: 'linear-gradient(135deg, rgba(255,255,255,0.4), transparent 45%), #efe4cc' },
+    darkSquare: {
+      background: 'radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.12), transparent 60%), linear-gradient(160deg, #24357a, #141f4d)',
+    },
+    notationLight: '#24357a',
+    notationDark: '#e8c766',
+    boardFrame: {
+      boxShadow: '0 0 0 3px #d4af37, 0 0 0 6px #7f1d1d, 0 0 0 8px #d4af37, 0 30px 70px -20px rgba(127,29,29,0.55), 0 30px 60px -20px rgba(0,0,0,0.85)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(212, 175, 55, 0.42)' },
+      selected: { backgroundColor: 'rgba(212, 175, 55, 0.6)' },
+      target: { background: 'radial-gradient(circle, rgba(185,28,28,0.85) 16%, rgba(185,28,28,0.3) 22%, transparent 25%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 57%, rgba(185,28,28,0.85) 60%, rgba(185,28,28,0.55) 70%, transparent 74%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(220,38,38,0.8) 30%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 4px rgba(212, 175, 55, 0.9)' },
+      hint: { boxShadow: glowRing('rgba(212, 175, 55, 0.95)') },
+    },
+    accent: '#d4af37',
+    accent2: '#ef4444',
+    background:
+      'radial-gradient(1100px 600px at 10% -10%, rgba(36,53,122,0.45), transparent 60%), radial-gradient(900px 600px at 110% 20%, rgba(127,29,29,0.35), transparent 60%), #0b0d1a',
+    chromeColor: '#0b0d1a',
+    particles: ['#d4af37', '#2563eb', '#ffffff', '#ef4444'],
+    suggestedPieceSet: 'imperial',
+  },
+  {
+    id: 'chalkboard',
+    name: 'Chalkboard 1905',
+    description: 'A slate blackboard dusted with the equations of a miraculous year.',
+    price: 0,
+    legendUnlock: 'einstein',
+    musicTexture: 'modern',
+    material: 'soft',
+    lightSquare: {
+      background: 'radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.10), transparent 70%), #4f6157',
+    },
+    darkSquare: {
+      background: 'radial-gradient(ellipse at 60% 70%, rgba(255,255,255,0.06), transparent 70%), #2c3a33',
+    },
+    notationLight: '#f8fafc',
+    notationDark: '#e2e8f0',
+    boardFrame: {
+      boxShadow: '0 0 0 8px #6b4a2b, 0 0 0 9px rgba(255,255,255,0.15), 0 30px 60px -20px rgba(0,0,0,0.85)',
+    },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(254, 243, 199, 0.22)', boxShadow: 'inset 0 0 0 2px rgba(254,243,199,0.55)' },
+      selected: { backgroundColor: 'rgba(147, 197, 253, 0.35)' },
+      target: { background: 'radial-gradient(circle, rgba(248,250,252,0.85) 15%, transparent 19%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 58%, rgba(248,250,252,0.75) 60%, rgba(248,250,252,0.75) 65%, transparent 68%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(254,202,202,0.9) 0%, rgba(239,68,68,0.6) 35%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(248, 250, 252, 0.8)' },
+      hint: { boxShadow: glowRing('rgba(254, 243, 199, 0.95)') },
+    },
+    accent: '#fde68a',
+    accent2: '#93c5fd',
+    background:
+      'radial-gradient(1000px 600px at 15% -10%, rgba(253,230,138,0.10), transparent 60%), radial-gradient(900px 600px at 100% 30%, rgba(147,197,253,0.10), transparent 60%), #111815',
+    chromeColor: '#111815',
+    particles: ['#f8fafc', '#fde68a', '#93c5fd', '#fca5a5'],
+    suggestedPieceSet: 'chalk',
+  },
 ]
 
 export const PIECE_SETS: ReadonlyArray<PieceSet> = [
@@ -249,6 +405,42 @@ export const PIECE_SETS: ReadonlyArray<PieceSet> = [
     white: { fill: '#fde68a', filter: 'drop-shadow(0 0 2px rgba(251,191,36,0.8)) drop-shadow(0 2px 2px rgba(0,0,0,0.45))' },
     black: { fill: '#4a1020', filter: 'drop-shadow(0 0 2px rgba(250,204,21,0.75)) drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
   },
+  {
+    id: 'lapis',
+    name: 'Lapis & Gold',
+    description: 'Pharaonic gold against lapis lazuli.',
+    price: 0,
+    legendUnlock: 'cleopatra',
+    white: { fill: '#f2d27a', filter: 'drop-shadow(0 0 2px rgba(224,176,74,0.8)) drop-shadow(0 2px 2px rgba(0,0,0,0.45))' },
+    black: { fill: '#1e3a8a', filter: 'drop-shadow(0 0 2px rgba(224,176,74,0.85)) drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
+  },
+  {
+    id: 'ink',
+    name: 'Quill & Ink',
+    description: 'Parchment pieces outlined in iron-gall ink.',
+    price: 0,
+    legendUnlock: 'newton',
+    white: { fill: '#f5ecd7', filter: 'sepia(0.35) drop-shadow(0 2px 2px rgba(0,0,0,0.45))' },
+    black: { fill: '#2b1d0e', filter: 'drop-shadow(0 0 1.5px rgba(253,230,138,0.6)) drop-shadow(0 2px 2px rgba(0,0,0,0.5))' },
+  },
+  {
+    id: 'imperial',
+    name: 'Grande Armée',
+    description: 'Ivory guards against crimson grenadiers, edged in gold.',
+    price: 0,
+    legendUnlock: 'napoleon',
+    white: { fill: '#fbf7ec', filter: 'drop-shadow(0 0 1.5px rgba(212,175,55,0.8)) drop-shadow(0 2px 2px rgba(0,0,0,0.45))' },
+    black: { fill: '#9b1c1c', filter: 'drop-shadow(0 0 2px rgba(212,175,55,0.85)) drop-shadow(0 2px 2px rgba(0,0,0,0.55))' },
+  },
+  {
+    id: 'chalk',
+    name: 'Chalk Sketch',
+    description: 'Pieces sketched in chalk on slate.',
+    price: 0,
+    legendUnlock: 'einstein',
+    white: { fill: '#f8fafc', filter: 'drop-shadow(0 0 1.2px rgba(255,255,255,0.85))' },
+    black: { fill: '#1b2420', filter: 'drop-shadow(0 0 1.5px rgba(248,250,252,0.9))' },
+  },
 ]
 
 export const getBoardTheme = (id: BoardThemeId): BoardTheme =>
@@ -256,5 +448,5 @@ export const getBoardTheme = (id: BoardThemeId): BoardTheme =>
 
 export const getPieceSet = (id: PieceSetId): PieceSet => PIECE_SETS.find((p) => p.id === id) ?? (PIECE_SETS[0] as PieceSet)
 
-export const FREE_THEMES: BoardThemeId[] = BOARD_THEMES.filter((t) => t.price === 0).map((t) => t.id)
-export const FREE_PIECE_SETS: PieceSetId[] = PIECE_SETS.filter((p) => p.price === 0).map((p) => p.id)
+export const FREE_THEMES: BoardThemeId[] = BOARD_THEMES.filter((t) => t.price === 0 && !t.legendUnlock).map((t) => t.id)
+export const FREE_PIECE_SETS: PieceSetId[] = PIECE_SETS.filter((p) => p.price === 0 && !p.legendUnlock).map((p) => p.id)

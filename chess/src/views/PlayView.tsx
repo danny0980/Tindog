@@ -19,9 +19,10 @@ import { NewGameModal } from '../components/modals/NewGameModal'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { GestureGuide } from '../components/ui/GestureGuide'
+import { LegendDialogue } from '../components/legends/LegendDialogue'
+import { TimeWarpOverlay } from '../components/legends/TimeWarpOverlay'
 import { Modal } from '../components/ui/Modal'
 import { SwipeFeedback } from '../components/ui/SwipeFeedback'
-import { getPieceSet } from '../constants/themes'
 import type { GameController } from '../hooks/useGameController'
 import { useLayoutMode } from '../hooks/useLayoutMode'
 import { type SwipeDirection, useSwipeGesture } from '../hooks/useSwipeGesture'
@@ -63,10 +64,13 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const [menuOpen, setMenuOpen] = useState(false)
   const [movesOpen, setMovesOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
+  // Game key whose time-travel intro has already played.
+  const [warpFor, setWarpFor] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ id: number; direction: SwipeDirection; label: string } | null>(null)
   const { oneHanded, gestures } = useLayoutMode()
   const settings = game.settings
-  const pieceSet = getPieceSet(settings.pieceSet)
+  // Legend battles use their epoch's pieces; otherwise the player's equipped set.
+  const pieceSet = game.pieceSet
   const turn = game.status.kind === 'playing' ? game.status.turn : null
   const { timeMachine } = game
   const total = game.history.length
@@ -160,18 +164,25 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const currentMoveAnalysis = analysisMoves?.[timeMachine.displayPly - 1] ?? null
   const arrows = game.bestMoveArrow ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
 
-  const renderPlayer = (color: Color, hideClock = false) => (
-    <PlayerBar
-      player={game.players[color]}
-      isTurn={turn === color}
-      thinking={game.aiThinking && game.players[color].isEngine}
-      captured={game.captured[color]}
-      advantage={color === 'w' ? game.captured.materialDiff : -game.captured.materialDiff}
-      pieceSet={pieceSet}
-      hideClock={hideClock}
-      clock={{ enabled: game.clock.enabled, timeMs: game.clock.times[color], initialMs: game.timeControl.initialMs }}
-    />
-  )
+  const renderPlayer = (color: Color, hideClock = false) => {
+    const legendId = game.players[color].legendId
+    return (
+      <div className="relative">
+        <PlayerBar
+          player={game.players[color]}
+          isTurn={turn === color}
+          thinking={game.aiThinking && game.players[color].isEngine}
+          captured={game.captured[color]}
+          advantage={color === 'w' ? game.captured.materialDiff : -game.captured.materialDiff}
+          pieceSet={pieceSet}
+          hideClock={hideClock}
+          clock={{ enabled: game.clock.enabled, timeMs: game.clock.times[color], initialMs: game.timeControl.initialMs }}
+        />
+        {/* Legend remarks float over the board edge next to their bar. */}
+        {legendId && <LegendDialogue legendId={legendId} placement={color === game.orientation ? 'above' : 'below'} />}
+      </div>
+    )
+  }
 
   const board = (
     <div className="flex items-stretch gap-2">
@@ -252,6 +263,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
             gestures={gestures}
             status={statusSummary(game.status, {
               aiThinking: game.aiThinking,
+              opponentName: game.opponentName,
               isLive: timeMachine.isLive,
               engineLoading: game.isAiMode && game.engineStatus === 'loading',
             })}
@@ -304,6 +316,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
                 isAiMode={game.isAiMode}
                 isLive={timeMachine.isLive}
                 isReview={game.review !== null}
+                opponentName={game.opponentName}
                 opening={game.opening}
               />
             </div>
@@ -359,6 +372,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
       />
 
       <GestureGuide open={showGuide} onClose={closeGuide} />
+
+      {game.legend && game.epoch && !settings.batterySaver && warpFor !== game.gameKey && game.history.length === 0 && active && (
+        <TimeWarpOverlay key={game.gameKey} epoch={game.epoch} legendId={game.legend.id} onDone={() => setWarpFor(game.gameKey)} />
+      )}
 
       <ConfettiCanvas burst={game.celebration} colors={game.theme.particles} disabled={settings.batterySaver} />
 

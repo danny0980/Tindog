@@ -1,6 +1,7 @@
 // Validates bundled game data:
 //  • every opening line in src/data/openings.ts is legal SAN
 //  • every puzzle in src/data/puzzles.ts replays legally and ends in checkmate
+//  • every legend repertoire line in src/data/historicalLegends.ts is legal SAN
 //
 //   node scripts/validate-data.mjs
 import { Chess } from 'chess.js'
@@ -47,5 +48,24 @@ for (const [, id, fen, solution, mateIn] of entries) {
   }
 }
 console.log(`${entries.length} puzzles checked`)
+const legends = readFileSync(new URL('../src/data/historicalLegends.ts', import.meta.url), 'utf8')
+let repertoireLines = 0
+for (const [, block] of legends.matchAll(/repertoire: \{([\s\S]*?)\n\s*\},/g)) {
+  for (const [, line] of block.matchAll(/'([^']+)'/g)) {
+    repertoireLines += 1
+    const chess = new Chess()
+    for (const san of line.split(' ')) {
+      try {
+        chess.move(san)
+      } catch {
+        console.error(`✗ legend repertoire: illegal move "${san}" in "${line}"`)
+        failures += 1
+        break
+      }
+    }
+  }
+}
+console.log(`${repertoireLines} legend repertoire lines checked`)
+
 console.log(failures ? `${failures} problem(s) found` : 'All data valid ✓')
 process.exit(failures ? 1 : 0)

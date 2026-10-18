@@ -14,6 +14,7 @@ interface GameStatusBannerProps {
   isLive: boolean
   isReview: boolean
   opening: DetectedOpening | null
+  opponentName?: string
 }
 
 const TONES = {
@@ -43,7 +44,7 @@ function Banner({ tone, icon, title, detail, opening }: { tone: keyof typeof TON
   )
 }
 
-export function GameStatusBanner({ status, aiThinking, engineStatus, engineError, isAiMode, isLive, isReview, opening }: GameStatusBannerProps) {
+export function GameStatusBanner({ status, aiThinking, engineStatus, engineError, isAiMode, isLive, isReview, opening, opponentName = 'Stockfish' }: GameStatusBannerProps) {
   if (isAiMode && engineStatus === 'error') {
     return (
       <Banner tone="danger" icon={<AlertTriangle className="size-5" />} title="Engine unavailable" opening={opening} detail={`${engineError ?? 'Stockfish failed to load.'} Try a local game.`} />
@@ -60,7 +61,7 @@ export function GameStatusBanner({ status, aiThinking, engineStatus, engineError
     return <Banner tone={r.kind === 'draw' ? 'neutral' : 'success'} icon={icon} title={isReview ? `Review · ${title}` : title} detail={detail} opening={opening} />
   }
   if (isAiMode && engineStatus === 'loading') {
-    return <Banner tone="neutral" icon={<LoaderCircle className="size-5 animate-spin" />} title="Loading Stockfish…" detail="Preparing the engine" opening={opening} />
+    return <Banner tone="neutral" icon={<LoaderCircle className="size-5 animate-spin" />} title={`Summoning ${opponentName}…`} detail="Preparing the engine" opening={opening} />
   }
   if (status.inCheck) {
     return <Banner tone="danger" icon={<AlertTriangle className="size-5" />} title="Check!" detail={`${colorName(status.turn)} must get out of check`} opening={opening} />
@@ -77,7 +78,7 @@ export function GameStatusBanner({ status, aiThinking, engineStatus, engineError
         )
       }
       title={`${colorName(status.turn)} to move`}
-      detail={aiThinking ? 'Stockfish is thinking…' : 'Make your move'}
+      detail={aiThinking ? `${opponentName} is thinking…` : 'Make your move'}
     />
   )
 }

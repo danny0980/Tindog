@@ -1,8 +1,19 @@
 import type { CSSProperties } from 'react'
+import type { LegendId, MusicTexture } from './legend'
 
-export type BoardThemeId = 'classic-wood' | 'minimal' | 'oled-black' | 'obsidian-marble' | 'cyberpunk-neon' | 'royal-gold'
+export type BoardThemeId =
+  | 'classic-wood'
+  | 'minimal'
+  | 'oled-black'
+  | 'obsidian-marble'
+  | 'cyberpunk-neon'
+  | 'royal-gold'
+  | 'papyrus-gold'
+  | 'blueprint'
+  | 'imperial-velvet'
+  | 'chalkboard'
 
-export type PieceSetId = 'standard' | 'obsidian' | 'neon' | 'gilded'
+export type PieceSetId = 'standard' | 'obsidian' | 'neon' | 'gilded' | 'lapis' | 'ink' | 'imperial' | 'chalk'
 
 export type SoundMaterial = 'wood' | 'marble' | 'metal' | 'synth' | 'soft'
 
@@ -39,6 +50,10 @@ export interface BoardTheme {
   particles: string[]
   /** Piece set equipped automatically if owned and the user hasn't chosen one. */
   suggestedPieceSet: PieceSetId
+  /** Earned (not bought) by defeating this legend for the first time. */
+  legendUnlock?: LegendId
+  /** Soundtrack flavour while this theme is shown. */
+  musicTexture?: MusicTexture
 }
 
 export interface PieceStyle {
@@ -53,4 +68,5 @@ export interface PieceSet {
   price: number
   white: PieceStyle
   black: PieceStyle
+  legendUnlock?: LegendId
 }

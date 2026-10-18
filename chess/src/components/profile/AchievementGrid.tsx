@@ -1,5 +1,5 @@
 import {
-  Brain, ChessKnight, Crown, Rocket, ScrollText, Flame, Gem, Handshake, Hourglass, Lock, Medal, Palette, Puzzle, Repeat, Search, Shield, Skull, Star, Swords, Target, Timer, TrendingUp, Trophy, Zap,
+  Apple, Atom, Brain, ChessKnight, Clock, Crown, Eye, Flag, Rocket, ScrollText, Flame, Gem, Handshake, Hourglass, Lock, Medal, Palette, Puzzle, Repeat, Search, Shield, Skull, Star, Swords, Target, Timer, TrendingUp, Trophy, Zap,
 } from 'lucide-react'
 import { ACHIEVEMENTS } from '../../constants/achievements'
 import type { AchievementIcon } from '../../types/profile'
@@ -28,6 +28,11 @@ const ACHIEVEMENT_ICONS: Record<AchievementIcon, typeof Trophy> = {
   repeat: Repeat,
   search: Search,
   rocket: Rocket,
+  atom: Atom,
+  apple: Apple,
+  eye: Eye,
+  flag: Flag,
+  clock: Clock,
   scroll: ScrollText,
 }
 

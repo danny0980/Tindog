@@ -1,4 +1,5 @@
 import type { Color, Move, PieceSymbol, Square } from 'chess.js'
+import type { LegendId } from './legend'
 
 export type { Color, Move, PieceSymbol, Square }
 
@@ -34,6 +35,8 @@ export interface GameSettings {
   /** Used when timeControlId === 'custom'. */
   customMinutes: number
   customIncrementSeconds: number
+  /** Historical legend opponent (AI mode); overrides difficulty & personality. */
+  legendId: LegendId | null
 }
 
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient'

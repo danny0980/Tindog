@@ -3,6 +3,8 @@ import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../const
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from '../types/chess'
 import type { EloPoint, MatchRecord, PlayerProfile } from '../types/profile'
 import type { QuestMetric } from '../types/quest'
+import { EPOCH_IDS, LEGEND_IDS } from '../data/historicalLegends'
+import type { EpochId, LegendId, LegendProgress } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { createPersistentStore } from '../utils/store'
 import { arrayOf, asRecord, isRecord, num, oneOf, str, stringRecord } from '../utils/validate'
@@ -34,6 +36,29 @@ export function createDefaultProfile(): PlayerProfile {
     gamesAnalyzed: 0,
     quests: { date: '', progress: {}, claimed: [], bonusClaimed: false, perfectDays: 0 },
     rush: { bestScore: 0, bestRound: 0, runs: 0, totalScore: 0 },
+    legends: { defeated: {}, wins: {}, losses: {}, draws: {}, epochsVisited: [] },
+  }
+}
+
+const isLegendId = (v: unknown): v is LegendId => typeof v === 'string' && (LEGEND_IDS as readonly string[]).includes(v)
+const isEpochId = (v: unknown): v is EpochId => typeof v === 'string' && (EPOCH_IDS as readonly string[]).includes(v)
+
+function legendRecord<T>(raw: unknown, guard: (v: unknown) => v is T): Partial<Record<LegendId, T>> {
+  const out: Partial<Record<LegendId, T>> = {}
+  for (const [key, value] of Object.entries(asRecord(raw))) if (isLegendId(key) && guard(value)) out[key] = value
+  return out
+}
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+const isString = (v: unknown): v is string => typeof v === 'string'
+
+function sanitizeLegends(raw: unknown): LegendProgress {
+  const l = asRecord(raw)
+  return {
+    defeated: legendRecord(l.defeated, isString),
+    wins: legendRecord(l.wins, isCount),
+    losses: legendRecord(l.losses, isCount),
+    draws: legendRecord(l.draws, isCount),
+    epochsVisited: arrayOf(l.epochsVisited, isEpochId),
   }
 }
 
@@ -88,6 +113,7 @@ function sanitizeMatch(v: unknown): MatchRecord | null {
     coins: num(v.coins, 0, 0),
     accuracy: nullableNum(v.accuracy),
     opening: typeof v.opening === 'string' ? v.opening : null,
+    legendId: isLegendId(v.legendId) ? v.legendId : null,
   }
 }
 
@@ -149,6 +175,7 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
       runs: num(rush.runs, 0, 0),
       totalScore: num(rush.totalScore, 0, 0),
     },
+    legends: sanitizeLegends(raw.legends),
   }
 }
 

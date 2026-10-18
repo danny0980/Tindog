@@ -1,10 +1,110 @@
-# ♞ Chess Arena: AAA Edition
+# ♞ Chess Arena: AAA Edition (v3.1 · Chronos Chess)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 3.1: Chronos Chess, historical legends & eras
+
+Travel through four epochs and play legendary historical figures, each with a distinct, engine-backed playing style.
+
+| Chapter | Epoch | Legend | Rating | How they play |
+|---|---|---|---|---|
+| I | Ancient World (Ptolemaic Egypt) | **Cleopatra VII** | ~1300 | Cunning and patient. Avoids trades and favours moves that **fork** valuable pieces. Her book includes the **Blackburne Shilling trap** (…Nd4). |
+| II | Scientific Revolution (1687) | **Sir Isaac Newton** | ~1750 | Slow and methodical: 1.8 s minimum think, deep search, tight tolerance. Castles early, keeps a solid structure, avoids sacrifices. Plays the Queen's Gambit, Caro-Kann and Slav. |
+| III | Napoleonic Empire (1805) | **Napoleon Bonaparte** | ~2000 | Relentless. Heavy king-pressure and **sacrifice** weights, never trades willingly, and moves fast. Plays the Napoleon Attack (1.e4 e5 2.Qf3), King's Gambit, Elephant and Latvian Gambits. |
+| IV | Modern Physics (1905) | **Albert Einstein** | ~2300 | Creative. A **creativity** weight deliberately reaches for lower-ranked (but sound) MultiPV lines, with high randomness and gambits such as 1.b4, the Evans Gambit and the Budapest Gambit. |
+
+### How a persona becomes a playing style
+
+Every legend has an `OpponentProfile` in `src/data/historicalLegends.ts`. The fields are:
+
+- **Strength:** Stockfish `skillLevel`, `depth`, `moveTimeMs`, and `minThinkMs` (a human-like pause).
+- **Candidates:** `multiPv`, the number of candidate lines Stockfish returns. `toleranceCp` sets how far below the best move a stylish choice may be.
+- **Personality:** `StyleWeights`, which re-score each candidate. The base weights are check, capture, forcing, king pressure, advance, castling, king shelter, trades, centre, development, quiet moves and early queen moves. Three are new for 3.1:
+  - **`sacrifice`**: rewards leaving material en prise for initiative.
+  - **`fork`**: rewards moves where the moved piece attacks two or more valuable targets.
+  - **`creativity`**: rewards lower-ranked MultiPV lines.
+- **Randomness:** `noise`, a creativity / unpredictability factor.
+- **Openings:** a **per-colour repertoire** (SAN lines) played while the game stays in book.
+
+Forced mates are never passed up. The move picker is shared with the regular personalities (`engine/personalities.ts`), so Quick Play and Legends use one code path.
+
+### Era overhaul
+
+Each epoch overrides the whole app while you browse it on the Legends screen or play its legend. This uses a non-persisted `themeOverrideStore`, so your saved theme is untouched.
+
+| Epoch | Board | Pieces | Piece sound | Soundtrack texture |
+|---|---|---|---|---|
+| Ancient | Papyrus & Gold (papyrus / sienna, lapis frame) | Lapis & Gold | marble | E Phrygian-dominant drone + harp plucks |
+| Scientific | Principia Blueprint (navy drafting grid) | Quill & Ink | wood | harpsichord-style arpeggios over a I–V–vi–IV continuo |
+| Napoleonic | Imperial Velvet (ivory / blue velvet, gold & crimson frame) | Grande Armée | metal | brass pads + military snare cadence |
+| Modern | Chalkboard 1905 (slate, chalk dust) | Chalk Sketch | soft | jazz-voiced electric-piano harmony (maj9 / m11 / 13) |
+
+The accent colours, page background, status-bar `theme-color`, particles and the **adaptive soundtrack** all switch too. The soundtrack still follows game tension, and needs Settings → Audio → Ambient soundtrack turned on. Each battle opens with a **time-warp** intro (a tunnel animation and a "warp" sound), which battery saver skips.
+
+### Dialogue & reactions
+
+Each legend has in-character lines for 12 triggers:
+- the intro, and thinking
+- you taking too long (25 s)
+- captures by either side, giving or receiving check
+- the advantage swinging past ±2.5 pawns
+- winning, losing and drawing
+
+Lines appear in a typewriter speech bubble anchored to the legend's player bar. The bubble overlays the board edge, so it never shifts the one-handed or landscape layouts. A cooldown and per-trigger probabilities stop the legend from monologuing.
+
+The dialogue is written for the game: a few lines riff on popularly attributed sayings, but none are presented as verified historical quotations. Portraits are **iconographic emblems** (an era gradient, a symbol and a monogram), not likenesses, and they need no image assets.
+
+### Campaign & rewards
+
+- **Boss progression.** Chapters unlock in order: each legend becomes challengeable once the previous one is defeated.
+- **First victory.** A large coin bounty (**300 / 500 / 700 / 1000**). It also permanently unlocks that epoch's **board theme and piece set** for everyday play; these can't be bought in the shop.
+- **Rematches.** Smaller bounties (40–100). Defeated legends also appear under **Legend opponents** in *New game → vs Computer* (Quick Play).
+- **Rating.** Legend games are rated against the legend's rating. They also count toward quests, stats and match history, and you can review them with the epoch theme.
+- **Trophies:**
+  - **Dethroned the Nile**
+  - **Gravity Defied**
+  - **Calculated by Newton** (last 40+ moves against Newton)
+  - **Your Waterloo, Sire**
+  - **Relativity Defeated**
+  - **Time Traveler** (fight in all four epochs)
+  - **Master of Time** (defeat all four)
+- **Hall of Legends.** Your record against each legend is shown on the Profile.
+
+### Testing Chronos Chess locally
+
+```bash
+cd chess
+npm install
+npm run dev              # open the Legends tab (hourglass icon)
+npm run test:legends     # campaign/reward/repertoire/style-filter logic tests
+npm run validate:data    # also replays every legend repertoire line with chess.js
+```
+
+1. **Browse the timeline.** Open the **Legends** tab. Selecting an epoch re-themes the whole app. Newton, Napoleon and Einstein are locked at first.
+2. **Fight a legend.** Choose a side and time control, then press **Travel & challenge**. You'll see the time-warp intro and the legend's opening remark. Then try their books:
+   - **Cleopatra** (you play White): 1.e4 e5 2.Nf3 Nc6 3.Bc4 — she answers **3…Nd4**, the Blackburne Shilling trap.
+   - **Napoleon** (you play Black): he opens 1.e4, and after 1…e5 he plays 2.Qf3 or 2.f4.
+   - **Newton** (you play White): 1.e4 → 1…c6.
+   - **Einstein** (you play White): 1.e4 → 1…Nf6.
+3. **Reactions.** Wait 25 s on your move, capture something, or give check, and a speech bubble appears.
+4. **Rewards without beating every legend.** To try the later chapters straight away, seed the campaign in the browser console and reload:
+
+   ```js
+   const p = JSON.parse(localStorage.getItem('chess-arena:profile:v1') ?? '{"version":1}')
+   p.legends = { defeated: { cleopatra: new Date().toISOString(), newton: new Date().toISOString(), napoleon: new Date().toISOString() }, wins: {}, losses: {}, draws: {}, epochsVisited: [] }
+   localStorage.setItem('chess-arena:profile:v1', JSON.stringify(p))
+   ```
+
+   Einstein is then unlocked, and the three seeded legends appear in Quick Play. Epoch cosmetics are granted by an actual first win, not by this seed.
+5. **Mobile.**
+   - Enable Settings → General → One-handed mode. The legend's bubble then floats over the top of the board, and the dock shows "*Legend* is thinking…".
+   - Rotate to landscape to check the side rail. The legend bar and bubble move beside the board.
 
 ---
 
@@ -195,7 +295,8 @@ chess/
 ├── scripts/
 │   ├── copy-stockfish.mjs         # postinstall: Stockfish WASM → public/stockfish
 │   ├── generate-puzzles.mjs       # Stockfish self-play → verified mate puzzles
-│   └── validate-data.mjs          # checks every opening line and puzzle solution
+│   ├── validate-data.mjs          # checks openings, puzzle solutions and legend repertoires
+│   └── run-ts-test.mjs            # bundles + runs TS logic tests (tests/legends.test.ts)
 ├── public/
 │   ├── favicon.svg
 │   └── stockfish/                 # (generated, git-ignored) engine .js + .wasm
@@ -228,7 +329,9 @@ chess/
     │   └── useStore.ts            #   useSyncExternalStore binding
     ├── stores/                    # persisted state (localStorage, sanitised on load)
     │   ├── settingsStore.ts · profileStore.ts · toastStore.ts
-    │   └── questActions.ts        #   feeds game events into daily quests
+    │   ├── questActions.ts        #   feeds game events into daily quests
+    │   ├── dialogueStore.ts       #   legend remarks (cooldown, no repeats)
+    │   └── themeOverrideStore.ts  #   temporary epoch theme (not persisted)
     ├── components/
     │   ├── board/                 #   ChessBoard, EvalBar, BoardHologram, PromotionDialog
     │   ├── game/                  #   PlayerBar, PlayerAvatar, ChessClock, TimeMachine, MoveHistory,
@@ -236,15 +339,18 @@ chess/
     │   ├── rush/                  #   RushHud, ScorePopups
     │   ├── quests/                #   QuestCard
     │   ├── settings/              #   AudioPanel (mixer), HapticsPanel (channels)
+    │   ├── legends/               #   EpochSelector (timeline), LegendDossier, LegendPortrait,
+    │   │                          #   LegendDialogue (speech bubble), TimeWarpOverlay
     │   ├── analysis/              #   AnalysisPanel, EvalGraph, ClassificationBadge
     │   ├── modals/                #   NewGame, GameOver, Settings
     │   ├── profile/ · shop/       #   EloChart, AchievementGrid, MatchHistory, ThemeSwatch
     │   ├── effects/               #   ConfettiCanvas
     │   ├── layout/                #   AppHeader, BottomNav
     │   └── ui/                    #   Modal, Button, Toggle, ToastViewport, PieceIcon, GestureGuide, SwipeFeedback…
-    ├── views/                     # PlayView · RushView · PuzzlesView · QuestsView · ProfileView · ShopView
+    ├── views/                     # PlayView · LegendsView · RushView · PuzzlesView · QuestsView · ProfileView · ShopView
     ├── constants/                 # difficulty/personality tuning, themes, achievements, economy, quests, rush
     ├── data/                      # openings.ts (189 lines) · puzzles.ts (120 verified mates)
+    │                              # historicalLegends.ts (epochs, legends, profiles, repertoires, dialogue)
     ├── types/                     # chess, engine, analysis, theme, profile, settings, puzzle, quest, rush, ui
     ├── utils/                     # chess helpers, progression (Elo/coins/achievements),
     │                              # quests (daily selection/claims), rushScoring, status,
@@ -278,8 +384,9 @@ npm run dev            # http://localhost:5173 — the "Network" URL works on yo
 |---|---|
 | `npm run build` | Strict type-check + production build to `dist/` |
 | `npm run preview` | Serve the production build |
-| `npm run check` | Typecheck + lint (oxlint) + validate openings & puzzles |
-| `npm run validate:data` | Replay every opening line and puzzle solution |
+| `npm run check` | Typecheck + lint (oxlint) + data validation + legend logic tests |
+| `npm run test:legends` | Chronos Chess logic tests (campaign, rewards, shop, repertoires, style filter) |
+| `npm run validate:data` | Replay every opening line, puzzle solution and legend repertoire line |
 | `npm run generate:puzzles` | Regenerate 120 verified puzzles (takes a few minutes; overwrites `src/data/puzzles.ts`) |
 
 Tailwind v4 needs no `tailwind.config.js`. Runtime theme colours are exposed as `--accent` and `--accent-2` and used through the `accent` utilities (for example `bg-accent/20`).

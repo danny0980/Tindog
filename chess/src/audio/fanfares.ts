@@ -102,3 +102,32 @@ export function playScore(combo: number): void {
   tone({ destination: ui(), frequency: base, type: 'triangle', decay: 0.12, gain: 0.08 })
   tone({ destination: ui(), at: 0.05, frequency: base * 1.5, type: 'triangle', decay: 0.18, gain: 0.07, reverb: 0.2 })
 }
+
+/** Time-travel "warp": rising filtered sweep, shimmering bells and a low arrival boom. */
+export function playTimeTravel(): void {
+  const ctx = audioEngine.ready()
+  const out = audioEngine.sfxBus
+  const buffer = audioEngine.noiseBuffer
+  if (ctx && out && buffer) {
+    const start = ctx.currentTime
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    src.loop = true
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.Q.value = 3
+    filter.frequency.setValueAtTime(180, start)
+    filter.frequency.exponentialRampToValueAtTime(5200, start + 1.3)
+    const env = ctx.createGain()
+    env.gain.setValueAtTime(0.0001, start)
+    env.gain.exponentialRampToValueAtTime(0.22, start + 0.9)
+    env.gain.exponentialRampToValueAtTime(0.0001, start + 1.5)
+    src.connect(filter).connect(env).connect(out)
+    const reverb = audioEngine.reverbBus
+    if (reverb) env.connect(reverb)
+    src.start(start)
+    src.stop(start + 1.6)
+  }
+  ;[76, 83, 88, 95].forEach((n, i) => tone({ at: 0.5 + i * 0.12, frequency: midiToHz(n), decay: 1.1, gain: 0.07, reverb: 0.7 }))
+  tone({ at: 1.3, frequency: 70, frequencyEnd: 38, decay: 0.9, gain: 0.35 })
+}

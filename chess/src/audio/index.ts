@@ -61,6 +61,7 @@ export const sfx = {
     haptic('tap')
   },
   score: fanfares.playScore,
+  timeTravel: fanfares.playTimeTravel,
   pickup(): void {
     haptic('pickup')
   },

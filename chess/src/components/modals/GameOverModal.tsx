@@ -1,4 +1,4 @@
-import { Coins, Crown, Eye, Handshake, Microscope, RotateCcw, Share2, Skull, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Coins, Crown, Eye, Handshake, Hourglass, Microscope, RotateCcw, Share2, Skull, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import type { GameEndSummary } from '../../hooks/useGameController'
 import { describeResult } from '../../utils/chess'
 import { Button } from '../ui/Button'
@@ -81,6 +81,21 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               </div>
               <div className="mt-1 font-mono text-xl font-bold text-yellow-300">+{summary.coins}</div>
             </div>
+          </div>
+        )}
+
+        {summary.legend && summary.legend.coins > 0 && (
+          <div className="mt-3 w-full rounded-xl border border-accent/40 bg-accent/10 p-3 text-left">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
+              <Hourglass className="size-3.5" /> {summary.legend.firstDefeat ? 'Legend defeated' : 'Chronos bounty'}
+            </div>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-sm font-semibold text-white">
+                {summary.legend.firstDefeat ? `First victory over ${summary.legend.name}!` : `Another win over ${summary.legend.name}`}
+              </span>
+              <span className="font-mono text-sm font-bold text-yellow-300">+{summary.legend.coins}</span>
+            </div>
+            {summary.legend.rewards.length > 0 && <div className="mt-1 text-xs text-slate-300">Unlocked: {summary.legend.rewards.join(' · ')}</div>}
           </div>
         )}
 

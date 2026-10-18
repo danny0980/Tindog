@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { AppHeader } from './components/layout/AppHeader'
 import { BottomNav } from './components/layout/BottomNav'
 import { ToastViewport } from './components/ui/ToastViewport'
@@ -8,6 +8,9 @@ import { useLayoutMode } from './hooks/useLayoutMode'
 import { useStore } from './hooks/useStore'
 import { profileStore } from './stores/profileStore'
 import type { MatchRecord } from './types/profile'
+import type { ColorChoice } from './types/chess'
+import type { LegendId } from './types/legend'
+import { setThemeOverride } from './stores/themeOverrideStore'
 import type { AppView } from './types/ui'
 import { localDateKey } from './utils/date'
 import { getDailyPuzzles } from './utils/puzzles'
@@ -19,6 +22,7 @@ const PuzzlesView = lazy(() => import('./views/PuzzlesView').then((m) => ({ defa
 const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
 const ShopView = lazy(() => import('./views/ShopView').then((m) => ({ default: m.ShopView })))
 const SettingsModal = lazy(() => import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })))
+const LegendsView = lazy(() => import('./views/LegendsView').then((m) => ({ default: m.LegendsView })))
 const RushView = lazy(() => import('./views/RushView').then((m) => ({ default: m.RushView })))
 const QuestsView = lazy(() => import('./views/QuestsView').then((m) => ({ default: m.QuestsView })))
 
@@ -53,6 +57,21 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  // Chronos Chess: launch a legend battle from the timeline.
+  const challengeLegend = useCallback(
+    (legendId: LegendId, options: { color: ColorChoice; timeControlId: string }) => {
+      game.startNewGame({ ...game.gameSettings, mode: 'ai', legendId, playerColor: options.color, timeControlId: options.timeControlId })
+      navigate('play')
+    },
+    [game, navigate],
+  )
+
+  // While a legend battle is on screen, the whole app wears that epoch's theme.
+  const epochTheme = view === 'play' ? (game.epoch?.themeId ?? null) : null
+  useEffect(() => {
+    if (view !== 'legends') setThemeOverride(epochTheme)
+  }, [epochTheme, view])
+
   const reviewMatch = useCallback(
     (match: MatchRecord) => {
       game.loadReview(match)
@@ -81,11 +100,12 @@ export default function App() {
           />
         </div>
         <Suspense fallback={<ViewFallback />}>
+          {view === 'legends' && <LegendsView onChallenge={challengeLegend} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}
           {view === 'profile' && <ProfileView onReview={reviewMatch} />}
-          {view === 'shop' && <ShopView />}
+          {view === 'shop' && <ShopView onOpenLegends={() => navigate('legends')} />}
         </Suspense>
       </main>
 

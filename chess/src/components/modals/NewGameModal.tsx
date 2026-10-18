@@ -4,6 +4,10 @@ import { DIFFICULTIES, DIFFICULTY_CONFIGS, PERSONALITIES, TIME_CATEGORY_LABELS, 
 import type { ColorChoice, GameMode, GameSettings, Personality } from '../../types/chess'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { LegendPortrait } from '../legends/LegendPortrait'
+import { LEGENDS, getEpoch } from '../../data/historicalLegends'
+import { useStore } from '../../hooks/useStore'
+import { profileStore } from '../../stores/profileStore'
 
 interface NewGameModalProps {
   open: boolean
@@ -31,6 +35,8 @@ export function NewGameModal({ open, initialSettings, onStart, onClose }: NewGam
 
 function NewGameForm({ initialSettings, onStart }: Pick<NewGameModalProps, 'initialSettings' | 'onStart'>) {
   const [draft, setDraft] = useState<GameSettings>(initialSettings)
+  const defeated = useStore(profileStore, (p) => p.legends.defeated)
+  const unlockedLegends = LEGENDS.filter((l) => defeated[l.id])
   const update = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => setDraft((prev) => ({ ...prev, [key]: value }))
 
   const modes: ReadonlyArray<{ id: GameMode; label: string; hint: string; icon: ReactNode }> = [
@@ -55,7 +61,7 @@ function NewGameForm({ initialSettings, onStart }: Pick<NewGameModalProps, 'init
       <Field label="Game mode">
         <div className="grid grid-cols-2 gap-2">
           {modes.map((m) => (
-            <OptionCard key={m.id} selected={draft.mode === m.id} onClick={() => update('mode', m.id)}>
+            <OptionCard key={m.id} selected={draft.mode === m.id} onClick={() => setDraft((prev) => ({ ...prev, mode: m.id, legendId: m.id === 'local' ? null : prev.legendId }))}>
               <div className="flex items-center gap-3">
                 <span className={draft.mode === m.id ? 'text-accent' : 'text-slate-400'}>{m.icon}</span>
                 <div className="text-left">
@@ -68,7 +74,32 @@ function NewGameForm({ initialSettings, onStart }: Pick<NewGameModalProps, 'init
         </div>
       </Field>
 
-      {draft.mode === 'ai' && (
+      {draft.mode === 'ai' && unlockedLegends.length > 0 && (
+        <Field label="Legend opponents">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {unlockedLegends.map((legend) => (
+              <OptionCard
+                key={legend.id}
+                selected={draft.legendId === legend.id}
+                onClick={() => update('legendId', draft.legendId === legend.id ? null : legend.id)}
+              >
+                <div className="flex items-center gap-3 text-left">
+                  <LegendPortrait legendId={legend.id} size="sm" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{legend.name}</div>
+                    <div className="truncate text-[11px] text-slate-400">
+                      {getEpoch(legend.epoch).name} · ~{legend.elo}
+                    </div>
+                  </div>
+                </div>
+              </OptionCard>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Defeated legends can be re-challenged here. Tap again to clear.</p>
+        </Field>
+      )}
+
+      {draft.mode === 'ai' && !draft.legendId && (
         <>
           <Field label="Difficulty">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -98,19 +129,22 @@ function NewGameForm({ initialSettings, onStart }: Pick<NewGameModalProps, 'init
             </div>
           </Field>
 
-          <Field label="Play as">
-            <div className="grid grid-cols-3 gap-2">
-              {colors.map((c) => (
-                <OptionCard key={c.id} selected={draft.playerColor === c.id} onClick={() => update('playerColor', c.id)}>
-                  <div className="flex flex-col items-center gap-1.5">
-                    {c.swatch}
-                    <span className="text-xs font-semibold">{c.label}</span>
-                  </div>
-                </OptionCard>
-              ))}
-            </div>
-          </Field>
         </>
+      )}
+
+      {draft.mode === 'ai' && (
+        <Field label="Play as">
+          <div className="grid grid-cols-3 gap-2">
+            {colors.map((c) => (
+              <OptionCard key={c.id} selected={draft.playerColor === c.id} onClick={() => update('playerColor', c.id)}>
+                <div className="flex flex-col items-center gap-1.5">
+                  {c.swatch}
+                  <span className="text-xs font-semibold">{c.label}</span>
+                </div>
+              </OptionCard>
+            ))}
+          </div>
+        </Field>
       )}
 
       <Field label="Time control">

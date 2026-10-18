@@ -1,5 +1,5 @@
 import type { Difficulty, GameSettings, Personality, TimeControl, TimeControlCategory } from '../types/chess'
-import type { DifficultyConfig } from '../types/engine'
+import type { DifficultyConfig, OpponentProfile, StyleWeights } from '../types/engine'
 
 export const DIFFICULTIES: ReadonlyArray<{ id: Difficulty; label: string; description: string }> = [
   { id: 'beginner', label: 'Beginner', description: 'Makes frequent mistakes — great for learning' },
@@ -15,28 +15,7 @@ export const DIFFICULTY_CONFIGS: Readonly<Record<Difficulty, DifficultyConfig>> 
   expert: { skillLevel: 20, depth: 18, moveTimeMs: 1600, minThinkMs: 450, toleranceCp: 25, noise: 0.04, elo: 2600 },
 }
 
-export interface PersonalityWeights {
-  /** Multiplier on the engine evaluation (per 100cp). */
-  evaluation: number
-  check: number
-  /** Per point of captured material. */
-  capture: number
-  /** Bonus for any forcing move (check or capture). */
-  forcing: number
-  /** Closeness of the destination square to the enemy king (0–1). */
-  kingPressure: number
-  /** Ranks advanced towards the opponent. */
-  advance: number
-  castle: number
-  /** Destination next to our own king. */
-  kingShelter: number
-  /** Equal-value capture (simplification). */
-  trade: number
-  center: number
-  development: number
-  quiet: number
-  earlyQueen: number
-}
+export type PersonalityWeights = StyleWeights
 
 export const PERSONALITIES: ReadonlyArray<{
   id: Personality
@@ -138,6 +117,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   timeControlId: 'none',
   customMinutes: 5,
   customIncrementSeconds: 3,
+  legendId: null,
 }
 
 export const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 } as const
@@ -150,3 +130,19 @@ export const STORAGE_KEYS = {
 export const STOCKFISH_WORKER_PATH = `${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`
 
 export const STARTING_ELO = 1200
+
+/** Opponent profile for regular games: difficulty sets strength, personality sets style. */
+export function standardOpponent(difficulty: GameSettings['difficulty'], personality: Personality): OpponentProfile {
+  const config = DIFFICULTY_CONFIGS[difficulty]
+  const weights = PERSONALITIES.find((p) => p.id === personality)?.weights ?? null
+  return {
+    skillLevel: config.skillLevel,
+    depth: config.depth,
+    moveTimeMs: config.moveTimeMs,
+    minThinkMs: config.minThinkMs,
+    multiPv: weights ? 4 : 1,
+    toleranceCp: config.toleranceCp,
+    noise: config.noise,
+    weights,
+  }
+}

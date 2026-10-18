@@ -1,7 +1,7 @@
-import { Chess } from 'chess.js'
-import { PERSONALITIES, PIECE_VALUES, type PersonalityWeights } from '../constants/game'
-import type { Personality, Square } from '../types/chess'
-import type { DifficultyConfig, SearchResult } from '../types/engine'
+import { Chess, type Move } from 'chess.js'
+import { PIECE_VALUES } from '../constants/game'
+import type { Square } from '../types/chess'
+import type { OpponentProfile, SearchResult, StyleWeights } from '../types/engine'
 import { parseUciMove } from '../utils/chess'
 import { scoreToCp } from './scoring'
 
@@ -15,14 +15,39 @@ const chebyshev = (a: Square, b: Square): number => {
 const CENTER = new Set(['d4', 'e4', 'd5', 'e5'])
 const EXTENDED_CENTER = new Set(['c3', 'd3', 'e3', 'f3', 'c4', 'f4', 'c5', 'f5', 'c6', 'd6', 'e6', 'f6'])
 
-/** Style score of a single candidate move from the perspective of the mover. */
-function styleScore(fen: string, uci: string, w: PersonalityWeights): number {
+/** Material left hanging: the moved piece can be taken and is worth more than what it captured. */
+function sacrificeValue(after: Chess, move: Move): number {
+  if (move.piece === 'k') return 0
+  const opponent = move.color === 'w' ? 'b' : 'w'
+  if (!after.isAttacked(move.to, opponent)) return 0
+  const given = PIECE_VALUES[move.piece]
+  const taken = move.captured ? PIECE_VALUES[move.captured] : 0
+  return Math.max(0, given - taken)
+}
+
+/** Number of valuable enemy pieces (minor or better, or the king) the moved piece now attacks. */
+function forkTargets(after: Chess, move: Move): number {
+  const opponent = move.color === 'w' ? 'b' : 'w'
+  let targets = 0
+  for (const row of after.board()) {
+    for (const cell of row) {
+      if (!cell || cell.color !== opponent) continue
+      if (cell.type === 'p') continue
+      if (cell.type !== 'k' && PIECE_VALUES[cell.type] < 3) continue
+      if (after.attackers(cell.square, move.color).includes(move.to)) targets += 1
+    }
+  }
+  return targets
+}
+
+/** Style score of one candidate move from the mover's perspective. `rank` is its MultiPV index (0 = best). */
+function styleScore(fen: string, uci: string, w: StyleWeights, rank: number, lines: number): number {
   const parsed = parseUciMove(uci)
   if (!parsed) return 0
   const chess = new Chess(fen)
   const mover = chess.turn()
   const fullMove = Number(fen.split(' ')[5] ?? 1)
-  let move
+  let move: Move
   try {
     move = chess.move(parsed)
   } catch {
@@ -47,38 +72,40 @@ function styleScore(fen: string, uci: string, w: PersonalityWeights): number {
   score += advance * w.advance
   if (isCastle) score += w.castle
   if (ownKing && move.piece !== 'k' && chebyshev(move.to, ownKing) <= 1) score += w.kingShelter
-  if (move.captured && Math.abs(PIECE_VALUES[move.captured] - PIECE_VALUES[move.piece]) <= 0) score += w.trade
+  if (move.captured && PIECE_VALUES[move.captured] === PIECE_VALUES[move.piece]) score += w.trade
   if (CENTER.has(move.to)) score += w.center
   else if (EXTENDED_CENTER.has(move.to)) score += w.center * 0.4
   if ((move.piece === 'n' || move.piece === 'b') && fromRank === backRank && fullMove <= 15) score += w.development
   if (move.piece === 'q' && fullMove <= 8) score += w.earlyQueen
+  if (w.sacrifice) score += (Math.min(3, sacrificeValue(chess, move)) / 3) * w.sacrifice
+  if (w.fork) score += Math.max(0, forkTargets(chess, move) - 1) * w.fork
+  if (w.creativity && lines > 1) score += (rank / (lines - 1)) * w.creativity
   return score
 }
 
 /**
- * Chooses the engine's move according to its personality. The engine supplies
- * several principal variations (MultiPV); every candidate within the
- * difficulty's tolerance window is re-ranked by style features, so an
- * "Aggressive Attacker" really does prefer the king hunt among sound options.
+ * Chooses the engine's move according to a style. The engine supplies several
+ * principal variations (MultiPV); every candidate within the tolerance window
+ * is re-ranked by style features, so an attacking style really does prefer
+ * the king hunt among sound options.
  */
 export function chooseMove(
   fen: string,
   result: SearchResult,
-  personality: Personality,
-  config: DifficultyConfig,
+  profile: Pick<OpponentProfile, 'weights' | 'toleranceCp' | 'noise'>,
   random: () => number = Math.random,
 ): string {
-  const weights = PERSONALITIES.find((p) => p.id === personality)?.weights ?? null
+  const weights = profile.weights
   if (!weights || result.lines.length === 0) return result.bestMove
 
   const scored = result.lines
     .filter((line) => line.pv[0])
-    .map((line) => ({ move: line.pv[0] as string, cp: scoreToCp(line.score) }))
+    .map((line, rank) => ({ move: line.pv[0] as string, cp: scoreToCp(line.score), rank }))
   const top = Math.max(...scored.map((c) => c.cp))
-  // Never pass up a forced mate, and never walk into one if avoidable.
+  // Never pass up a forced mate.
   if (top >= 9000) return scored.find((c) => c.cp === top)?.move ?? result.bestMove
 
-  const candidates = scored.filter((c) => c.cp >= top - config.toleranceCp)
+  const candidates = scored.filter((c) => c.cp >= top - profile.toleranceCp)
   // The skill-limited best move stays in the pool so lower levels remain beatable.
   if (!candidates.some((c) => c.move === result.bestMove)) {
     const fromLines = scored.find((c) => c.move === result.bestMove)
@@ -90,12 +117,31 @@ export function chooseMove(
   for (const candidate of candidates) {
     const value =
       ((candidate.cp - top) / 100) * weights.evaluation +
-      styleScore(fen, candidate.move, weights) +
-      (random() * 2 - 1) * config.noise
+      styleScore(fen, candidate.move, weights, candidate.rank, scored.length) +
+      (random() * 2 - 1) * profile.noise
     if (value > bestValue) {
       bestValue = value
       best = candidate
     }
   }
   return best?.move ?? result.bestMove
+}
+
+/**
+ * Next move from an opening repertoire, if the game so far matches a line
+ * (lines are SAN from the initial position). Returns SAN or null.
+ */
+export function repertoireMove(history: readonly string[], repertoire: readonly string[] | undefined, random: () => number = Math.random): string | null {
+  if (!repertoire?.length) return null
+  const options: string[] = []
+  for (const line of repertoire) {
+    const moves = line.split(' ')
+    if (moves.length <= history.length) continue
+    if (history.every((san, i) => moves[i] === san)) {
+      const next = moves[history.length]
+      if (next) options.push(next)
+    }
+  }
+  if (options.length === 0) return null
+  return options[Math.floor(random() * options.length)] ?? null
 }

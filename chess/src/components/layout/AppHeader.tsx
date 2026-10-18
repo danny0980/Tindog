@@ -37,11 +37,13 @@ export function AppHeader({ view, onNavigate, onOpenSettings }: AppHeaderProps) 
             type="button"
             onClick={() => onNavigate(id)}
             aria-current={view === id ? 'page' : undefined}
+            aria-label={label}
+            title={label}
             className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
               view === id ? 'bg-accent/15 text-white shadow-[inset_0_0_0_1px_var(--accent)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'
             }`}
           >
-            <Icon className="size-4" /> {label}
+            <Icon className="size-4" /> <span className="hidden xl:inline">{label}</span>
           </button>
         ))}
       </nav>

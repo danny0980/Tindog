@@ -203,3 +203,52 @@
     }
   }
 }
+
+@theme {
+  --animate-warp-in: warp-in 2200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-warp-out: warp-out 2200ms ease-in-out both;
+  --animate-warp-tunnel: warp-tunnel 2200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+
+  @keyframes warp-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.4);
+      filter: blur(12px);
+    }
+    35% {
+      opacity: 1;
+      transform: scale(1.05);
+      filter: blur(0);
+    }
+    45%,
+    80% {
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.15);
+    }
+  }
+  @keyframes warp-out {
+    0% {
+      opacity: 0;
+    }
+    10%,
+    80% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes warp-tunnel {
+    from {
+      transform: scale(3);
+      opacity: 0.9;
+    }
+    to {
+      transform: scale(0.6);
+      opacity: 0.15;
+    }
+  }
+}

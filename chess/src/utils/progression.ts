@@ -7,6 +7,8 @@ import type { Color, Difficulty, GameMode, GameResult, Move, Outcome, Personalit
 import type { AchievementDef, MatchRecord, PlayerProfile } from '../types/profile'
 import type { Puzzle } from '../types/puzzle'
 import type { QuestEvents } from '../types/quest'
+import { LEGENDS, getEpoch, getLegend } from '../data/historicalLegends'
+import type { LegendId } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { localDateKey, previousDateKey } from './date'
 
@@ -49,6 +51,9 @@ export interface MatchInput {
   timeControl: TimeControl
   rated: boolean
   opening: string | null
+  /** Historical legend opponent, if any (its rating replaces the difficulty's). */
+  legendId?: LegendId | null
+  opponentElo?: number
 }
 
 export interface MatchOutcome {
@@ -100,6 +105,7 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
     coins: 0,
     accuracy: null,
     opening: input.opening,
+    legendId: input.legendId ?? null,
   }
 
   if (!isAi || input.humanColor === null || input.difficulty === null) {
@@ -118,7 +124,8 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
   const score = outcome === 'win' ? 1 : outcome === 'draw' ? 0.5 : 0
 
   // Elo (only rated games — takebacks make a game casual).
-  const delta = input.rated ? eloDelta(profile.elo, DIFFICULTY_CONFIGS[difficulty].elo, score, profile.stats.games) : null
+  const opponentElo = input.opponentElo ?? DIFFICULTY_CONFIGS[difficulty].elo
+  const delta = input.rated ? eloDelta(profile.elo, opponentElo, score, profile.stats.games) : null
   const elo = Math.max(100, profile.elo + (delta ?? 0))
 
   // Coins.
@@ -245,6 +252,12 @@ export function applyPuzzleSolve(
 
 export type ShopItem = { kind: 'theme'; id: BoardThemeId } | { kind: 'pieces'; id: PieceSetId }
 
+/** Legend items are earned in the Chronos campaign, never bought. */
+export function legendUnlockFor(item: ShopItem): LegendId | null {
+  if (item.kind === 'theme') return BOARD_THEMES.find((t) => t.id === item.id)?.legendUnlock ?? null
+  return PIECE_SETS.find((p) => p.id === item.id)?.legendUnlock ?? null
+}
+
 export function itemPrice(item: ShopItem): number {
   if (item.kind === 'theme') return BOARD_THEMES.find((t) => t.id === item.id)?.price ?? 0
   return PIECE_SETS.find((p) => p.id === item.id)?.price ?? 0
@@ -260,7 +273,7 @@ export function purchase(
   now: Date = new Date(),
 ): { ok: boolean; profile: PlayerProfile; unlocked: AchievementDef[] } {
   const price = itemPrice(item)
-  if (ownsItem(profile, item) || profile.coins < price) return { ok: false, profile, unlocked: [] }
+  if (legendUnlockFor(item) || ownsItem(profile, item) || profile.coins < price) return { ok: false, profile, unlocked: [] }
   const next: PlayerProfile = {
     ...profile,
     coins: profile.coins - price,
@@ -333,4 +346,71 @@ export function applyRushResult(
   if (score >= 20000) ids.push('arcade-legend')
   const granted = grant(next, ids, now.toISOString())
   return { profile: granted.profile, coins, newBest, unlocked: granted.unlocked }
+}
+
+// ── Chronos Chess legends ────────────────────────────────────────────────────
+
+export interface LegendResult {
+  profile: PlayerProfile
+  coins: number
+  firstDefeat: boolean
+  unlocked: AchievementDef[]
+  /** Cosmetics earned with a first victory. */
+  rewards: string[]
+}
+
+/**
+ * Campaign bookkeeping after a legend game: record, first-victory bounty,
+ * epoch theme + piece set unlocks and historical achievements.
+ */
+export function applyLegendResult(
+  profile: PlayerProfile,
+  legendId: LegendId,
+  outcome: Outcome,
+  humanMoves: number,
+  now: Date = new Date(),
+): LegendResult {
+  const legend = getLegend(legendId)
+  const epoch = getEpoch(legend.epoch)
+  const l = profile.legends
+  const firstDefeat = outcome === 'win' && !l.defeated[legendId]
+  const coins = outcome === 'win' ? (firstDefeat ? legend.firstWinReward : legend.repeatWinReward) : 0
+  const bump = (rec: Partial<Record<LegendId, number>>, hit: boolean) => (hit ? { ...rec, [legendId]: (rec[legendId] ?? 0) + 1 } : rec)
+
+  const legends = {
+    defeated: firstDefeat ? { ...l.defeated, [legendId]: now.toISOString() } : l.defeated,
+    wins: bump(l.wins, outcome === 'win'),
+    losses: bump(l.losses, outcome === 'loss'),
+    draws: bump(l.draws, outcome === 'draw'),
+    epochsVisited: l.epochsVisited.includes(legend.epoch) ? l.epochsVisited : [...l.epochsVisited, legend.epoch],
+  }
+  const rewards: string[] = []
+  let unlockedThemes = profile.unlockedThemes
+  let unlockedPieceSets = profile.unlockedPieceSets
+  if (firstDefeat) {
+    if (!unlockedThemes.includes(epoch.themeId)) {
+      unlockedThemes = [...unlockedThemes, epoch.themeId]
+      rewards.push(BOARD_THEMES.find((t) => t.id === epoch.themeId)?.name ?? epoch.themeId)
+    }
+    if (!unlockedPieceSets.includes(epoch.pieceSetId)) {
+      unlockedPieceSets = [...unlockedPieceSets, epoch.pieceSetId]
+      rewards.push(PIECE_SETS.find((p) => p.id === epoch.pieceSetId)?.name ?? epoch.pieceSetId)
+    }
+  }
+  const next: PlayerProfile = {
+    ...profile,
+    coins: profile.coins + coins,
+    totalCoinsEarned: profile.totalCoinsEarned + coins,
+    unlockedThemes,
+    unlockedPieceSets,
+    legends,
+  }
+
+  const ids: string[] = []
+  if (outcome === 'win') ids.push(legend.achievementId)
+  if (legendId === 'newton' && humanMoves >= 40) ids.push('calculated-by-newton')
+  if (legends.epochsVisited.length >= 4) ids.push('time-traveler')
+  if (LEGENDS.every((x) => legends.defeated[x.id])) ids.push('master-of-time')
+  const granted = grant(next, ids, now.toISOString())
+  return { profile: granted.profile, coins, firstDefeat, unlocked: granted.unlocked, rewards }
 }

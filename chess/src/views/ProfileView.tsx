@@ -1,6 +1,9 @@
 import { Coins, Crown, Flame, Puzzle, Swords, Trophy } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AchievementGrid } from '../components/profile/AchievementGrid'
+import { LegendPortrait } from '../components/legends/LegendPortrait'
+import { LEGENDS, isLegendUnlocked } from '../data/historicalLegends'
+import { formatShortDate } from '../utils/date'
 import { EloChart } from '../components/profile/EloChart'
 import { MatchHistory } from '../components/profile/MatchHistory'
 import { DIFFICULTIES, DIFFICULTY_CONFIGS } from '../constants/game'
@@ -109,6 +112,27 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
               <div className="text-[10px] text-slate-500">~{DIFFICULTY_CONFIGS[d.id].elo} Elo</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="glass rounded-2xl p-4">
+        <h3 className="mb-3 text-sm font-semibold text-white">Hall of Legends</h3>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {LEGENDS.map((legend) => {
+            const won = profile.legends.defeated[legend.id]
+            return (
+              <div key={legend.id} className={`flex items-center gap-3 rounded-xl p-2.5 ${won ? 'bg-amber-300/10 ring-1 ring-amber-300/30' : 'bg-white/[0.03]'}`}>
+                <LegendPortrait legendId={legend.id} size="sm" locked={!won && !isLegendUnlocked(legend.id, profile.legends.defeated)} defeated={Boolean(won)} />
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-bold text-white">{legend.name}</div>
+                  <div className="font-mono text-[10px] text-slate-400">
+                    {profile.legends.wins[legend.id] ?? 0}W · {profile.legends.losses[legend.id] ?? 0}L
+                  </div>
+                  <div className={`text-[10px] font-semibold ${won ? 'text-amber-300' : 'text-slate-500'}`}>{won ? `Defeated ${formatShortDate(won)}` : 'Undefeated'}</div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </section>
 

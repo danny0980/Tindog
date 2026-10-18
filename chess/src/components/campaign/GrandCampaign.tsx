@@ -1,4 +1,4 @@
-import { ChevronRight, Gem, Lock, Map as MapIcon, Star, Trophy } from 'lucide-react'
+import { ChevronRight, CloudOff, Gem, Lock, Map as MapIcon, RotateCcw, Star, TriangleAlert, Trophy } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { GRAND_REALMS, TOTAL_BOSSES, getGrandRealm } from '../../data/campaign/realms'
 import { RELICS } from '../../data/campaign/relics'
@@ -14,7 +14,7 @@ import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import type { BattleOptions } from './battleOptions'
-import { BossDossier } from './BossDossier'
+import { BossBattleAction, BossDossier } from './BossDossier'
 import { Reliquary } from './Reliquary'
 import { WorldMap } from './WorldMap'
 
@@ -44,7 +44,7 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
   const progress = useStore(profileStore, (p) => p.campaign)
   const realmId = useStore(settingsStore, (s) => s.grandRealm)
   const realm = getGrandRealm(realmId)
-  const roster = useRealmRoster(realmId)
+  const { roster, error: rosterError, retry: retryRoster } = useRealmRoster(realmId)
   const wide = useMediaQuery('(min-width: 1024px), (orientation: landscape) and (max-height: 520px)')
   const [picked, setPicked] = useState<Partial<Record<GrandRealmId, BossId>>>({})
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -72,13 +72,18 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
     onChallenge(boss.id, options)
   }
 
-  const dossier = selected && roster && (
+  const unlockedSelected = Boolean(selected && roster && isBossUnlocked(selected, roster, progress))
+  const lockedSelectedReason = selected && roster ? lockReasonFor(selected, roster, progress) : ''
+  const dossier = (showAction: boolean) =>
+    selected &&
+    roster && (
     <BossDossier
+      showAction={showAction}
       key={selected.id}
       boss={selected}
       progress={progress}
-      unlocked={isBossUnlocked(selected, roster, progress)}
-      lockedReason={lockReasonFor(selected, roster, progress)}
+      unlocked={unlockedSelected}
+      lockedReason={lockedSelectedReason}
       options={options}
       onOptions={setOptions}
       onToggleRelic={toggle}
@@ -168,17 +173,41 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
             selected={selectedId}
             onSelect={select}
           />
+        ) : rosterError ? (
+          <div className="glass flex h-96 flex-col items-center justify-center gap-3 rounded-3xl p-6 text-center" role="alert">
+            {rosterError.offline ? <CloudOff className="size-8 text-amber-300" /> : <TriangleAlert className="size-8 text-amber-300" />}
+            <div className="font-bold text-white">{rosterError.offline ? 'You’re offline' : `Couldn’t chart ${realm.name}`}</div>
+            <p className="max-w-xs text-sm text-slate-400">
+              {rosterError.offline
+                ? 'This realm downloads the first time you open it. It will load as soon as you reconnect.'
+                : 'The realm failed to download after several attempts. Your progress is safe.'}
+            </p>
+            <Button size="sm" onClick={retryRoster} icon={<RotateCcw className="size-4" />}>
+              Retry download
+            </Button>
+          </div>
         ) : (
           <div className="glass flex h-96 items-center justify-center rounded-3xl text-sm text-slate-400" role="status">
             <MapIcon className="mr-2 size-5 animate-pulse-soft" /> Charting {realm.name}…
           </div>
         )}
-        {wide && dossier && <aside className="glass scrollbar-thin sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl p-4">{dossier}</aside>}
+        {wide && selected && <aside className="glass scrollbar-thin sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl p-4">{dossier(true)}</aside>}
       </div>
 
       {!wide && (
-        <Modal open={sheetOpen && Boolean(dossier)} title={selected ? `#${selected.index + 1} · ${selected.zone.name}` : 'Boss'} onClose={() => setSheetOpen(false)} size="md">
-          <div className="pb-2">{dossier}</div>
+        <Modal
+          open={sheetOpen && Boolean(selected && roster)}
+          title={selected ? `#${selected.index + 1} · ${selected.zone.name}` : 'Boss'}
+          onClose={() => setSheetOpen(false)}
+          size="md"
+          // Pinned above the home indicator so the main action never needs a scroll.
+          footer={
+            selected ? (
+              <BossBattleAction boss={selected} progress={progress} unlocked={unlockedSelected} lockedReason={lockedSelectedReason} onBattle={() => battle(selected)} />
+            ) : undefined
+          }
+        >
+          {dossier(false)}
         </Modal>
       )}
 

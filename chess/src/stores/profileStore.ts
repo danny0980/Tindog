@@ -9,12 +9,13 @@ import { EPOCH_IDS, LEGEND_IDS } from '../data/legends'
 import type { BossId, BossRecord, CampaignProgress, GrandRealmId, StarCount } from '../types/campaign'
 import type { EpochId, LegendId, LegendProgress } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
-import { createPersistentStore } from '../utils/store'
+import { type LoadSource, createPersistentStore } from '../utils/store'
+import { PROFILE_VERSION, migrateProfile } from './migrations'
 import { arrayOf, asRecord, isRecord, num, oneOf, str, stringRecord } from '../utils/validate'
 
 export function createDefaultProfile(): PlayerProfile {
   return {
-    version: 1,
+    version: PROFILE_VERSION,
     name: 'You',
     elo: STARTING_ELO,
     peakElo: STARTING_ELO,
@@ -153,9 +154,14 @@ function sanitizeMatch(v: unknown): MatchRecord | null {
   }
 }
 
+/**
+ * Validates (already migrated) profile data field by field. Unknown or broken
+ * fields fall back to defaults individually — a version number alone never
+ * resets the profile.
+ */
 export function sanitizeProfile(raw: unknown): PlayerProfile {
   const d = createDefaultProfile()
-  if (!isRecord(raw) || raw.version !== 1) return d
+  if (!isRecord(raw)) return d
   const stats = asRecord(raw.stats)
   const wbd = asRecord(stats.winsByDifficulty)
   const puzzles = asRecord(raw.puzzles)
@@ -165,7 +171,7 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
   const pieces = arrayOf(raw.unlockedPieceSets, isPieceId)
   const elo = num(raw.elo, d.elo, 100, 4000)
   return {
-    version: 1,
+    version: PROFILE_VERSION,
     name: str(raw.name, d.name).slice(0, 24),
     elo,
     peakElo: num(raw.peakElo, elo, 100, 4000),
@@ -216,7 +222,29 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
   }
 }
 
-export const profileStore = createPersistentStore<PlayerProfile>(STORAGE_KEYS.profile, sanitizeProfile)
+/** Migration outcome of the profile loaded at startup (for a one-time notice). */
+export interface ProfileLoadReport {
+  source: LoadSource
+  migratedFrom: number | null
+  /** Saved by a newer app version and read best-effort. */
+  fromNewerVersion: boolean
+}
+
+let migration: Pick<ProfileLoadReport, 'migratedFrom' | 'fromNewerVersion'> = { migratedFrom: null, fromNewerVersion: false }
+
+/** Storage → migrations → sanitiser. */
+export function loadProfile(raw: unknown): PlayerProfile {
+  const result = migrateProfile(raw)
+  migration = { migratedFrom: result.migrated ? result.fromVersion : null, fromNewerVersion: result.future }
+  return sanitizeProfile(result.data)
+}
+
+export const profileStore = createPersistentStore<PlayerProfile>(STORAGE_KEYS.profile, loadProfile, { backupKey: STORAGE_KEYS.profileBackup })
+
+// Keep the pre-migration save as the backup before the upgraded shape is ever written.
+if (migration.migratedFrom !== null || migration.fromNewerVersion) profileStore.ensureBackup()
+
+export const profileLoadReport: ProfileLoadReport = { source: profileStore.loadSource, ...migration }
 
 export function resetProfile(): void {
   profileStore.set(createDefaultProfile())

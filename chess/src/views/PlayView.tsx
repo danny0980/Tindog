@@ -64,6 +64,7 @@ const SWIPE_LABELS: Record<SwipeDirection, string> = { left: 'Undo', right: 'Boa
 
 export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
+  const [confirmUndo, setConfirmUndo] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [movesOpen, setMovesOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
@@ -111,6 +112,13 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
     if (result === 'downloaded') showToast('success', 'PGN exported')
   }, [game])
 
+  // Campaign battles: a takeback spends the Shield of Kings or caps the win at
+  // one star, so swipes and buttons both ask first.
+  const requestUndo = useCallback(() => {
+    if (game.undoCost) setConfirmUndo(true)
+    else game.undo()
+  }, [game])
+
   // ── Swipe gestures (on bars / dock, never on the board) ─────────────────────
   const handleSwipe = useCallback(
     (direction: SwipeDirection) => {
@@ -118,6 +126,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         if (!game.canUndo) {
           sfx.error()
           setFeedback({ id: Date.now(), direction, label: 'Nothing to undo' })
+          return
+        }
+        if (game.undoCost) {
+          setConfirmUndo(true)
           return
         }
         game.undo()
@@ -288,7 +300,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
             }
             player={renderPlayer(bottomColor, true)}
             canUndo={game.canUndo}
-            onUndo={game.undo}
+            onUndo={requestUndo}
             onNewGame={openNewGame}
             onMoves={() => setMovesOpen(true)}
             onMenu={() => setMenuOpen(true)}
@@ -339,7 +351,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
               canResign={game.canResign}
               onNewGame={openNewGame}
               onFlip={game.flipBoard}
-              onUndo={game.undo}
+              onUndo={requestUndo}
               onResign={() => setConfirmResign(true)}
             />
             {reviewTools(false)}
@@ -395,6 +407,23 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
       <ConfettiCanvas burst={game.celebration} colors={game.theme.particles} disabled={settings.batterySaver} />
 
       <NewGameModal open={newGameOpen} initialSettings={game.gameSettings} onStart={startGame} onClose={() => onNewGameOpenChange(false)} />
+
+      <ConfirmDialog
+        open={confirmUndo && active}
+        title="Take back your move?"
+        message={
+          game.undoCost === 'shield'
+            ? 'Your Shield of Kings will absorb this takeback: the battle stays rated and keeps its stars, but the shield is spent for this battle.'
+            : 'Taking back a move in a campaign battle makes it unrated and caps a win at one star.'
+        }
+        confirmLabel={game.undoCost === 'shield' ? 'Use the Shield' : 'Take back'}
+        confirmVariant={game.undoCost === 'shield' ? 'primary' : 'danger'}
+        onConfirm={() => {
+          setConfirmUndo(false)
+          game.undo()
+        }}
+        onCancel={() => setConfirmUndo(false)}
+      />
 
       <ConfirmDialog
         open={confirmResign}

@@ -55,7 +55,8 @@ export interface PuzzleProgress {
 }
 
 export interface PlayerProfile {
-  version: 1
+  /** Schema version (see stores/migrations.ts). */
+  version: 2
   name: string
   elo: number
   peakElo: number

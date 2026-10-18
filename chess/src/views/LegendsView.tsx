@@ -1,5 +1,7 @@
 import { ArrowLeft, Hourglass, Map as MapIcon, Swords, WandSparkles } from 'lucide-react'
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { ErrorBoundary } from '../components/ErrorBoundary'
+import { lazyWithRetry } from '../utils/lazyWithRetry'
 import type { BattleOptions } from '../components/campaign/battleOptions'
 import { CampaignSelect } from '../components/legends/CampaignSelect'
 import { EpochSelector } from '../components/legends/EpochSelector'
@@ -16,7 +18,7 @@ import type { BossId } from '../types/campaign'
 import type { LegendsScreen } from '../types/settings'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
-const GrandCampaign = lazy(() => import('../components/campaign/GrandCampaign'))
+const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
 
 interface LegendsViewProps {
   onChallenge: (legendId: LegendId, options: ChallengeOptions) => void
@@ -85,6 +87,7 @@ export function LegendsView({ onChallenge, onChallengeBoss }: LegendsViewProps) 
       {screen === 'select' && <CampaignSelect defeated={progress.defeated} campaign={campaignProgress} onOpen={open} />}
 
       {screen === 'grand' && (
+        <ErrorBoundary scope="view" label="the Grand Campaign">
         <Suspense
           fallback={
             <div className="flex justify-center py-20" role="status" aria-label="Loading campaign">
@@ -94,6 +97,7 @@ export function LegendsView({ onChallenge, onChallengeBoss }: LegendsViewProps) 
         >
           <GrandCampaign onChallenge={onChallengeBoss} />
         </Suspense>
+        </ErrorBoundary>
       )}
 
       {campaign && selected && (

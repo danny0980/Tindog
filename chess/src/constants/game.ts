@@ -127,6 +127,8 @@ export const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 } as const
 export const STORAGE_KEYS = {
   settings: 'chess-arena:settings:v2',
   profile: 'chess-arena:profile:v1',
+  /** Known-good snapshot of the profile (taken at launch and before migrations). */
+  profileBackup: 'chess-arena:profile-backup',
 } as const
 
 export const STOCKFISH_WORKER_PATH = `${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`

@@ -22,10 +22,12 @@ interface BossDossierProps {
   onOptions: (next: BattleOptions) => void
   onToggleRelic: (id: RelicId) => void
   onBattle: () => void
+  /** False when the host pins the battle button elsewhere (the phone sheet's footer). */
+  showAction?: boolean
 }
 
 /** Pre-battle briefing: who the boss is, how it plays, what it pays, and your relic loadout. */
-export function BossDossier({ boss, progress, unlocked, lockedReason, options, onOptions, onToggleRelic, onBattle }: BossDossierProps) {
+export function BossDossier({ boss, progress, unlocked, lockedReason, options, onOptions, onToggleRelic, onBattle, showAction = true }: BossDossierProps) {
   const record = bossRecord(progress, boss.id)
   const archetype = ARCHETYPES[boss.archetype]
   const ArchetypeIcon = PORTRAIT_ICONS[archetype.icon]
@@ -151,16 +153,24 @@ export function BossDossier({ boss, progress, unlocked, lockedReason, options, o
         <Segmented label="Clock" options={CAMPAIGN_TIME_CONTROLS} value={options.timeControlId} onChange={(v) => onOptions({ ...options, timeControlId: v })} />
       </div>
 
-      {unlocked ? (
-        <Button variant="primary" size="lg" className="w-full" onClick={onBattle} icon={<Swords className="size-5" />}>
-          {record.firstClear ? 'Rematch' : 'Battle'} {boss.shortName}
-        </Button>
-      ) : (
-        <div className="flex items-center gap-2 rounded-xl bg-white/5 p-3 text-sm text-slate-300">
-          <Lock className="size-4 shrink-0" /> {lockedReason}
-        </div>
-      )}
+      {showAction && <BossBattleAction boss={boss} progress={progress} unlocked={unlocked} lockedReason={lockedReason} onBattle={onBattle} />}
     </article>
+  )
+}
+
+/** The dossier's primary action: battle / rematch, or why the boss is still locked. */
+export function BossBattleAction({ boss, progress, unlocked, lockedReason, onBattle }: Pick<BossDossierProps, 'boss' | 'progress' | 'unlocked' | 'lockedReason' | 'onBattle'>) {
+  if (!unlocked) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl bg-white/5 p-3 text-sm text-slate-300">
+        <Lock className="size-4 shrink-0" /> {lockedReason}
+      </div>
+    )
+  }
+  return (
+    <Button variant="primary" size="lg" className="w-full" onClick={onBattle} icon={<Swords className="size-5" />}>
+      {bossRecord(progress, boss.id).firstClear ? 'Rematch' : 'Battle'} {boss.shortName}
+    </Button>
   )
 }
 

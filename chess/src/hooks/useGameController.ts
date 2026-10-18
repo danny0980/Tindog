@@ -397,6 +397,11 @@ export function useGameController({ active }: { active: boolean }) {
     return game.history.length >= plies ? plies : 0
   })()
 
+  // Shield of Kings: one free takeback early in a campaign battle.
+  const shieldReady = Boolean(boss) && battleRelics.includes('shield-of-kings') && !shieldUsed && Math.ceil(game.history.length / 2) <= SHIELD_MOVE_LIMIT
+  /** What a takeback would cost right now in a campaign battle (null = nothing at stake). */
+  const undoCost: 'shield' | 'stars' | null = isAiMode && boss && !casual && undoPlies > 0 ? (shieldReady ? 'shield' : 'stars') : null
+
   const undo = useCallback(() => {
     if (undoPlies === 0) return
     playEngine.stop()
@@ -407,8 +412,6 @@ export function useGameController({ active }: { active: boolean }) {
     if (restoreTo) clock.restore(restoreTo)
     timeMachine.goTo(null)
     if (isAiMode && !casual) {
-      // Shield of Kings: one free takeback early in a campaign battle.
-      const shieldReady = Boolean(boss) && battleRelics.includes('shield-of-kings') && !shieldUsed && Math.ceil(game.history.length / 2) <= SHIELD_MOVE_LIMIT
       if (shieldReady) {
         setShieldUsed(true)
         showToast('info', 'Shield of Kings', 'The relic absorbed this takeback — the battle stays rated.', 2800)
@@ -417,7 +420,7 @@ export function useGameController({ active }: { active: boolean }) {
         showToast('info', 'Casual game', boss ? 'Takebacks make this battle unrated and cap it at one star.' : 'Takebacks make this game unrated.', 2800)
       }
     }
-  }, [battleRelics, boss, casual, clock, game, isAiMode, playEngine, shieldUsed, timeMachine, undoPlies])
+  }, [boss, casual, clock, game, isAiMode, playEngine, shieldReady, timeMachine, undoPlies])
 
   const resign = useCallback(() => {
     if (!isPlaying) return
@@ -483,7 +486,8 @@ export function useGameController({ active }: { active: boolean }) {
       }
       setReview(match)
       // Campaign reviews show the boss once its realm chunk arrives.
-      if (match.bossId) void loadRealmRoster(realmOfBoss(match.bossId))
+      // (A failed download just leaves the generic opponent bar; the map offers a retry.)
+      if (match.bossId) loadRealmRoster(realmOfBoss(match.bossId)).catch(() => undefined)
       setOrientation(match.humanColor ?? 'w')
       setSummary(null)
       setGameOverDismissed(true)
@@ -615,6 +619,7 @@ export function useGameController({ active }: { active: boolean }) {
     aiThinking,
     movableColor,
     canUndo: undoPlies > 0,
+    undoCost,
     canResign: isPlaying && game.history.length > 0,
     showGameOver: game.status.kind === 'over' && !gameOverDismissed && summary !== null,
     summary,

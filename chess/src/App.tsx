@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppHeader } from './components/layout/AppHeader'
 import { BottomNav } from './components/layout/BottomNav'
 import { ToastViewport } from './components/ui/ToastViewport'
@@ -6,7 +7,9 @@ import { useAppEnvironment } from './hooks/useAppEnvironment'
 import { useGameController } from './hooks/useGameController'
 import { useLayoutMode } from './hooks/useLayoutMode'
 import { useStore } from './hooks/useStore'
-import { profileStore } from './stores/profileStore'
+import { profileLoadReport, profileStore } from './stores/profileStore'
+import { showToast } from './stores/toastStore'
+import { lazyWithRetry } from './utils/lazyWithRetry'
 import { updateSettings } from './stores/settingsStore'
 import type { MatchRecord } from './types/profile'
 import type { BattleOptions } from './components/campaign/battleOptions'
@@ -19,14 +22,15 @@ import { getDailyPuzzles } from './utils/puzzles'
 import { claimableCount } from './utils/quests'
 import { PlayView } from './views/PlayView'
 
-// Secondary screens are code-split so the board loads first on slow mobile connections.
-const PuzzlesView = lazy(() => import('./views/PuzzlesView').then((m) => ({ default: m.PuzzlesView })))
-const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
-const ShopView = lazy(() => import('./views/ShopView').then((m) => ({ default: m.ShopView })))
-const SettingsModal = lazy(() => import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })))
-const LegendsView = lazy(() => import('./views/LegendsView').then((m) => ({ default: m.LegendsView })))
-const RushView = lazy(() => import('./views/RushView').then((m) => ({ default: m.RushView })))
-const QuestsView = lazy(() => import('./views/QuestsView').then((m) => ({ default: m.QuestsView })))
+// Secondary screens are code-split so the board loads first on slow mobile connections;
+// failed chunk downloads are retried and, failing that, caught by a view ErrorBoundary.
+const PuzzlesView = lazyWithRetry(() => import('./views/PuzzlesView'), (m) => m.PuzzlesView)
+const ProfileView = lazyWithRetry(() => import('./views/ProfileView'), (m) => m.ProfileView)
+const ShopView = lazyWithRetry(() => import('./views/ShopView'), (m) => m.ShopView)
+const SettingsModal = lazyWithRetry(() => import('./components/modals/SettingsModal'), (m) => m.SettingsModal)
+const LegendsView = lazyWithRetry(() => import('./views/LegendsView'), (m) => m.LegendsView)
+const RushView = lazyWithRetry(() => import('./views/RushView'), (m) => m.RushView)
+const QuestsView = lazyWithRetry(() => import('./views/QuestsView'), (m) => m.QuestsView)
 
 function ViewFallback() {
   return (
@@ -53,6 +57,12 @@ export default function App() {
   const today = localDateKey()
   const unsolvedDaily = getDailyPuzzles(today).filter((p) => !solved[p.id]).length
   const questRewards = claimableCount(questProgress, today)
+
+  // One-time notice when saved progress had to be recovered or upgraded.
+  useEffect(() => {
+    if (profileLoadReport.source === 'backup') showToast('warning', 'Progress restored', 'Your save was unreadable, so the backup from your last session was loaded.', 7000)
+    else if (profileLoadReport.source === 'reset') showToast('warning', 'Save data unreadable', 'Starting fresh — the damaged save was kept aside, not deleted.', 7000)
+  }, [])
 
   const navigate = useCallback((next: AppView) => {
     setView(next)
@@ -125,6 +135,7 @@ export default function App() {
       <main className="flex min-h-0 flex-1 flex-col">
         {/* PlayView stays mounted (hidden) so board state and animations persist. */}
         <div className={view === 'play' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+          <ErrorBoundary scope="view" label="the game screen">
           <PlayView
             game={game}
             active={view === 'play'}
@@ -133,7 +144,9 @@ export default function App() {
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenCampaign={openCampaignMap}
           />
+          </ErrorBoundary>
         </div>
+        <ErrorBoundary scope="view" resetKey={view} label={`the ${view} screen`}>
         <Suspense fallback={<ViewFallback />}>
           {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
@@ -142,10 +155,12 @@ export default function App() {
           {view === 'profile' && <ProfileView onReview={reviewMatch} />}
           {view === 'shop' && <ShopView onOpenLegends={() => navigate('legends')} />}
         </Suspense>
+        </ErrorBoundary>
       </main>
 
       <BottomNav view={view} onNavigate={navigate} badges={{ puzzles: unsolvedDaily, quests: questRewards }} />
       {settingsOpen && (
+        <ErrorBoundary scope="view" label="settings">
         <Suspense fallback={null}>
           <SettingsModal
             open={settingsOpen}
@@ -156,6 +171,7 @@ export default function App() {
             }}
           />
         </Suspense>
+        </ErrorBoundary>
       )}
       <ToastViewport />
     </div>

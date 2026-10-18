@@ -1,10 +1,69 @@
-# ♞ Chess Arena: AAA Edition (v4.0 · Grand Campaign)
+# ♞ Chess Arena: AAA Edition (v4.1 · Grand Campaign)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 4.1: reliability & resilience
+
+This release adds no new features. It makes sure a bad network, a corrupt save or a stray swipe can't cost players their progress.
+
+### Crash and download resilience
+- **Error boundaries** (`src/components/ErrorBoundary.tsx`) wrap the whole app, the Play screen, every lazy screen, the Settings modal and the Grand Campaign.
+  - A crash shows a recovery card with **Try again** and **Reload App** instead of a blank page.
+  - Chunk-download failures get an offline-aware message and retry automatically when the device reconnects.
+  - Switching tabs clears a screen's error.
+- **Retrying lazy screens** (`src/utils/lazyWithRetry.tsx`).
+  - Each screen download is tried up to 3 times with back-off (0.6 s, then 1.8 s).
+  - Browsers cache a failed `import()` per URL, so the retries re-request the chunk with a cache-busting query (`importWithRetry`, `src/utils/retry.ts`).
+  - Without that, a retry would never reach the network in Chrome or the Android WebView.
+  - A screen that still fails is only re-downloaded when the player asks: React re-renders once after an error, and rebuilding the screen then would start a silent download loop.
+- **Realm rosters** (`data/campaign/loader.ts`).
+  - Downloads use the same cache-busted retries, and a final failure is recorded per realm in `realmStatusStore`.
+  - The map shows "Couldn't chart {realm}" / "You're offline" with **Retry download**, and also retries on reconnect. It never sits on "Charting…" forever.
+  - `createRosterLoader()` takes the importers as a parameter, so the failure paths are unit-tested.
+- **No auto-reload on `vite:preloadError`.** Vite fires that event on the *first* failed attempt, so reloading there would pre-empt the retries and throw the player back to the Play tab. A chunk missing after a new deploy ends on the error card, where **Reload App** loads the new build.
+- **Native builds** bundle every chunk locally, so these download failures mainly matter for the web/PWA build.
+
+### Save-data safety
+- **Versioned migrations** (`src/stores/migrations.ts`).
+  - The profile now carries `version: 2`.
+  - Older saves are upgraded one step at a time (v1 → v2 adds the campaign block and `bossId` on old matches). Saves without a version are treated as v1.
+  - Saves from a *newer* app version are read best-effort instead of being reset.
+  - A missing step stops the chain without discarding anything. The sanitiser then repairs each field on its own; a version number alone never wipes a profile.
+  - To add v3: write `PROFILE_MIGRATIONS[2]` and bump `PROFILE_VERSION`.
+- **Backups and corruption guards** (`createPersistentStore`, `src/utils/store.ts`).
+  - **Backup:** before the first write of each session, and immediately before a migration, the last good save is copied to `chess-arena:profile-backup`.
+  - **Corrupt or missing save:** if the main save is corrupt, unreadable or deleted, the backup is loaded and the player sees "Progress restored".
+  - **Nothing usable:** if both copies are unusable, defaults are used, but the damaged text is kept under `chess-arena:profile:v1:corrupt` and never deleted.
+  - **Good backups stay good:** corrupt text never overwrites a good backup.
+  - **No crashes:** a full or blocked storage never crashes the app.
+- **Protected takebacks in campaign battles.** In a boss battle, a takeback either spends the Shield of Kings or caps the win at one star. Both swipe-left and the Undo button therefore open a confirmation that says exactly which will happen ("Use the Shield" / "Take back"). Cancel keeps the position. Once the battle is already casual, nothing more is at stake and undo works directly.
+
+### Mobile sheets
+- **Safe-area padding:** every bottom sheet (boss dossier, Reliquary, moves, game menu, gesture guide, confirmations) clears the iPhone home indicator. Footers already padded with `env(safe-area-inset-bottom)`; footer-less sheets now pad their scroll area too, and scrolling inside a sheet no longer scrolls the page behind it.
+- **Pinned battle button:** on phones the dossier's **Battle / Rematch** button sits in the sheet's footer, so it is always visible above the home indicator instead of below the fold.
+
+### Testing the resilience features
+
+```bash
+npm run test:resilience   # retries, roster error/retry, migrations, backups & corruption (25 checks)
+npm run check             # everything, including the new suite
+```
+
+To try them by hand (`npm run build && npm run preview`, Chrome DevTools):
+
+1. **Offline map.** Open Legends → Grand Campaign, go offline in DevTools → Network, then pick a realm you haven't opened yet. After three attempts the map shows *You're offline*. Go back online and it loads by itself (or press **Retry download**).
+2. **Lazy screen failure.** In DevTools → Network → *Block request URL*, block `RushView-*.js`, then open **Rush**. The error card appears and the nav still works. Unblock it and press **Try again**.
+3. **Corrupt save.** In the console:
+   `localStorage.setItem('chess-arena:profile:v1', '{broken')`
+   Reload: the "Progress restored" toast appears and the launch backup is used. The broken text is kept under `chess-arena:profile:v1:corrupt`.
+4. **v1 migration.** Save a profile with `"version": 1` and reload. Your progress is intact, `profile-backup` holds the original v1 text, and the next write stores `version: 2`.
+5. **Undo protection.** Equip the Shield of Kings, start a boss battle on a phone-sized viewport, play a move and swipe left on the dock. The confirmation appears; Cancel keeps the move.
 
 ---
 

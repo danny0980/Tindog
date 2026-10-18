@@ -8,9 +8,11 @@ interface ConfirmDialogProps {
   confirmLabel: string
   onConfirm: () => void
   onCancel: () => void
+  /** 'danger' (default) for destructive actions, 'primary' for a deliberate but safe choice. */
+  confirmVariant?: 'danger' | 'primary'
 }
 
-export function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel, confirmVariant = 'danger' }: ConfirmDialogProps) {
   return (
     <Modal
       open={open}
@@ -20,7 +22,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, o
       footer={
         <div className="grid grid-cols-2 gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm}>
+          <Button variant={confirmVariant} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </div>

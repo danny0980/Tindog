@@ -60,7 +60,8 @@ export function Modal({ open, title, onClose, children, footer, size = 'md' }: M
             <X className="size-5" />
           </button>
         </div>
-        <div className="scrollbar-thin flex-1 overflow-y-auto px-5 pb-4">{children}</div>
+        {/* Without a footer the scroll area is the sheet's bottom edge, so it clears the home indicator itself. */}
+        <div className={`scrollbar-thin flex-1 overflow-y-auto overscroll-contain px-5 ${footer ? 'pb-4' : 'pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]'}`}>{children}</div>
         {footer && <div className="border-t border-white/5 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
     </div>,

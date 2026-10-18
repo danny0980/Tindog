@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './animations.css';
+@import './vfx.css';
 
 /* Phones held sideways: little height, plenty of width. */
 @custom-variant short (@media (orientation: landscape) and (max-height: 520px));

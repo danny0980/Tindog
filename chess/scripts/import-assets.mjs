@@ -42,14 +42,23 @@ console.log(`[assets] Recognises ${catalog.people.length} characters, ${catalog.
 const plan = new Map()
 const skipped = []
 // The app's own folders (src, public, node_modules …) are never scanned.
+/** Files that could not be read or written; the import carries on without them. */
+const failedFiles = []
 for (const rel of listImages(from, { skip: true })) {
   const full = join(from, ...rel.split('/'))
-  const hit = classify(rel, catalog, imageSize(full))
+  let hit
+  let bytes
+  try {
+    hit = classify(rel, catalog, imageSize(full))
+    bytes = hit ? statSync(full).size : 0
+  } catch (err) {
+    failedFiles.push({ rel, reason: err instanceof Error ? err.message : String(err) })
+    continue
+  }
   if (!hit) {
     skipped.push(rel)
     continue
   }
-  const bytes = statSync(full).size
   const prev = plan.get(hit.target)
   if (prev) {
     const keep = bytes > prev.bytes ? { rel, full, hit, bytes } : prev
@@ -109,6 +118,16 @@ let cut = 0
 /** What happened to every sheet, for the visual report. */
 const report = []
 for (const { rel, full, hit, bytes } of [...plan.values()].sort((a, b) => a.hit.target.localeCompare(b.hit.target))) {
+  try {
+    await importOne(rel, full, hit, bytes)
+  } catch (err) {
+    failedFiles.push({ rel, reason: err instanceof Error ? err.message : String(err) })
+    console.warn(`  ✗        ${rel}  — skipped: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+/** Imports one file (cut, copy or route to a board); throws on I/O errors, which the loop above reports. */
+async function importOne(rel, full, hit, bytes) {
   const mb = bytes / 1048576
   const big = mb > 2 ? `  (${mb.toFixed(1)} MB — consider WebP / smaller)` : ''
   if (hit.kind === 'sheet' && (sharp || /\.png$/i.test(rel))) {
@@ -132,27 +151,29 @@ for (const { rel, full, hit, bytes } of [...plan.values()].sort((a, b) => a.hit.
         write(files[code], out)
       }
       report.push({ set: hit.set, rel, ok: true, note: result.note, files })
-      continue
+      return
     }
     if (/no background/.test(result.error)) {
       const theme = boardThemeFor(rel, hit.set)
       const target = `boards/${theme}/board.png`
       dropOldPieces(hit.set)
-      if (plan.has(target)) continue
+      if (plan.has(target)) return
       counts.board += 1
       console.log(`  board    ${rel}  →  public/assets/${target}  (no pieces on it — it is a board picture)${big}`)
       write(target, readFileSync(full))
       report.push({ set: hit.set, rel, ok: true, note: `a board picture → ${theme}`, files: { board: target } })
-      continue
+      return
     }
+    // A file that can't even be decoded is not imported at all (the game keeps its built-in look).
+    if (!keyed) throw new Error(result.error)
     // Couldn't find 12 pieces: keep the sheet, background removed, and slice it by grid.
     console.warn(`  sheet    ${rel}  →  public/assets/${hit.target}  ⚠ could not cut it: ${result.error}; using the grid instead`)
     counts.sheet += 1
     dropOldPieces(hit.set)
-    const target = keyed ? `pieces/${hit.set}/sheet.png` : hit.target
-    write(target, keyed ? encodePng(keyed) : readFileSync(full))
+    const target = `pieces/${hit.set}/sheet.png`
+    write(target, encodePng(keyed))
     report.push({ set: hit.set, rel, ok: false, note: result.error, files: { sheet: target } })
-    continue
+    return
   } else console.log(`  ${hit.kind.padEnd(8)} ${rel}  →  public/assets/${hit.target}${big}`)
   counts[hit.kind] += 1
   if (!dryRun) {
@@ -189,6 +210,10 @@ if (report.length > 0) {
 }
 
 console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets (${cut} cut into pieces), ${counts.board} board images, ${counts.avatar} avatars, ${counts.background} backgrounds`)
+if (failedFiles.length > 0) {
+  console.warn(`[assets] ${failedFiles.length} file(s) could not be read or written and were skipped (the game uses its built-in look for them):`)
+  for (const f of failedFiles) console.warn(`  ✗ ${f.rel}: ${f.reason}`)
+}
 if (skipped.length > 0) {
   console.log(`[assets] Not recognised (${skipped.length}). Rename each to include a character, piece-set or board-theme name`)
   console.log('         (e.g. "Saladin.png", "aztec sprite sheet.png", "wild-west board.png") and run again:')

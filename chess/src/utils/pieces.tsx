@@ -28,7 +28,10 @@ export function buildPieces(set: PieceSet, lowPower: boolean, art: { id: string;
         fill: style.fill,
         svgStyle: { ...props?.svgStyle, filter: lowPower ? 'none' : style.filter },
       })
-    pieces[code] = art && isPieceCode(code) ? (props) => <ArtPiece code={code} art={art.set} fallback={vector(props)} style={artStyle} /> : vector
+    // Every piece sits in a .piece-lift box: the hover lift and the selected-piece raise animate it.
+    const draw: PieceRenderObject[string] =
+      art && isPieceCode(code) ? (props) => <ArtPiece code={code} art={art.set} fallback={vector(props)} style={artStyle} /> : vector
+    pieces[code] = (props) => <div className="piece-lift">{draw(props)}</div>
   }
   cache.set(key, pieces)
   return pieces

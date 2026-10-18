@@ -27,7 +27,13 @@ export const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ssr', '.git', 'p
 export function listImages(dir, { skip = false } = {}) {
   const out = []
   const walk = (current) => {
-    for (const name of readdirSync(current)) {
+    let names = []
+    try {
+      names = readdirSync(current)
+    } catch {
+      return // unreadable folder (permissions, a broken link): skip it, keep scanning
+    }
+    for (const name of names) {
       if (name.startsWith('.')) continue
       const full = join(current, name)
       let st
@@ -49,6 +55,14 @@ export function listImages(dir, { skip = false } = {}) {
 
 /** Width and height from the file header, or null when unknown (e.g. SVG). */
 export function imageSize(file) {
+  try {
+    return readImageSize(file)
+  } catch {
+    return null // a truncated or corrupt header is "size unknown", never a crash
+  }
+}
+
+function readImageSize(file) {
   let b
   try {
     b = readFileSync(file)

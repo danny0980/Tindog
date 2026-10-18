@@ -8,6 +8,21 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 
 ---
 
+## What's new in 6.3: Board VFX
+
+- **Effects under every piece.** Each square can carry its own animated layers, drawn under the piece:
+  - a pulsing **selection aura** in the theme colour, with the selected piece raised;
+  - a **last-move trail**: a soft glow on the origin square and a landing ring on the destination;
+  - a **check** alarm on the king, and a dark core with repeating shockwaves on **checkmate**;
+  - **status tiles** with shimmer: frost, snow, glue and stuck squares come from the battle rules.
+  Lava, poison and void tiles are drawn the same way, but no game rule creates them yet. To use them, pass `arena.hazards` (`src/components/board/boardVfx.ts`, `BoardSquare.tsx`, `src/styles/vfx.css`).
+- **Captures.** A white-hot flash, an expanding ring and a burst of shards and sparks on the square.
+- **Piece interaction.** On a mouse or trackpad, the side to move's pieces lift when hovered.
+- **The board rim** glows in the theme accent colour, and turns into a pulsing red alarm while a king is in check.
+- **Game over.** Golden fountains and motes for a victory, rising embers for a defeat.
+- **Resilient art.** Art-pack pieces show the built-in vector piece immediately and fade in once their image has decoded. A missing or broken file never leaves an empty square. The importer skips any file it cannot read or write, lists it, and keeps going.
+- **Battery saver and reduced motion.** Battery saver keeps the looks but stops the motion, flashes and particles. "Reduce motion" does the same, except that particles still play on the game-over window.
+
 ## What's new in 6.2: the Art Pack — your own portraits, pieces and boards
 
 Drop a folder of images in and the game uses them everywhere:

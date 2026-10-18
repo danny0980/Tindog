@@ -1,5 +1,5 @@
 import { Chess } from 'chess.js'
-import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type Arrow, Chessboard, type PieceDropHandlerArgs, type PieceHandlerArgs, type SquareHandlerArgs } from 'react-chessboard'
 import type { Color, Move, MoveInput, PendingPromotion, PromotionPiece, Square } from '../../types/chess'
 import type { BoardTheme, PieceSet } from '../../types/theme'
@@ -10,6 +10,10 @@ import { useBoardArt, useImagesStatus, usePieceArt } from '../../assets/useArt'
 import { useStore } from '../../hooks/useStore'
 import { settingsStore } from '../../stores/settingsStore'
 import { PromotionDialog } from './PromotionDialog'
+import { BoardSquare } from './BoardSquare'
+import { boardVfx, captureSquare, type TileKind } from './boardVfx'
+import { useParticleLayer } from '../fx/useParticleLayer'
+import { squareCenter } from '../../utils/boardGeometry'
 
 export interface BoardArrow {
   from: string
@@ -51,6 +55,8 @@ export interface BoardArena {
   snow: readonly Square[]
   glue: readonly Square[]
   stuck: readonly Square[]
+  /** Extra animated status tiles (lava, poison, void rifts …) for rules that create them. */
+  hazards?: Partial<Record<TileKind, readonly Square[]>>
   /** True when the arena forbids this (otherwise legal) move for you. */
   isBlocked: (move: Move) => boolean
 }
@@ -61,20 +67,6 @@ export interface BoardPicker {
   onPick: (square: Square) => void
 }
 
-const FROST_STYLE: CSSProperties = {
-  background:
-    'repeating-linear-gradient(45deg, rgba(186,230,253,0.55) 0 6px, rgba(125,211,252,0.25) 6px 12px), radial-gradient(circle, rgba(224,242,254,0.9), rgba(56,189,248,0.4))',
-  boxShadow: 'inset 0 0 0 3px rgba(125,211,252,0.95), inset 0 0 22px rgba(14,165,233,0.85)',
-}
-const SNOW_STYLE: CSSProperties = {
-  background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0 3px, transparent 4px), radial-gradient(circle at 70% 60%, rgba(255,255,255,0.9) 0 2px, transparent 3px), radial-gradient(circle, rgba(241,245,249,0.75), rgba(203,213,225,0.45))',
-  boxShadow: 'inset 0 0 16px rgba(255,255,255,0.8)',
-}
-const GLUE_STYLE: CSSProperties = {
-  background: 'radial-gradient(circle, rgba(251,191,36,0.75) 0 30%, rgba(217,119,6,0.45) 45%, transparent 66%)',
-  boxShadow: 'inset 0 0 0 2px rgba(245,158,11,0.7)',
-}
-const STUCK_STYLE: CSSProperties = { boxShadow: 'inset 0 0 0 4px rgba(245,158,11,0.95), inset 0 -18px 18px rgba(217,119,6,0.55)' }
 const PICK_STYLE: Record<BoardPicker['tone'], CSSProperties> = {
   glue: { boxShadow: 'inset 0 0 0 3px rgba(251,191,36,0.9)', background: 'rgba(251,191,36,0.18)' },
   altar: { boxShadow: 'inset 0 0 0 3px rgba(244,63,94,0.95)', background: 'rgba(244,63,94,0.22)' },
@@ -243,18 +235,58 @@ export function ChessBoard({
         boxShadow: 'inset 0 0 14px rgba(167,139,250,0.6)',
       }),
     )
-    // Arena: snow drifts, honey-glue traps, stuck pieces and icy, pulsing frost seals.
-    if (arena) {
-      arena.snow.forEach((sq) => add(sq, SNOW_STYLE))
-      arena.glue.forEach((sq) => add(sq, GLUE_STYLE))
-      arena.stuck.forEach((sq) => add(sq, STUCK_STYLE))
-      arena.frozen.forEach((sq) => add(sq, { ...FROST_STYLE, animation: lowPower ? undefined : 'pulse-soft 1.6s ease-in-out infinite' }))
-    }
+    // Arena tiles (frost, snow, glue, lava …) are drawn as animated VFX layers — see `vfx` below.
     if (picker) picker.squares.forEach((sq) => add(sq, { ...PICK_STYLE[picker.tone], animation: lowPower ? undefined : 'pulse-soft 1.4s ease-in-out infinite' }))
     if (hoverSquare && legalTargets.has(hoverSquare)) add(hoverSquare, h.hover)
     if (extraSquareStyles) Object.entries(extraSquareStyles).forEach(([square, style]) => add(square, style))
     return styles
-  }, [arena, extraSquareStyles, h, hoverSquare, lastMove, legalTargets, lowPower, picker, position, selected, showLegalMoves, specialFromSelected])
+  }, [extraSquareStyles, h, hoverSquare, lastMove, legalTargets, lowPower, picker, position, selected, showLegalMoves, specialFromSelected])
+
+  // ── VFX: per-square layers, capture flashes and sparks ─────────────────────
+  const inCheck = position.inCheck()
+  const mate = position.isCheckmate()
+  const vfx = useMemo(
+    () =>
+      boardVfx({
+        selected,
+        lastMove,
+        kingInDanger: inCheck ? findKingSquare(position, position.turn()) : null,
+        mate,
+        tiles: {
+          ...arena?.hazards,
+          frost: arena?.frozen ?? [],
+          snow: arena?.snow ?? [],
+          glue: arena?.glue ?? [],
+          stuck: arena?.stuck ?? [],
+        },
+      }),
+    [arena, inCheck, lastMove, mate, position, selected],
+  )
+  const [capture, setCapture] = useState<{ id: number; square: Square } | null>(null)
+  const prevFenRef = useRef<string | null>(null)
+  const { canvasRef: sparkCanvasRef, burst: burstSparks } = useParticleLayer(160, lowPower)
+  useEffect(() => {
+    const square = captureSquare(prevFenRef.current, fen, lastMove)
+    prevFenRef.current = fen
+    if (!square) return
+    setCapture((c) => ({ id: (c?.id ?? 0) + 1, square }))
+    const at = squareCenter(square, orientation)
+    burstSparks((system, size) => {
+      const cell = size.w / 8
+      const x = (at.x / 100) * size.w
+      const y = (at.y / 100) * size.h
+      system.emit('shard', 16, { x, y, spread: cell * 2.4, life: 0.7, size: cell * 0.06, vy: -cell * 1.5 })
+      system.emit('spark', 22, { x, y, spread: cell * 3, life: 0.5, size: cell * 0.035 })
+    })
+  }, [burstSparks, fen, lastMove, orientation])
+  const squareRenderer = useCallback(
+    ({ square, children }: { square: string; children?: ReactNode }) => (
+      <BoardSquare style={squareStyles[square]} vfx={isSquare(square) ? vfx.get(square) : undefined} captureKey={capture?.square === square ? capture.id : null}>
+        {children}
+      </BoardSquare>
+    ),
+    [capture, squareStyles, vfx],
+  )
 
   const boardArrows = useMemo<Arrow[]>(
     () =>
@@ -269,6 +301,7 @@ export function ChessBoard({
       position: fen,
       boardOrientation: orientation === 'w' ? ('white' as const) : ('black' as const),
       squareStyles,
+      squareRenderer,
       arrows: boardArrows,
       showNotation: showCoordinates,
       allowDragging: movableColor !== null && !picker,
@@ -307,13 +340,23 @@ export function ChessBoard({
       pieces,
       showCoordinates,
       squareStyles,
+      squareRenderer,
       boardSkin,
       theme,
+      pieceArt,
+      artPieceScale,
     ],
   )
 
   return (
-    <div key={shakeKey} className={`board-surface relative aspect-square w-full ${shakeKey > 0 ? 'animate-shake' : ''}`}>
+    <div
+      key={shakeKey}
+      className={`board-surface relative aspect-square w-full ${shakeKey > 0 ? 'animate-shake' : ''}`}
+      data-vfx={lowPower ? 'static' : 'live'}
+      data-lift={lowPower || picker ? undefined : (movableColor ?? undefined)}
+      style={{ '--vfx-glow': `color-mix(in srgb, ${theme.accent} 80%, transparent)`, '--vfx-rim': theme.accent } as CSSProperties}
+    >
+      <div className="vfx-rim" data-state={mate ? 'mate' : inCheck ? 'check' : 'idle'} aria-hidden="true" />
       <div className="size-full rounded-xl transition-shadow duration-500" style={theme.boardFrame}>
         <Chessboard options={options} />
       </div>
@@ -321,6 +364,7 @@ export function ChessBoard({
         // Decorative frame art: transparent centre, sized for a 2304 px frame around a 2048 px board.
         <img src={frameUrl} alt="" aria-hidden="true" draggable={false} className="pointer-events-none absolute -inset-[6.25%] z-0 size-[112.5%] max-w-none" />
       )}
+      <canvas ref={sparkCanvasRef} className="pointer-events-none absolute inset-0 z-10 size-full" aria-hidden="true" data-capture-sparks />
       {children}
       {pendingPromotion && (
         <PromotionDialog color={pendingPromotion.color} pieceSet={pieceSet} onSelect={handlePromotionSelect} onCancel={cancelPromotion} />

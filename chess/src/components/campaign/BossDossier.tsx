@@ -4,6 +4,7 @@ import { ARCHETYPES } from '../../data/campaign/archetypes'
 import { BOOKS } from '../../data/campaign/books'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RELICS, getRelic, relicSlots } from '../../data/campaign/relics'
+import { SPELLS, spellsForBoss } from '../../data/spells'
 import type { Boss, CampaignProgress, RelicId } from '../../types/campaign'
 import { bossRecord, starTarget, twoStarTarget } from '../../utils/campaign'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
@@ -91,6 +92,27 @@ export function BossDossier({ boss, progress, unlocked, lockedReason, options, o
         <Stat label="★★ within" value={`${twoStarTarget(boss.par, equipped)} moves`} />
         <Stat label={record.firstClear ? 'Rematch bounty' : 'First-win bounty'} value={<span className="inline-flex items-center gap-1 text-yellow-300"><Coins className="size-3.5" />{reward}</span>} />
       </div>
+
+      {spellsForBoss(boss).map((id) => {
+        const spell = SPELLS[id]
+        const SpellIcon = PORTRAIT_ICONS[spell.icon]
+        return (
+          <div key={id} className="flex items-start gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3" data-spell={id}>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-red-200">
+              <SpellIcon className="size-5" />
+            </span>
+            <div className="min-w-0 text-sm">
+              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-300">Signature spell</div>
+              <div className="font-semibold text-white">{spell.name}</div>
+              <div className="text-xs text-slate-300">{spell.description}</div>
+              <div className="mt-0.5 text-[11px] text-slate-400">
+                {spell.trigger}
+                {spell.needsClock ? ' · needs a timed battle' : ''}
+              </div>
+            </div>
+          </div>
+        )
+      })}
 
       {boss.relic && (
         <div className="flex items-center gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-3">

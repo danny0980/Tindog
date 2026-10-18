@@ -131,3 +131,15 @@ export function playTimeTravel(): void {
   ;[76, 83, 88, 95].forEach((n, i) => tone({ at: 0.5 + i * 0.12, frequency: midiToHz(n), decay: 1.1, gain: 0.07, reverb: 0.7 }))
   tone({ at: 1.3, frequency: 70, frequencyEnd: 38, decay: 0.9, gain: 0.35 })
 }
+
+/** A spell is charging: a thin, rising shimmer of fifths. */
+export function playSpellWarning(): void {
+  ;[69, 76, 81].forEach((n, i) => tone({ at: i * 0.09, frequency: midiToHz(n), frequencyEnd: midiToHz(n + 2), type: 'sine', decay: 0.5, gain: 0.06, reverb: 0.8 }))
+}
+
+/** A spell lands: a dark low impact under a glassy cluster. */
+export function playSpellCast(): void {
+  tone({ frequency: 90, frequencyEnd: 40, type: 'sine', decay: 0.7, gain: 0.32 })
+  noise({ duration: 0.35, gain: 0.08, filter: { type: 'bandpass', frequency: 2400, q: 4 } })
+  ;[84, 87, 91].forEach((n, i) => tone({ at: 0.05 + i * 0.04, frequency: midiToHz(n), type: 'triangle', decay: 0.6, gain: 0.05, reverb: 0.9 }))
+}

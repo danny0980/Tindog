@@ -1,3 +1,4 @@
+import { Chess } from 'chess.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ambientMusic, resolveMaterial, sfx } from '../audio'
 import { DIFFICULTIES, PERSONALITIES, resolveTimeControl, standardOpponent } from '../constants/game'
@@ -7,7 +8,14 @@ import { realmOfBoss } from '../data/campaign/realms'
 import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, applyRelicsToProfile } from '../data/campaign/relics'
 import { getLegend, strengthInfo } from '../data/legends'
 import { bossPersona, legendPersona } from '../data/personas'
-import { personaSay } from '../stores/dialogueStore'
+import { SPELLS, buildBattleSetup, getTactic, hashSeed, seededRandom } from '../data/spells'
+import { afterPly, bossSpecialMoves, createEffects, humanSpecialMoves, isMoveFrozen } from '../engine/spellEngine'
+import { analyzeTaunt } from '../engine/taunts'
+import { type SpecialMove, passTurn } from '../engine/variant'
+import { personaSay, personaTaunt } from '../stores/dialogueStore'
+import { type GauntletSummary, endGauntletRun, finishGauntletBattle } from '../stores/gauntletActions'
+import type { BattleEffects, BattleEvent, BattleSetup, TacticId } from '../types/spells'
+import type { TauntEvent } from '../types/taunts'
 import type { GrandRealmId, RelicDef, RelicId, StarCount } from '../types/campaign'
 import type { Persona, PortraitSpec } from '../types/persona'
 import { applyBossResult } from '../utils/campaign'
@@ -33,6 +41,26 @@ import { useStore } from './useStore'
 import { useTimeMachine } from './useTimeMachine'
 
 const UNTIMED: TimeControl = { id: 'none', label: 'Unlimited', category: 'none', initialMs: 0, incrementMs: 0 }
+
+/** Extra rules for a character battle, chosen by the screen that launches it. */
+export interface BattleLaunch {
+  kind: BattleSetup['kind']
+  /** Tactics drafted before the battle (campaign) or granted by boons (gauntlet). */
+  tactics: readonly TacticId[]
+  /** Gauntlet: your clock (the run's time bank) overrides the time control for your side. */
+  humanClockMs?: number
+  /** Gauntlet EMP boon: the boss searches shallower this battle. */
+  emp?: boolean
+  /** Free takebacks; the Gauntlet otherwise forbids undo. */
+  freeUndos?: number
+}
+
+/** A short holographic banner over the board (spell warnings, casts, tactics). */
+export interface SpellFlash {
+  id: number
+  text: string
+  tone: 'danger' | 'accent' | 'gold'
+}
 
 const resolveColor = (settings: GameSettings): Color =>
   settings.playerColor === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : settings.playerColor
@@ -69,6 +97,8 @@ export interface GameEndSummary {
     realmCleared: GrandRealmId | null
     rewards: string[]
   } | null
+  /** Endless Gauntlet bookkeeping when the battle was part of a run. */
+  gauntlet: GauntletSummary | null
 }
 
 const characterOf = (p: Persona): PlayerInfo['character'] => ({ key: p.key, name: p.name, portrait: p.portrait })
@@ -97,6 +127,21 @@ export function useGameController({ active }: { active: boolean }) {
   // Grand Campaign: relics snapshotted at the start of a boss battle.
   const [battleRelics, setBattleRelics] = useState<RelicId[]>([])
   const [shieldUsed, setShieldUsed] = useState(false)
+  // Spells & tactics: the battle's rules, and the effect state after every ply (index = ply).
+  const [battle, setBattle] = useState<BattleSetup | null>(null)
+  const [launchExtras, setLaunchExtras] = useState<{ emp: boolean; freeUndos: number }>({ emp: false, freeUndos: 0 })
+  const [effectsLog, setEffectsLog] = useState<BattleEffects[]>([])
+  const effectsLogRef = useRef<BattleEffects[]>([])
+  const [spellFlash, setSpellFlash] = useState<SpellFlash | null>(null)
+  const flashIdRef = useRef(0)
+  const rngRef = useRef<() => number>(seededRandom(1))
+  /** When the player's current turn began (for Time Dilation). */
+  const turnStartRef = useRef(0)
+  /** The opponent's evaluation after its last move (for blunder / brilliancy taunts). */
+  const bossEvalRef = useRef<number | null>(null)
+  const timeTroubleRef = useRef(false)
+  /** Clock reader for callbacks declared before the clock exists (the clock's flag handler needs them). */
+  const getClockTimesRef = useRef<() => ClockTimes>(() => ({ w: 0, b: 0 }))
 
   const game = useChessGame()
   const visible = usePageVisible()
@@ -127,15 +172,17 @@ export function useGameController({ active }: { active: boolean }) {
   const timeControl = useMemo(() => (review ? UNTIMED : resolveTimeControl(gameSettings)), [gameSettings, review])
   const difficultyLabel = DIFFICULTIES.find((d) => d.id === gameSettings.difficulty)?.label ?? ''
   const personality = PERSONALITIES.find((p) => p.id === gameSettings.personality) ?? PERSONALITIES[0]
-  const opponent = useMemo(
-    () =>
-      boss && persona
-        ? applyRelicsToProfile(persona.profile, battleRelics)
-        : persona
-          ? persona.profile
-          : standardOpponent(gameSettings.difficulty, gameSettings.personality),
-    [battleRelics, boss, gameSettings.difficulty, gameSettings.personality, persona],
-  )
+  const effects: BattleEffects | null = battle ? (effectsLog[game.history.length] ?? effectsLog[effectsLog.length - 1] ?? null) : null
+  const overclocked = effects?.overclock ?? false
+  const opponent = useMemo(() => {
+    let profile = boss && persona ? applyRelicsToProfile(persona.profile, battleRelics) : persona ? persona.profile : standardOpponent(gameSettings.difficulty, gameSettings.personality)
+    if (launchExtras.emp) profile = applyRelicsToProfile(profile, ['emp-spike'])
+    // Overclock spells: this one move is computed at full power.
+    if (overclocked) {
+      profile = { ...profile, skillLevel: 20, depth: profile.depth + 4, moveTimeMs: Math.round(profile.moveTimeMs * 1.5), toleranceCp: Math.min(profile.toleranceCp, 15), noise: 0 }
+    }
+    return profile
+  }, [battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona])
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
   const recordedGameRef = useRef<number | null>(null)
@@ -206,8 +253,10 @@ export function useGameController({ active }: { active: boolean }) {
         pgn,
         history,
         timeControl,
-        rated: ai && !casual,
+        // Gauntlet battles are arcade: unrated, scored by the run instead.
+        rated: ai && !casual && battle?.kind !== 'gauntlet',
         opening: openingName,
+        variant: game.getVariantEvents(),
         legendId: legend?.id ?? null,
         bossId: boss?.id ?? null,
         ...(persona ? { opponentElo: persona.elo } : {}),
@@ -236,7 +285,7 @@ export function useGameController({ active }: { active: boolean }) {
 
       // Grand Campaign: stars, bounty, relics and realm progression.
       let campaignSummary: GameEndSummary['campaign'] = null
-      if (boss && outcome) {
+      if (boss && outcome && battle?.kind === 'campaign') {
         const br = applyBossResult(profileStore.get(), boss, {
           outcome,
           humanMoves: history.filter((m) => m.color === humanColor).length,
@@ -256,6 +305,8 @@ export function useGameController({ active }: { active: boolean }) {
         }
         unlocked = [...unlocked, ...br.unlocked]
       }
+      // Endless Gauntlet: the bank carries on (or the run ends).
+      const gauntletSummary = boss && outcome && battle?.kind === 'gauntlet' ? finishGauntletBattle(boss, outcome, getClockTimesRef.current()[humanColor]) : null
       if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
       trackQuestEvents(matchQuestEvents(matchInput), 1400 + unlocked.length * 1100)
       setSummary({
@@ -269,6 +320,7 @@ export function useGameController({ active }: { active: boolean }) {
         rated: out.record.rated,
         legend: legendSummary,
         campaign: campaignSummary,
+        gauntlet: gauntletSummary,
       })
       setGameOverDismissed(false)
 
@@ -280,7 +332,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (out.coins > 0 || legendSummary?.coins || campaignSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, legend, persona, playerNames, timeControl],
+    [aiColor, battle, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, legend, persona, playerNames, timeControl],
   )
 
   const handleFlag = useCallback(
@@ -303,39 +355,186 @@ export function useGameController({ active }: { active: boolean }) {
     tickMs: settings.batterySaver ? 250 : 100,
   })
 
-  // ── Moves ──────────────────────────────────────────────────────────────────
-  const applyMove = useCallback(
-    (input: MoveInput): Move | null => {
-      const before = clock.getTimes()
-      const move = game.makeMove(input)
-      if (!move) {
-        sfx.error()
-        return null
+  useEffect(() => {
+    getClockTimesRef.current = clock.getTimes
+  }, [clock.getTimes])
+
+  // ── Spells, tactics & taunts ───────────────────────────────────────────────
+  const flash = useCallback((text: string, tone: SpellFlash['tone']) => {
+    flashIdRef.current += 1
+    setSpellFlash({ id: flashIdRef.current, text, tone })
+  }, [])
+
+  /** Dynamic reaction to a board event; classic check lines keep the legends' own voice half the time. */
+  const react = useCallback(
+    (event: TauntEvent) => {
+      if (!persona) return
+      if ((event.kind === 'check-given' || event.kind === 'in-check') && Math.random() < 0.5) {
+        personaSay(persona, event.kind === 'check-given' ? 'checkGiven' : 'inCheck', 0.8)
+        return
       }
+      personaTaunt(persona, event, Math.min(1, event.priority / 100 + 0.15))
+    },
+    [persona],
+  )
+
+  const emitBattleEvents = useCallback(
+    (events: readonly BattleEvent[]) => {
+      for (const e of events) {
+        if (e.kind === 'clock') {
+          clock.adjust(e.side === 'human' ? humanColor : aiColor, e.deltaMs)
+          showToast('info', e.reason, `${e.side === 'human' ? 'You gain' : `${persona?.name ?? 'Opponent'} gains`} ${Math.round(e.deltaMs / 1000)} s`, 2400)
+        } else if (e.kind === 'spell-warning') {
+          const spell = SPELLS[e.spell]
+          sfx.spellWarning()
+          flash(`${spell.name} charging`, 'gold')
+          showToast('warning', `${spell.name} incoming`, spell.description, 3200)
+        } else if (e.kind === 'spell-cast') {
+          const spell = SPELLS[e.spell]
+          sfx.spellCast()
+          flash(spell.name, 'danger')
+          showToast('warning', spell.name, e.square ? `${e.square.toUpperCase()} is frozen for your next move.` : spell.description, 3200)
+          react({ kind: 'spell-cast', mood: 'smug', priority: 88, vars: { spell: spell.name } })
+        } else if (e.kind === 'spell-blocked') {
+          sfx.achievement()
+          flash('Spell warded', 'accent')
+          showToast('success', 'Spell Ward', `${SPELLS[e.spell].name} was blocked.`, 2800)
+          react({ kind: 'spell-blocked', mood: 'angry', priority: 86, vars: { spell: SPELLS[e.spell].name } })
+        } else {
+          flash(getTactic(e.tactic).name, 'accent')
+          showToast('success', getTactic(e.tactic).name, e.detail, 2600)
+          if (e.tactic === 'katana-blade') react({ kind: 'tactic-used', mood: 'angry', priority: 84, vars: {} })
+        }
+      }
+    },
+    [aiColor, clock, flash, humanColor, persona, react],
+  )
+
+  // ── Moves ──────────────────────────────────────────────────────────────────
+  /**
+   * Book-keeping shared by every ply (normal, special or pass): clocks, sound,
+   * taunts, opening names, spell / tactic effects and the game result.
+   */
+  const commitPly = useCallback(
+    (move: Move, before: ClockTimes): void => {
+      const mover: 'human' | 'boss' = isAiMode && move.color === aiColor ? 'boss' : 'human'
       clockSnapshotsRef.current.push(before)
-      clock.addIncrement(move.color)
+      if (!move.flags.includes('z')) clock.addIncrement(move.color)
       timeMachine.goTo(null)
       sfx.move(material, move, givesCheck(move))
 
-      // In-character reactions from a legend or boss opponent.
-      if (persona) {
-        const byOpponent = move.color === aiColor
-        if (givesCheck(move)) personaSay(persona, byOpponent ? 'checkGiven' : 'inCheck', 0.8)
-        else if (move.captured) personaSay(persona, byOpponent ? 'legendCapture' : 'playerCapture', byOpponent ? 0.5 : 0.4)
+      const history = game.getLiveHistory()
+      const ply = history.length
+      if (persona && isAiMode) {
+        const taunt = analyzeTaunt({ mover, move, fen: move.after, humanColor, evalSwingCp: null, ply })
+        if (taunt) react(taunt)
       }
 
-      const detected = detectOpening(game.getLiveHistory())
-      if (detected && detected.ply === game.getLiveHistory().length && detected.name !== lastOpeningRef.current) {
+      const detected = detectOpening(history)
+      if (detected && detected.ply === ply && detected.name !== lastOpeningRef.current) {
         lastOpeningRef.current = detected.name
         showToast('opening', detected.name, detected.eco, 2600)
       }
 
-      const result = game.getLiveBoardResult()
+      let result = game.getLiveBoardResult()
+      let passBoss = false
+      if (battle) {
+        const previous = effectsLogRef.current[ply - 1] ?? createEffects(battle)
+        const thinkMs = mover === 'human' && turnStartRef.current > 0 ? performance.now() - turnStartRef.current : 0
+        const out = afterPly(previous, { setup: battle, mover, move, fen: move.after, humanColor, thinkMs, clocks: clock.getTimes(), rng: rngRef.current })
+        effectsLogRef.current = [...effectsLogRef.current.slice(0, ply), out.effects]
+        setEffectsLog(effectsLogRef.current)
+        if (!result) {
+          emitBattleEvents(out.events)
+          passBoss = out.passBoss
+        }
+      }
+
+      // Katana Blade: the boss loses this turn — recorded as a pass ply.
+      if (!result && passBoss) {
+        const pass = passTurn(game.getFen())
+        const passBefore = clock.getTimes()
+        if (pass && game.applySpecial(pass)) {
+          clockSnapshotsRef.current.push(passBefore)
+          // A pass changes no spell state: the snapshot after it equals the one before.
+          const unchanged = effectsLogRef.current[ply]
+          if (unchanged) effectsLogRef.current = [...effectsLogRef.current.slice(0, ply + 1), unchanged]
+          setEffectsLog(effectsLogRef.current)
+          result = game.getLiveBoardResult()
+        }
+      }
+      if (mover === 'boss' || passBoss) turnStartRef.current = performance.now()
       if (result) finishGame(result)
+    },
+    [aiColor, battle, clock, emitBattleEvents, finishGame, game, humanColor, isAiMode, material, persona, react, timeMachine],
+  )
+
+  /** The player's (or a local game's) move; also accepts spell / tactic moves the board offers. */
+  const applyMove = useCallback(
+    (input: MoveInput): Move | null => {
+      const before = clock.getTimes()
+      const fen = game.getFen()
+      const sideToMove = fen.split(' ')[1] === 'b' ? 'b' : 'w'
+      const humanTurn = !isAiMode || sideToMove === humanColor
+      const current = battle ? (effectsLogRef.current[game.getLiveHistory().length] ?? null) : null
+      if (battle && humanTurn && current?.frozen) {
+        const legal = new Chess(fen).moves({ verbose: true }).find((m) => m.from === input.from && m.to === input.to)
+        if (legal && isMoveFrozen(current, legal)) {
+          sfx.error()
+          showToast('warning', 'Frozen square', `No piece may land on or pass through ${current.frozen.toUpperCase()} this move.`, 2400)
+          return null
+        }
+      }
+      let move = game.makeMove(input)
+      if (!move && battle && humanTurn && current) {
+        const special = humanSpecialMoves(current, fen, humanColor).find((s) => s.from === input.from && s.to === input.to)
+        if (special) move = game.applySpecial(special)
+      }
+      if (!move) {
+        sfx.error()
+        return null
+      }
+      commitPly(move, before)
       return move
     },
-    [aiColor, clock, finishGame, game, material, persona, timeMachine],
+    [battle, clock, commitPly, game, humanColor, isAiMode],
   )
+
+  /** The opponent casts a rule-bending move (Berserker Charge, Shadow Step). */
+  const applyOpponentSpecial = useCallback(
+    (special: SpecialMove) => {
+      const before = clock.getTimes()
+      const move = game.applySpecial(special)
+      if (!move) return
+      if (persona && battle) {
+        const spell = battle.spells.find((id) => (special.kind === 'leap' ? SPELLS[id].mechanic === 'shadow-step' : SPELLS[id].mechanic === 'berserker'))
+        if (spell) flash(SPELLS[spell].name, 'danger')
+      }
+      commitPly(move, before)
+    },
+    [battle, clock, commitPly, flash, game, persona],
+  )
+
+  const getOpponentSpecials = useCallback((): SpecialMove[] => {
+    if (!battle) return []
+    const current = effectsLogRef.current[game.getLiveHistory().length]
+    return current ? bossSpecialMoves(current, battle, game.getFen(), aiColor) : []
+  }, [aiColor, battle, game])
+
+  /** Blunder / brilliancy detection from the opponent's own search (no extra engine work). */
+  const onOpponentEval = useCallback(
+    (cp: number) => {
+      const previous = bossEvalRef.current
+      if (previous === null || !persona) return
+      const swing = cp - previous
+      if (swing >= 250) react({ kind: 'blunder', mood: 'smug', priority: 85, vars: {} })
+      else if (swing <= -250) react({ kind: 'brilliance', mood: 'shocked', priority: 84, vars: {} })
+    },
+    [persona, react],
+  )
+  const onOpponentChosen = useCallback((cp: number | null) => {
+    bossEvalRef.current = cp
+  }, [])
 
   const isAiTurn = isAiMode && isPlaying && game.turn === aiColor
   useAiOpponent({
@@ -348,6 +547,10 @@ export function useGameController({ active }: { active: boolean }) {
     getHistory: game.getLiveHistory,
     onMove: applyMove,
     onThink: persona ? () => personaSay(persona, 'thinking', 0.12) : undefined,
+    getSpecials: getOpponentSpecials,
+    onSpecial: applyOpponentSpecial,
+    onEval: onOpponentEval,
+    onChosen: onOpponentChosen,
   })
   const aiThinking = isAiTurn && playEngine.status === 'ready'
 
@@ -382,25 +585,41 @@ export function useGameController({ active }: { active: boolean }) {
   const playerToMove = Boolean(persona) && isPlaying && game.turn === humanColor && active && visible
   useEffect(() => {
     if (!playerToMove || !persona) return
-    const id = window.setTimeout(() => personaSay(persona, 'playerSlow'), 25_000)
+    // Taking too long: a clock-aware jab (or the character's own line).
+    const id = window.setTimeout(() => {
+      if (Math.random() < 0.5) personaSay(persona, 'playerSlow')
+      else personaTaunt(persona, { kind: 'long-think', mood: 'smug', priority: 50, vars: { seconds: '25' } })
+    }, 25_000)
     return () => window.clearTimeout(id)
   }, [game.fen, persona, playerToMove])
+
+  // Time trouble: one urgent taunt when your clock first drops under 20 s.
+  const humanInTimeTrouble = Boolean(persona) && clock.enabled && isPlaying && clock.times[humanColor] < 20_000
+  useEffect(() => {
+    if (!humanInTimeTrouble || !persona || timeTroubleRef.current) return
+    timeTroubleRef.current = true
+    personaTaunt(persona, { kind: 'time-trouble', mood: 'smug', priority: 82, vars: {} })
+  }, [humanInTimeTrouble, persona])
 
   // ── Commands ───────────────────────────────────────────────────────────────
   const movableColor: Color | null =
     isPlaying && timeMachine.isLive && (!isAiMode || game.turn === humanColor) ? game.turn : null
 
+  const isCampaignBattle = battle?.kind === 'campaign'
+  const isGauntletBattle = battle?.kind === 'gauntlet'
   const undoPlies = (() => {
     if (!isPlaying) return 0
     if (!isAiMode) return game.history.length > 0 ? 1 : 0
+    // The Gauntlet forbids takebacks unless an Aegis boon granted one.
+    if (isGauntletBattle && launchExtras.freeUndos <= 0) return 0
     const plies = game.turn === humanColor ? 2 : 1
     return game.history.length >= plies ? plies : 0
   })()
 
   // Shield of Kings: one free takeback early in a campaign battle.
-  const shieldReady = Boolean(boss) && battleRelics.includes('shield-of-kings') && !shieldUsed && Math.ceil(game.history.length / 2) <= SHIELD_MOVE_LIMIT
+  const shieldReady = isCampaignBattle && battleRelics.includes('shield-of-kings') && !shieldUsed && Math.ceil(game.history.length / 2) <= SHIELD_MOVE_LIMIT
   /** What a takeback would cost right now in a campaign battle (null = nothing at stake). */
-  const undoCost: 'shield' | 'stars' | null = isAiMode && boss && !casual && undoPlies > 0 ? (shieldReady ? 'shield' : 'stars') : null
+  const undoCost: 'shield' | 'stars' | null = isAiMode && isCampaignBattle && !casual && undoPlies > 0 ? (shieldReady ? 'shield' : 'stars') : null
 
   const undo = useCallback(() => {
     if (undoPlies === 0) return
@@ -411,6 +630,16 @@ export function useGameController({ active }: { active: boolean }) {
     snapshots.splice(snapshots.length - undone, undone)
     if (restoreTo) clock.restore(restoreTo)
     timeMachine.goTo(null)
+    // Spell / tactic state rewinds with the position.
+    effectsLogRef.current = effectsLogRef.current.slice(0, Math.max(1, game.getLiveHistory().length + 1))
+    setEffectsLog(effectsLogRef.current)
+    turnStartRef.current = performance.now()
+    bossEvalRef.current = null
+    if (isGauntletBattle) {
+      setLaunchExtras((x) => ({ ...x, freeUndos: Math.max(0, x.freeUndos - 1) }))
+      showToast('info', 'Aegis', 'Your free takeback is spent.', 2400)
+      return
+    }
     if (isAiMode && !casual) {
       if (shieldReady) {
         setShieldUsed(true)
@@ -420,7 +649,7 @@ export function useGameController({ active }: { active: boolean }) {
         showToast('info', 'Casual game', boss ? 'Takebacks make this battle unrated and cap it at one star.' : 'Takebacks make this game unrated.', 2800)
       }
     }
-  }, [boss, casual, clock, game, isAiMode, playEngine, shieldReady, timeMachine, undoPlies])
+  }, [boss, casual, clock, game, isAiMode, isGauntletBattle, playEngine, shieldReady, timeMachine, undoPlies])
 
   const resign = useCallback(() => {
     if (!isPlaying) return
@@ -432,9 +661,12 @@ export function useGameController({ active }: { active: boolean }) {
   }, [finishGame, game, humanColor, isAiMode, isPlaying, playEngine])
 
   const startNewGame = useCallback(
-    (next: GameSettings) => {
+    (next: GameSettings, launch?: BattleLaunch) => {
+      // Leaving a Gauntlet battle unfinished forfeits the run.
+      if (battle?.kind === 'gauntlet' && recordedGameRef.current !== gameId) endGauntletRun()
       const color = resolveColor(next)
-      updateSettings({ game: next })
+      // Gauntlet clocks are per-run, not the player's preferred time control.
+      if (launch?.kind !== 'gauntlet') updateSettings({ game: next })
       playEngine.stop()
       playEngine.newGame()
       analysis.cancel()
@@ -445,15 +677,35 @@ export function useGameController({ active }: { active: boolean }) {
       clockSnapshotsRef.current = []
       const tc = resolveTimeControl(next)
       clock.reset(tc)
-      // Campaign relics are fixed for the whole battle.
       const challengerBoss = next.mode === 'ai' && next.bossId ? getCachedBoss(next.bossId) : null
+      const challenger = challengerBoss
+        ? bossPersona(challengerBoss)
+        : next.mode === 'ai' && next.legendId
+          ? legendPersona(getLegend(next.legendId), next.legendStrength)
+          : null
+      const kind: BattleSetup['kind'] = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
+      // Campaign relics are fixed for the whole battle (other modes don't use them).
       const campaign = profileStore.get().campaign
-      const relics = challengerBoss ? activeRelics(campaign.relics, campaign.equipped) : []
+      const relics = challengerBoss && kind === 'campaign' ? activeRelics(campaign.relics, campaign.equipped) : []
       setBattleRelics(relics)
       setShieldUsed(false)
       if (relics.includes('dragonheart-ember') && tc.initialMs > 0) {
         clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: tc.initialMs + EMBER_BONUS_MS })
       }
+      if (launch?.humanClockMs !== undefined && tc.initialMs > 0) {
+        clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: launch.humanClockMs })
+      }
+      // Spells & tactics for character battles.
+      const setup = challenger ? buildBattleSetup(kind, challenger.spells, launch?.tactics ?? [], tc.initialMs > 0, campaign.relics) : null
+      setBattle(setup)
+      effectsLogRef.current = setup ? [createEffects(setup)] : []
+      setEffectsLog(effectsLogRef.current)
+      setLaunchExtras({ emp: launch?.emp ?? false, freeUndos: launch?.freeUndos ?? 0 })
+      setSpellFlash(null)
+      rngRef.current = seededRandom(hashSeed(`${challenger?.key ?? 'game'}:${Date.now()}`))
+      turnStartRef.current = performance.now()
+      bossEvalRef.current = null
+      timeTroubleRef.current = false
       lastOpeningRef.current = null
       setCasual(false)
       setSummary(null)
@@ -461,30 +713,32 @@ export function useGameController({ active }: { active: boolean }) {
       setGameOverDismissed(false)
       setAnalysisRequestedFor(null)
       setGameId((id) => id + 1)
-      const challenger = challengerBoss
-        ? bossPersona(challengerBoss)
-        : next.mode === 'ai' && next.legendId
-          ? legendPersona(getLegend(next.legendId), next.legendStrength)
-          : null
       if (challenger) {
         sfx.timeTravel()
         window.setTimeout(() => personaSay(challenger, 'intro'), 1700)
+        if (setup && setup.spells.length > 0) {
+          const names = setup.spells.map((id) => SPELLS[id].name).join(', ')
+          window.setTimeout(() => showToast('warning', `${challenger.name} wields ${names}`, SPELLS[setup.spells[0] ?? 'frost-sigil'].trigger, 4200), 2600)
+        }
       } else {
         sfx.notify()
       }
     },
-    [analysis, clock, game, playEngine],
+    [analysis, battle, clock, game, gameId, playEngine],
   )
 
   const loadReview = useCallback(
     (match: MatchRecord) => {
       playEngine.stop()
       analysis.cancel()
-      if (!game.loadGame(match.pgn, match.result)) {
+      if (!game.loadGame(match.pgn, match.result, match.variant ?? [])) {
         showToast('warning', 'Could not open game', 'The saved PGN is invalid.')
         return
       }
       setReview(match)
+      setBattle(null)
+      effectsLogRef.current = []
+      setEffectsLog([])
       // Campaign reviews show the boss once its realm chunk arrives.
       // (A failed download just leaves the generic opponent bar; the map offers a retry.)
       if (match.bossId) loadRealmRoster(realmOfBoss(match.bossId)).catch(() => undefined)
@@ -586,9 +840,23 @@ export function useGameController({ active }: { active: boolean }) {
       ? { from: evaluation.bestMove.slice(0, 2), to: evaluation.bestMove.slice(2, 4) }
       : null
 
+  // Spell / tactic overlays for the board (only on your live turn).
+  const yourLiveTurn = Boolean(battle) && isAiMode && isPlaying && timeMachine.isLive && game.turn === humanColor
+  const frozenSquare = yourLiveTurn ? (effects?.frozen ?? null) : null
+  const specialTargets = useMemo(
+    () => (yourLiveTurn && effects ? humanSpecialMoves(effects, game.fen, humanColor).map((m) => ({ from: m.from, to: m.to, kind: m.kind })) : []),
+    [effects, game.fen, humanColor, yourLiveTurn],
+  )
+
   return {
     settings,
     gameSettings,
+    battle,
+    effects,
+    frozenSquare,
+    specialTargets,
+    spellFlash,
+    freeUndos: launchExtras.freeUndos,
     theme,
     pieceSet,
     legend,

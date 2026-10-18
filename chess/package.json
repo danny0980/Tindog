@@ -1,7 +1,7 @@
 {
   "name": "chess-arena",
   "private": true,
-  "version": "4.1.0",
+  "version": "5.0.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-stockfish.mjs",
@@ -11,14 +11,15 @@
     "lint": "oxlint",
     "validate:data": "node scripts/validate-data.mjs",
     "generate:puzzles": "node scripts/generate-puzzles.mjs 120",
-    "check": "npm run typecheck && npm run lint && npm run validate:data && npm run test:legends && npm run test:campaign && npm run test:resilience",
+    "check": "npm run typecheck && npm run lint && npm run validate:data && npm run test:legends && npm run test:campaign && npm run test:resilience && npm run test:roguelike",
     "preview": "vite preview",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run cap:sync && cap open android",
     "cap:ios": "npm run cap:sync && cap open ios",
     "test:legends": "node scripts/run-ts-test.mjs tests/legends.test.ts",
     "test:campaign": "node scripts/run-ts-test.mjs tests/campaign.test.ts",
-    "test:resilience": "node scripts/run-ts-test.mjs tests/resilience.test.ts"
+    "test:resilience": "node scripts/run-ts-test.mjs tests/resilience.test.ts",
+    "test:roguelike": "node scripts/run-ts-test.mjs tests/roguelike.test.ts"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.3",

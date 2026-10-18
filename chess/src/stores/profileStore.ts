@@ -9,6 +9,7 @@ import { EPOCH_IDS, LEGEND_IDS } from '../data/legends'
 import type { BossId, BossRecord, CampaignProgress, GrandRealmId, StarCount } from '../types/campaign'
 import type { EpochId, LegendId, LegendProgress } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
+import type { VariantEvent } from '../engine/variant'
 import { type LoadSource, createPersistentStore } from '../utils/store'
 import { PROFILE_VERSION, migrateProfile } from './migrations'
 import { arrayOf, asRecord, isRecord, num, oneOf, str, stringRecord } from '../utils/validate'
@@ -127,6 +128,16 @@ function isGameResult(v: unknown): v is GameResult {
   return (v.kind === 'checkmate' || v.kind === 'resign' || v.kind === 'timeout') && isColor(v.winner)
 }
 
+const SQUARE = /^[a-h][1-8]$/
+const isVariantEvent = (e: unknown): e is VariantEvent =>
+  isRecord(e) &&
+  typeof e.ply === 'number' &&
+  (e.kind === 'charge' || e.kind === 'leap' || e.kind === 'pass') &&
+  (e.color === 'w' || e.color === 'b') &&
+  typeof e.from === 'string' && SQUARE.test(e.from) &&
+  typeof e.to === 'string' && SQUARE.test(e.to) &&
+  typeof e.piece === 'string' && typeof e.san === 'string' && typeof e.before === 'string' && typeof e.after === 'string'
+
 function sanitizeMatch(v: unknown): MatchRecord | null {
   if (!isRecord(v) || typeof v.id !== 'string' || typeof v.pgn !== 'string' || !isGameResult(v.result)) return null
   const nullableNum = (x: unknown) => (typeof x === 'number' ? x : null)
@@ -151,6 +162,7 @@ function sanitizeMatch(v: unknown): MatchRecord | null {
     opening: typeof v.opening === 'string' ? v.opening : null,
     legendId: isLegendId(v.legendId) ? v.legendId : null,
     bossId: isBossId(v.bossId) ? v.bossId : null,
+    ...(Array.isArray(v.variant) ? { variant: v.variant.filter(isVariantEvent) } : {}),
   }
 }
 

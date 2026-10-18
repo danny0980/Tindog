@@ -14,12 +14,14 @@ import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import type { BattleOptions } from './battleOptions'
+import { BattleDraft } from './BattleDraft'
 import { BossBattleAction, BossDossier } from './BossDossier'
+import type { TacticId } from '../../types/spells'
 import { Reliquary } from './Reliquary'
 import { WorldMap } from './WorldMap'
 
 interface GrandCampaignProps {
-  onChallenge: (bossId: BossId, options: BattleOptions) => void
+  onChallenge: (bossId: BossId, options: BattleOptions, tactics: TacticId[]) => void
 }
 
 const updateCampaign = (fn: (c: CampaignProgress) => CampaignProgress) => profileStore.set((p) => ({ ...p, campaign: fn(p.campaign) }))
@@ -49,6 +51,7 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
   const [picked, setPicked] = useState<Partial<Record<GrandRealmId, BossId>>>({})
   const [sheetOpen, setSheetOpen] = useState(false)
   const [reliquaryOpen, setReliquaryOpen] = useState(false)
+  const [drafting, setDrafting] = useState<Boss | null>(null)
   const [options, setOptions] = useState<BattleOptions>({ color: 'w', timeControlId: 'none' })
 
   const realmUnlocked = isRealmUnlocked(realmId, progress)
@@ -67,9 +70,10 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
     setPicked((prev) => ({ ...prev, [realmId]: id }))
     if (!wide) setSheetOpen(true)
   }
+  // Battle → roguelike draft (tactics + loadout) → fight.
   const battle = (boss: Boss) => {
     setSheetOpen(false)
-    onChallenge(boss.id, options)
+    setDrafting(boss)
   }
 
   const unlockedSelected = Boolean(selected && roster && isBossUnlocked(selected, roster, progress))
@@ -209,6 +213,21 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
         >
           {dossier(false)}
         </Modal>
+      )}
+
+      {drafting && (
+        <BattleDraft
+          boss={drafting}
+          progress={progress}
+          timed={options.timeControlId !== 'none'}
+          onToggleRelic={toggle}
+          onClose={() => setDrafting(null)}
+          onConfirm={(tactics) => {
+            const boss = drafting
+            setDrafting(null)
+            onChallenge(boss.id, options, tactics)
+          }}
+        />
       )}
 
       <Reliquary open={reliquaryOpen} progress={progress} onClose={() => setReliquaryOpen(false)} onToggle={toggle} />

@@ -1,5 +1,6 @@
 import type { BoardThemeId, PieceSetId } from './theme'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from './chess'
+import type { VariantEvent } from '../engine/variant'
 import type { BossId, CampaignProgress } from './campaign'
 import type { LegendId, LegendProgress } from './legend'
 import type { QuestProgress } from './quest'
@@ -27,6 +28,8 @@ export interface MatchRecord {
   legendId: LegendId | null
   /** Grand Campaign boss, if any. */
   bossId: BossId | null
+  /** Chronos special plies (spells / tactics) needed to replay the game for review. */
+  variant?: VariantEvent[]
 }
 
 export interface EloPoint {

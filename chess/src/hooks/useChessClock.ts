@@ -70,7 +70,15 @@ export function useChessClock({ timeControl, activeColor, running, onFlag, tickM
 
   const reset = useCallback((tc: TimeControl) => setTimes(initialTimes(tc)), [])
   const restore = useCallback((snapshot: ClockTimes) => setTimes(snapshot), [])
+  /** Adds (or removes) time on one side — spells and tactics (never below zero). */
+  const adjust = useCallback(
+    (color: Color, deltaMs: number) => {
+      if (!enabled) return
+      setTimes((prev) => ({ ...prev, [color]: Math.max(0, prev[color] + deltaMs) }))
+    },
+    [enabled],
+  )
   const getTimes = useCallback((): ClockTimes => timesRef.current, [])
 
-  return { times, enabled, addIncrement, reset, restore, getTimes }
+  return { times, enabled, addIncrement, reset, restore, adjust, getTimes }
 }

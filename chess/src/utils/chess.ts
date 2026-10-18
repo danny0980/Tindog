@@ -6,12 +6,16 @@ export const opposite = (color: Color): Color => (color === 'w' ? 'b' : 'w')
 
 export const colorName = (color: Color): string => (color === 'w' ? 'White' : 'Black')
 
-/** Derives the result implied by the board position alone (mate / draws), if any. */
-export function getBoardResult(chess: Chess): GameResult | null {
+/**
+ * Derives the result implied by the board position alone (mate / draws), if any.
+ * `repetitions` overrides chess.js's own count — needed when the game history
+ * is longer than the chess.js instance's (Chronos special moves reload it).
+ */
+export function getBoardResult(chess: Chess, repetitions?: number): GameResult | null {
   if (chess.isCheckmate()) return { kind: 'checkmate', winner: opposite(chess.turn()) }
   if (chess.isStalemate()) return { kind: 'draw', reason: 'stalemate' }
   if (chess.isInsufficientMaterial()) return { kind: 'draw', reason: 'insufficient' }
-  if (chess.isThreefoldRepetition()) return { kind: 'draw', reason: 'threefold' }
+  if (repetitions !== undefined ? repetitions >= 3 : chess.isThreefoldRepetition()) return { kind: 'draw', reason: 'threefold' }
   if (chess.isDrawByFiftyMoves()) return { kind: 'draw', reason: 'fifty-move' }
   return null
 }

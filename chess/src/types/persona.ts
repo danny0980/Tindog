@@ -1,6 +1,8 @@
 import type { Difficulty } from './chess'
 import type { OpponentProfile } from './engine'
 import type { QuoteTrigger } from './legend'
+import type { SpellId } from './spells'
+import type { TauntTone } from './taunts'
 import type { BoardThemeId, PieceSetId } from './theme'
 
 /** Symbolic icons available to character portraits (mapped to lucide icons in PortraitEmblem). */
@@ -14,7 +16,7 @@ export type PortraitIcon =
   | 'key' | 'scan-eye' | 'bug' | 'terminal' | 'wifi' | 'lock' | 'network' | 'dna'
   | 'hexagon' | 'glasses' | 'shield-half' | 'bot' | 'radar' | 'factory' | 'crosshair' | 'cpu'
   | 'server' | 'brain-circuit' | 'circuit' | 'microchip' | 'clock' | 'nut' | 'infinity' | 'sunrise'
-  | 'hourglass' | 'music' | 'orbit' | 'star'
+  | 'hourglass' | 'music' | 'orbit' | 'star' | 'knight'
 
 /** Iconographic portrait: a gradient, a symbol and a monogram (no likenesses, no image assets). */
 export interface PortraitSpec {
@@ -45,4 +47,8 @@ export interface Persona {
   /** Arrival card: big caption ("AD 1805", "Neon Syndicate") and setting name. */
   arrivalCaption: string
   settingName: string
+  /** Signature spells (elite bosses and spell-casting legends). */
+  spells: readonly SpellId[]
+  /** Voice used for dynamic, board-aware taunts. */
+  tone: TauntTone
 }

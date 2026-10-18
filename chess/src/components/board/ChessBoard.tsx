@@ -3,6 +3,7 @@ import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } fr
 import { type Arrow, Chessboard, type PieceDropHandlerArgs, type PieceHandlerArgs, type SquareHandlerArgs } from 'react-chessboard'
 import type { Color, Move, MoveInput, PendingPromotion, PromotionPiece, Square } from '../../types/chess'
 import type { BoardTheme, PieceSet } from '../../types/theme'
+import { crossesFrozen } from '../../engine/variant'
 import { findKingSquare, isPromotionMove } from '../../utils/chess'
 import { buildPieces } from '../../utils/pieces'
 import { PromotionDialog } from './PromotionDialog'
@@ -33,6 +34,10 @@ interface ChessBoardProps {
   shakeKey?: number
   /** Fired when the user picks up / selects one of their pieces (haptics). */
   onPickup?: () => void
+  /** Chronos freeze spell: no piece may land on or pass through this square. */
+  frozenSquare?: Square | null
+  /** Rule-bending moves currently available to the player (Knight's Boot, Vanguard Charge). */
+  specialTargets?: ReadonlyArray<{ from: Square; to: Square; kind: string }>
   children?: ReactNode
 }
 
@@ -56,6 +61,8 @@ export function ChessBoard({
   arrows,
   shakeKey = 0,
   onPickup,
+  frozenSquare = null,
+  specialTargets,
   children,
 }: ChessBoardProps) {
   // Selection is tied to the position it was made in, so it clears itself whenever the FEN changes.
@@ -71,8 +78,15 @@ export function ChessBoard({
 
   const legalTargets = useMemo(() => {
     if (!selected) return new Map<Square, Move>()
-    return new Map(position.moves({ square: selected, verbose: true }).map((m) => [m.to, m] as const))
-  }, [position, selected])
+    const moves = position.moves({ square: selected, verbose: true }).filter((m) => !crossesFrozen(m, frozenSquare))
+    return new Map(moves.map((m) => [m.to, m] as const))
+  }, [frozenSquare, position, selected])
+
+  /** Destinations reachable only through a spell / tactic from the selected piece. */
+  const specialFromSelected = useMemo(
+    () => new Set<Square>(selected ? (specialTargets ?? []).filter((t) => t.from === selected && !legalTargets.has(t.to)).map((t) => t.to) : []),
+    [legalTargets, selected, specialTargets],
+  )
 
   const canMoveFrom = useCallback(
     (square: Square): boolean => movableColor !== null && position.get(square)?.color === movableColor,
@@ -96,7 +110,7 @@ export function ChessBoard({
   const handleSquareClick = useCallback(
     ({ square }: SquareHandlerArgs) => {
       if (!isSquare(square) || !movableColor) return
-      if (selected && legalTargets.has(square)) {
+      if (selected && (legalTargets.has(square) || specialFromSelected.has(square))) {
         attemptMove(selected, square)
         return
       }
@@ -109,7 +123,7 @@ export function ChessBoard({
       if (selected && square !== selected) attemptMove(selected, square)
       setSelection(null)
     },
-    [attemptMove, canMoveFrom, fen, legalTargets, movableColor, onPickup, selected],
+    [attemptMove, canMoveFrom, fen, legalTargets, movableColor, onPickup, selected, specialFromSelected],
   )
 
   const handlePieceDrag = useCallback(
@@ -156,10 +170,26 @@ export function ChessBoard({
     }
     if (selected) add(selected, h.selected)
     if (showLegalMoves) legalTargets.forEach((move, square) => add(square, move.isCapture() ? h.captureTarget : h.target))
+    // Spell / tactic destinations: a violet rune ring, distinct from normal targets.
+    specialFromSelected.forEach((square) =>
+      add(square, {
+        background: 'radial-gradient(circle, transparent 40%, rgba(167,139,250,0.95) 44%, rgba(167,139,250,0.35) 56%, transparent 62%)',
+        boxShadow: 'inset 0 0 14px rgba(167,139,250,0.6)',
+      }),
+    )
+    // Frozen square: an icy, pulsing seal.
+    if (frozenSquare) {
+      add(frozenSquare, {
+        background:
+          'repeating-linear-gradient(45deg, rgba(186,230,253,0.55) 0 6px, rgba(125,211,252,0.25) 6px 12px), radial-gradient(circle, rgba(224,242,254,0.9), rgba(56,189,248,0.4))',
+        boxShadow: 'inset 0 0 0 3px rgba(125,211,252,0.95), inset 0 0 22px rgba(14,165,233,0.85)',
+        animation: lowPower ? undefined : 'pulse-soft 1.6s ease-in-out infinite',
+      })
+    }
     if (hoverSquare && legalTargets.has(hoverSquare)) add(hoverSquare, h.hover)
     if (extraSquareStyles) Object.entries(extraSquareStyles).forEach(([square, style]) => add(square, style))
     return styles
-  }, [extraSquareStyles, h, hoverSquare, lastMove, legalTargets, position, selected, showLegalMoves])
+  }, [extraSquareStyles, frozenSquare, h, hoverSquare, lastMove, legalTargets, lowPower, position, selected, showLegalMoves, specialFromSelected])
 
   const boardArrows = useMemo<Arrow[]>(
     () =>

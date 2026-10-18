@@ -1,10 +1,159 @@
-# ♞ Chess Arena: AAA Edition (v4.1 · Grand Campaign)
+# ♞ Chess Arena: AAA Edition (v5.0 · Legends of the Board — RPG & Roguelike Edition)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 5.0: Legends of the Board — RPG & Roguelike Edition
+
+Four systems turn character battles into RPG encounters: **boss spells**, a **roguelike tactic draft**, **board-aware taunts**, and a new **Endless Gauntlet** survival mode.
+
+### Rule-bending moves, done safely (`src/engine/variant.ts`)
+Some spells and tactics break normal chess rules, so they are implemented at FEN level:
+
+| Move | Rule | Written as |
+|---|---|---|
+| **Charge** | A pawn steps one square diagonally forward onto an empty square; on the last rank it becomes a queen. | `e5~f6` |
+| **Leap** | A knight makes a 3 + 1 "camel" jump over anything, onto an empty square or an enemy piece (never the king). | `Nb1~c4` |
+| **Pass** | The side to move loses its turn. Only allowed when not in check. | `--` |
+
+Every generated move is validated: the resulting FEN must be legal, and the mover may never leave its own king in check. That keeps every position legal for chess.js and Stockfish.
+
+Special moves are stored as normal entries in the game history, so undo, the time machine, analysis, the captured-pieces bar and opening detection keep working. To make that possible, `useChessGame` now:
+- **History:** keeps the full history itself (special moves reload the chess.js instance).
+- **Undo:** restores saved positions instead of replaying moves.
+- **Threefold repetition:** counts repeats over the whole game.
+- **PGN export:** writes a `[Variant "Chronos Spells"]` PGN with comments.
+
+Matches with special moves also store them in `MatchRecord.variant`, so **reviews replay them exactly**.
+
+### 🔮 Boss spells (`src/engine/spellEngine.ts`, `src/data/spells.ts`)
+A pure reducer runs after every move and returns the new spell state plus events (casts, warnings, clock changes, Katana passes). The spell state is snapshotted per move, so undo and the time machine restore it exactly.
+
+| Spell (who) | Effect |
+|---|---|
+| **Frost Sigil** (Malakor) · **Faerie Ring** (Oberon) · **Arrow Storm** (Black Prince) · **Void Lock** (Warden Xal) | Every 5th boss move (with a warning one move before), an empty square freezes for your next move. No piece may land on it or pass through it. The board shows an icy tile, and moves through it are refused. The square is never chosen so that you'd be left without a legal move. |
+| **Berserker Charge** (Ragnar) · **Rally of Orléans** (Joan of Arc) | Once the boss loses a rook, its pawns may also make diagonal charges for the rest of the battle. |
+| **Time Dilation** (Einstein) · **Eternity** (The Infinite) | Every move you think for more than 15 s gives the boss +10 s. Only active in timed battles; untimed, it shows as dormant. |
+| **Ancient Fury** (Aurelion) · **Threat Analysis** (AEGIS Prime) · **Total Computation** (OMNICORE) | Every 5th move is announced, then computed at full engine power. |
+| **Shadow Step** (Hattori Hanzō) | Once per battle, when he is in check or his queen is attacked, a knight may make a leap (only one that's legal, e.g. one that blocks the check). |
+
+Every milestone (#10) and overlord (#20) boss in all five realms has a signature spell, as do Ragnar, Einstein and Malakor (in both Chronos and their campaign cameos). Einstein is also Realm I's overlord.
+
+**How the bosses choose spell moves.** The AI considers spell moves (charges and Shadow Steps) only when the engine agrees they're about as good as its best normal move: it checks each with a shallow search, within the boss's style tolerance. So spells add menace without making bosses blunder.
+
+**Visual and audio cues.**
+- A holographic banner over the board ("Frost Sigil charging", the spell name when it lands).
+- Spell chips that pulse while charging.
+- New procedural warning and cast sounds.
+- Toasts that name the frozen square.
+
+### 🎒 Roguelike tactic draft (`src/components/campaign/BattleDraft.tsx`)
+Pressing **Battle** on a Grand Campaign boss opens **Prepare for battle**:
+1. Review the boss's spells.
+2. Set your Reliquary loadout (it uses the same store as the Reliquary).
+3. Draft **1 of 3** tactic cards for this battle.
+
+The deal is seeded by boss and attempt, so reopening the screen can't reroll it. Clock-only cards appear only in timed battles.
+
+| Tactic | Effect |
+|---|---|
+| **Knight's Boot** | Once, a knight may make a 3 + 1 leap. Its targets show as violet rings. |
+| **Chronos Hourglass** | +20 s every time you're put in check. |
+| **Katana Blade** | Your first capture makes the boss lose its next turn (as soon as it isn't in check). |
+| **Vanguard Charge** | Once, a pawn may charge diagonally. |
+| **Spell Ward** | Blocks the boss's first spell. |
+| **Second Wind** | +60 s the first time you finish a move under 30 s. |
+
+The original brief described Knight's Boot as "one leap over a blocking piece". Knights already jump over pieces, so it's implemented as the long 3 + 1 leap instead.
+
+**Relic synergies.** Owning these relics upgrades the draft:
+- **Hourglass of Time:** Chronos Hourglass gives +30 s.
+- **Smoke Veil:** Knight's Boot can be used twice.
+- **Shield of Kings:** Spell Ward blocks two spells.
+- **Starforged Crown:** the draft shows 4 cards and you take 2.
+
+During the battle, the **Spells & tactics HUD** shows both sides' powers and their state; tap a chip for its rules. In one-handed mode it appears as compact chips under the opponent's bar.
+
+### 💬 Dynamic psychological taunts (`src/engine/taunts.ts`, `src/data/taunts.ts`)
+After every move, `analyzeTaunt()` picks the most important thing that happened and returns it with a priority and a mood. It covers:
+- **Queens:** a hanging queen ("A reckless sacrifice!"), your queen lost, or the boss's queen taken.
+- **Big swings:** blunders and brilliancies, detected from the boss's own search with no extra engine work (±250 cp compared with what it expected after its last move).
+- **Material:** rook, knight and bishop captures, and promotions by either side.
+- **Checks:** checks given and received.
+- **Your king:** king walks and early castling.
+- **The clock and spells:** slow moves, time trouble, spells cast, spells warded and tactic tricks.
+
+**Voices.** Lines come in three voices, *fierce*, *cold* and *sly*, mapped from each boss's archetype or legend. Templates are filled with the real piece, square and spell. The legends' handwritten check lines are still used half the time.
+
+**Interruptions.** Urgent events (priority 80 or above) cut through the chatter cooldown.
+
+**Speech bubbles.** Each bubble takes a mood:
+- **smug** 😄
+- **angry** 😠 (the bubble shakes)
+- **shocked** ⚡
+- **tense**
+- **calm**
+
+Urgent lines stay up longer, in larger text.
+
+### ♾️ Endless Gauntlet (`src/components/gauntlet/`, `src/utils/gauntlet.ts`)
+Open it from **Legends → Endless Gauntlet**.
+- **Time bank as health:** a single **5:00 time bank** is your health, carried from battle to battle (+2 s per move). The boss always gets 10:00.
+- **Escalating bosses:** opponents come from all 100 campaign characters, spells included, ramping from about 800 Elo by +110 per round. Only the realm chunks a round needs are downloaded.
+- **Colours alternate** each round.
+- **Takebacks are forbidden.**
+- **Results:**
+  - **Win:** restores 35% of the time you spent, plus 15 s. Then you pick **1 of 3 boons**: Time Cache +60 s, Tempo (+1 s increment for the whole run), EMP Burst, Tactics Cache or Aegis (one takeback).
+  - **Draw:** the run continues without a restore.
+  - **Loss or flag:** the run ends.
+- **Score:** each win scores the boss's Elo × a streak bonus, plus the seconds you have left. The run pays up to 300 coins.
+- **Interruptions:** if the app closes mid-battle, the next launch offers *Resume* (same boss, −60 s) or *End run*.
+- **Forfeits:** starting another game mid-battle forfeits the run.
+
+**Leaderboards** (`src/services/leaderboard.ts`).
+- **Local:** your top 10 runs and personal bests.
+- **Global:** a real HTTP client that's off by default, because there is no server.
+  - **Enable:** build with `VITE_LEADERBOARD_URL=https://your.server/gauntlet`.
+  - **API:** `GET ?limit=N` must return `LeaderboardEntry[]` (or `{ entries }`), and `POST` takes a `LeaderboardEntry` JSON body.
+  - **Robustness:** responses are validated, and requests time out after 6 s and are retried.
+
+Runs are never rated, so the Gauntlet can't be farmed for Elo.
+
+### Integration & test guide
+
+```bash
+cd chess
+npm install
+npm run check              # typecheck + lint + data + legends + campaign + resilience + roguelike tests
+npm run test:roguelike     # 76 checks: variant moves, spells, draft, taunts, gauntlet, leaderboard client
+npm run dev
+```
+
+1. **Draft and Knight's Boot.** Go to Legends → Grand Campaign → Hammurabi → **Battle**. Pick *Knight's Boot* (the deal varies per attempt; resign once for a new deal if it isn't offered).
+   - Tap your b1 knight: violet rings appear on a4 and c4.
+   - Leap there. The chip turns to "used", and the move list shows `Nb1~c4`.
+   - Resign, then open the game from Profile → match history: the review replays the leap.
+2. **Frost Sigil.** Seed `{"version":2,"legends":{"defeated":{"aerith":"2026-01-01T00:00:00.000Z"},"wins":{},"losses":{},"draws":{},"epochsVisited":[]}}` into `chess-arena:profile:v1`, then play Malakor (Legends → Fantasy Realm).
+   - After his 4th move, the Frost Sigil chip pulses (*charging*).
+   - After his 5th, a square turns to ice and Malakor taunts you.
+   - Moves onto or through that square are refused with a "Frozen square" toast.
+3. **Berserker and Katana.** Win a rook from Ragnar (Chronos or campaign #7): the HUD switches to *pawns charging*, and he may answer with `e5~f6`-style steps. With *Katana Blade* drafted, your first capture makes the boss skip a turn (a `--` ply).
+4. **Taunts.** Hang your queen, give or take checks, think for 25 s, or let your clock drop under 20 s in a timed battle. The bubble changes colour and icon by mood.
+5. **Gauntlet.** Go to Legends → Endless Gauntlet → **Start a run** → **Fight round 1**.
+   - The clocks show 5:00 (you) and 10:00 (the boss), and Undo is disabled.
+   - Win to see the boon picker, or resign to see the run summary and the local leaderboard.
+   - Reload in the middle of a battle to see the *interrupted* resume option.
+6. **Mobile.** In one-handed mode the spell chips sit under the opponent's bar, and the draft and boon screens are scrollable sheets. Landscape keeps the battle on one screen.
+
+**Limitations.**
+- **Spells and AI strength:** spells are tuned conservatively (bosses only use rule-bending moves the engine approves), and their effect on win rates hasn't been measured with real players.
+- **Global leaderboard:** it needs a server you host; nothing is sent anywhere unless `VITE_LEADERBOARD_URL` is set.
+- **Bundle size:** the eager bundle grew by about 13.5 kB gzip (taunt text, spell data, the variant engine and the Gauntlet logic used by the game controller). The Gauntlet screen itself is lazy-loaded (~3.9 kB gzip).
 
 ---
 

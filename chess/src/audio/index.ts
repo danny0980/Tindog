@@ -62,6 +62,8 @@ export const sfx = {
   },
   score: fanfares.playScore,
   timeTravel: fanfares.playTimeTravel,
+  spellWarning: fanfares.playSpellWarning,
+  spellCast: fanfares.playSpellCast,
   pickup(): void {
     haptic('pickup')
   },

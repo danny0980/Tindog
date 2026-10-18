@@ -1,4 +1,4 @@
-import { Coins, Crown, Eye, Handshake, Hourglass, Map as MapIcon, Microscope, RotateCcw, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Coins, Crown, Eye, Infinity as InfinityIcon, Handshake, Hourglass, Map as MapIcon, Microscope, RotateCcw, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
 import { StarRow } from '../campaign/StarRow'
@@ -16,12 +16,13 @@ interface GameOverModalProps {
   /** Same opponent and settings again (campaign battles). */
   onRematch: () => void
   onOpenCampaign: () => void
+  onOpenGauntlet: () => void
   onReview: () => void
   onAnalyze: () => void
   onShare: () => void
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onReview, onAnalyze, onShare }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -40,6 +41,11 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
       size="sm"
       footer={
         <div className="space-y-2">
+          {summary.gauntlet ? (
+            <Button variant="primary" className="w-full" onClick={onOpenGauntlet} icon={<InfinityIcon className="size-4" />}>
+              {summary.gauntlet.ended ? 'Gauntlet results' : 'Continue the Gauntlet'}
+            </Button>
+          ) : null}
           {summary.campaign ? (
             <div className="grid grid-cols-2 gap-2">
               <Button variant="primary" onClick={onOpenCampaign} icon={<MapIcon className="size-4" />}>
@@ -50,7 +56,7 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               </Button>
             </div>
           ) : null}
-          <Button variant={summary.campaign ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
+          <Button variant={summary.campaign || summary.gauntlet ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
             Analyze game
           </Button>
           <div className="grid grid-cols-3 gap-2">
@@ -112,6 +118,27 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               <span className="font-mono text-sm font-bold text-yellow-300">+{summary.legend.coins}</span>
             </div>
             {summary.legend.rewards.length > 0 && <div className="mt-1 text-xs text-slate-300">Unlocked: {summary.legend.rewards.join(' · ')}</div>}
+          </div>
+        )}
+
+        {summary.gauntlet && (
+          <div className="mt-3 w-full space-y-1 rounded-xl border border-fuchsia-300/40 bg-fuchsia-400/10 p-3 text-left" data-gauntlet-summary>
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-fuchsia-200">
+              <InfinityIcon className="size-3.5" /> Endless Gauntlet
+            </div>
+            <div className="text-sm font-semibold text-white">
+              {summary.gauntlet.ended
+                ? `Run over — ${summary.gauntlet.defeated} ${summary.gauntlet.defeated === 1 ? 'boss' : 'bosses'} defeated`
+                : summary.gauntlet.outcome === 'win'
+                  ? `${summary.gauntlet.bossName} falls! +${Math.round(summary.gauntlet.restoredMs / 1000)} s restored`
+                  : `A draw with ${summary.gauntlet.bossName} — the run goes on`}
+            </div>
+            <div className="flex flex-wrap gap-x-3 font-mono text-xs text-slate-300">
+              <span>Score {summary.gauntlet.score.toLocaleString()}</span>
+              {summary.gauntlet.scoreGained > 0 && <span className="text-emerald-300">+{summary.gauntlet.scoreGained.toLocaleString()}</span>}
+              {summary.gauntlet.coins > 0 && <span className="text-yellow-300">+{summary.gauntlet.coins} coins</span>}
+              {summary.gauntlet.newBest && <span className="text-amber-200">New best!</span>}
+            </div>
           </div>
         )}
 

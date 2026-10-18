@@ -6,6 +6,7 @@ import { BoardHologram } from '../components/board/BoardHologram'
 import { ChessBoard } from '../components/board/ChessBoard'
 import { EvalBar } from '../components/board/EvalBar'
 import { CampaignBattleStrip } from '../components/campaign/CampaignBattleStrip'
+import { SpellHud } from '../components/campaign/SpellHud'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
 import { ChessClock } from '../components/game/ChessClock'
 import { ControlPanel } from '../components/game/ControlPanel'
@@ -42,6 +43,8 @@ interface PlayViewProps {
   onOpenSettings: () => void
   /** Opens the Grand Campaign world map. */
   onOpenCampaign: () => void
+  /** Opens the Endless Gauntlet screen. */
+  onOpenGauntlet: () => void
 }
 
 function buildShareSummary(game: GameController): string {
@@ -62,7 +65,7 @@ function buildShareSummary(game: GameController): string {
 
 const SWIPE_LABELS: Record<SwipeDirection, string> = { left: 'Undo', right: 'Board flipped', up: 'Moves', down: 'Menu' }
 
-export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign }: PlayViewProps) {
+export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -217,8 +220,13 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           showLegalMoves={settings.showLegalMoves}
           showCoordinates={settings.showCoordinates}
           arrows={arrows}
+          frozenSquare={game.frozenSquare}
+          specialTargets={game.specialTargets}
         >
           {hologram && !settings.batterySaver && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
+          {game.spellFlash && !settings.batterySaver && timeMachine.isLive && (
+            <BoardHologram key={`spell-${game.spellFlash.id}`} text={game.spellFlash.text} tone={game.spellFlash.tone} />
+          )}
         </ChessBoard>
       </div>
     </div>
@@ -267,6 +275,9 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
     />
   )
 
+  const spellHud = (compact: boolean) =>
+    game.battle && game.effects && !game.review ? <SpellHud setup={game.battle} effects={game.effects} opponentName={game.opponentName} compact={compact} /> : null
+
   // The human's own colour sits at the bottom (the side being "held").
   const bottomColor = game.orientation
   const topColor = opposite(game.orientation)
@@ -278,6 +289,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           <div className="safe-px shrink-0 space-y-2" {...swipe}>
             {reviewBanner}
             {renderPlayer(topColor)}
+            {spellHud(true)}
           </div>
           {/* Size container: the board takes the largest square the leftover space allows. */}
           <div className="safe-px flex min-h-0 flex-1 items-center justify-center py-2 [container-type:size]">
@@ -346,6 +358,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
               />
             </div>
             {campaignStrip}
+            {spellHud(false)}
             <ControlPanel
               canUndo={game.canUndo}
               canResign={game.canResign}
@@ -451,6 +464,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         onOpenCampaign={() => {
           game.dismissGameOver()
           onOpenCampaign()
+        }}
+        onOpenGauntlet={() => {
+          game.dismissGameOver()
+          onOpenGauntlet()
         }}
         onReview={game.dismissGameOver}
         onAnalyze={game.requestAnalysis}

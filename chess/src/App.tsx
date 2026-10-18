@@ -13,7 +13,11 @@ import { lazyWithRetry } from './utils/lazyWithRetry'
 import { updateSettings } from './stores/settingsStore'
 import type { MatchRecord } from './types/profile'
 import type { BattleOptions } from './components/campaign/battleOptions'
-import type { BossId } from './types/campaign'
+import type { Boss, BossId } from './types/campaign'
+import type { TacticId } from './types/spells'
+import { beginGauntletBattle } from './stores/gauntletActions'
+import { gauntletStore } from './stores/gauntletStore'
+import { BASE_INCREMENT_MS, BOSS_CLOCK_MS } from './utils/gauntlet'
 import type { ChallengeOptions, LegendId } from './types/legend'
 import { setThemeOverride } from './stores/themeOverrideStore'
 import type { AppView } from './types/ui'
@@ -90,8 +94,9 @@ export default function App() {
 
   // Grand Campaign: launch a boss battle from the world map (its realm chunk is already loaded).
   const challengeBoss = useCallback(
-    (bossId: BossId, options: BattleOptions) => {
-      game.startNewGame({
+    (bossId: BossId, options: BattleOptions, tactics: TacticId[]) => {
+      game.startNewGame(
+        {
         ...game.gameSettings,
         mode: 'ai',
         bossId,
@@ -99,11 +104,43 @@ export default function App() {
         legendStrength: 'authentic',
         playerColor: options.color,
         timeControlId: options.timeControlId,
-      })
+        },
+        { kind: 'campaign', tactics },
+      )
       navigate('play')
     },
     [game, navigate],
   )
+
+  // Endless Gauntlet: your bank vs the boss's clock, boons applied, colours alternate.
+  const fightGauntlet = useCallback(
+    (boss: Boss) => {
+      const run = gauntletStore.get().run
+      if (!run) return
+      beginGauntletBattle(boss)
+      game.startNewGame(
+        {
+          ...game.gameSettings,
+          mode: 'ai',
+          bossId: boss.id,
+          legendId: null,
+          legendStrength: 'authentic',
+          playerColor: run.round % 2 === 1 ? 'w' : 'b',
+          timeControlId: 'custom',
+          customMinutes: BOSS_CLOCK_MS / 60_000,
+          customIncrementSeconds: (BASE_INCREMENT_MS + run.boons.incrementMs) / 1000,
+        },
+        { kind: 'gauntlet', tactics: run.boons.tactics, humanClockMs: run.bankMs, emp: run.boons.empBattles > 0, freeUndos: run.boons.shields },
+      )
+      navigate('play')
+    },
+    [game, navigate],
+  )
+
+  const openGauntlet = useCallback(() => {
+    updateSettings({ legendsScreen: 'gauntlet' })
+    navigate('legends')
+  }, [navigate])
 
   const openCampaignMap = useCallback(() => {
     updateSettings({ legendsScreen: 'grand' })
@@ -143,12 +180,13 @@ export default function App() {
             onNewGameOpenChange={setNewGameOpen}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenCampaign={openCampaignMap}
+            onOpenGauntlet={openGauntlet}
           />
           </ErrorBoundary>
         </div>
         <ErrorBoundary scope="view" resetKey={view} label={`the ${view} screen`}>
         <Suspense fallback={<ViewFallback />}>
-          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} />}
+          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onFightGauntlet={fightGauntlet} onReturnToBoard={() => navigate('play')} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}

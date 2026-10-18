@@ -8,6 +8,7 @@ import type { AchievementDef, MatchRecord, PlayerProfile } from '../types/profil
 import type { Puzzle } from '../types/puzzle'
 import type { QuestEvents } from '../types/quest'
 import { CAMPAIGNS, EPOCHS, getCampaign, getEpoch, getLegend, isCampaignComplete, strengthInfo } from '../data/legends'
+import type { VariantEvent } from '../engine/variant'
 import type { BossId, GrandRealmId } from '../types/campaign'
 import type { LegendId, LegendStrength } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
@@ -59,6 +60,8 @@ export interface MatchInput {
   opponentElo?: number
   /** Firewall Core relic: the most Elo a rated defeat may cost. */
   eloLossCap?: number
+  /** Special plies, stored so the game can be reviewed. */
+  variant?: VariantEvent[]
 }
 
 export interface MatchOutcome {
@@ -112,6 +115,7 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
     opening: input.opening,
     legendId: input.legendId ?? null,
     bossId: input.bossId ?? null,
+    ...(input.variant && input.variant.length > 0 ? { variant: input.variant } : {}),
   }
 
   if (!isAi || input.humanColor === null || input.difficulty === null) {

@@ -4,6 +4,7 @@ import { CAMPAIGNS, LEGENDS, campaignLegends, isCampaignComplete, isLegendUnlock
 import type { CampaignProgress } from '../../types/campaign'
 import type { CampaignId, LegendId } from '../../types/legend'
 import { GrandCampaignCard } from '../campaign/GrandCampaignCard'
+import { GauntletCard } from '../gauntlet/GauntletCard'
 import type { LegendsScreen } from '../../types/settings'
 import { LegendPortrait } from './LegendPortrait'
 
@@ -32,6 +33,7 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <GrandCampaignCard progress={campaign} onOpen={() => onOpen('grand')} />
+      <GauntletCard onOpen={() => onOpen('gauntlet')} />
       {CAMPAIGNS.map((campaign) => {
         const legends = campaignLegends(campaign.id)
         const done = legends.filter((l) => defeated[l.id]).length

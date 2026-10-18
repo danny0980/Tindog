@@ -5,6 +5,8 @@ import type { Difficulty } from '../types/chess'
 import type { Legend, LegendStrength } from '../types/legend'
 import type { Persona } from '../types/persona'
 import { applyStrength, epochLabel, getEpoch, legendElo } from './legends'
+import { LEGEND_SPELLS, spellsForBoss } from './spells'
+import { ARCHETYPE_TONE, LEGEND_TONE } from './taunts'
 
 /** Closest Quick Play difficulty bucket for a rating (coins and stats). */
 export function difficultyForElo(elo: number): Difficulty {
@@ -29,6 +31,8 @@ export function legendPersona(legend: Legend, strength: LegendStrength): Persona
     pieceSetId: epoch.pieceSetId,
     arrivalCaption: epochLabel(epoch),
     settingName: epoch.name,
+    spells: LEGEND_SPELLS[legend.id] ?? [],
+    tone: LEGEND_TONE[legend.id],
   }
 }
 
@@ -46,5 +50,7 @@ export function bossPersona(boss: Boss): Persona {
     pieceSetId: boss.pieceSetId,
     arrivalCaption: boss.arrivalCaption,
     settingName: boss.settingName,
+    spells: spellsForBoss(boss),
+    tone: boss.legendRef ? LEGEND_TONE[boss.legendRef] : ARCHETYPE_TONE[boss.archetype],
   }
 }

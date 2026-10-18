@@ -1,6 +1,6 @@
 // Icon and size tables shared by every character / relic emblem.
 import {
-  Anchor, Apple, Atom, Axe, Binary, Bird, BookOpen, Bone, Bot, BrainCircuit, Bug, Church, CircuitBoard, Clock, CloudLightning, Compass, Cpu,
+  Anchor, Apple, Atom, Axe, Binary, ChessKnight, Bird, BookOpen, Bone, Bot, BrainCircuit, Bug, Church, CircuitBoard, Clock, CloudLightning, Compass, Cpu,
   Crosshair, Crown, Dna, Drama, Eclipse, Eye, Factory, Feather, Flag, Flame, Flower2, Gem, Ghost, Glasses, Globe, Hammer, Hexagon, Hourglass,
   Infinity as InfinityIcon, KeyRound, Leaf, Lock, Map as MapIcon, Microchip, Moon, Mountain, Music, Network, Nut, Orbit, Palette, Pyramid, Radar, Radiation,
   Sailboat, Scale, ScanEye, ScrollText, Server, Shield, ShieldHalf, Ship, Skull, Snowflake, Sparkles, Star, Sun, Sunrise, Sword, Swords, Target,
@@ -18,7 +18,7 @@ export const PORTRAIT_ICONS: Record<PortraitIcon, typeof Atom> = {
   key: KeyRound, 'scan-eye': ScanEye, bug: Bug, terminal: Terminal, wifi: Wifi, lock: Lock, network: Network, dna: Dna,
   hexagon: Hexagon, glasses: Glasses, 'shield-half': ShieldHalf, bot: Bot, radar: Radar, factory: Factory, crosshair: Crosshair, cpu: Cpu,
   server: Server, 'brain-circuit': BrainCircuit, circuit: CircuitBoard, microchip: Microchip, clock: Clock, nut: Nut, infinity: InfinityIcon, sunrise: Sunrise,
-  hourglass: Hourglass, music: Music, orbit: Orbit, star: Star,
+  hourglass: Hourglass, music: Music, orbit: Orbit, star: Star, knight: ChessKnight,
 }
 
 export const PORTRAIT_SIZES = {

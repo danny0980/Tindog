@@ -6,6 +6,12 @@ export interface BattleOptions {
   timeControlId: string
 }
 
+/** Clock for a launch: the dossier's choice, or a bounty's fixed contract clock. */
+export interface ChallengeClock extends BattleOptions {
+  customMinutes?: number
+  customIncrementSeconds?: number
+}
+
 export const CAMPAIGN_TIME_CONTROLS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'none', label: '∞' },
   { id: 'blitz-5-3', label: '5 + 3' },

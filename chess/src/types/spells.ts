@@ -1,5 +1,6 @@
 import type { RelicId } from './campaign'
 import type { Square } from './chess'
+import type { PotionId, RestrictionId, StuckPiece, Trap, WeatherId, WeatherState } from './rpg'
 import type { PortraitIcon } from './persona'
 
 /** The rule-level effect a spell has; several bosses share a mechanic under their own name. */
@@ -30,6 +31,8 @@ export interface SpellDef {
   icon: PortraitIcon
   /** True when the spell needs a running clock to have any effect. */
   needsClock: boolean
+  /** Freeze spells: how many of your moves the frost lasts. */
+  duration?: number
 }
 
 /** One-battle tactical buffs drafted before a fight (roguelike layer). */
@@ -51,9 +54,12 @@ export interface Synergy {
   description: string
 }
 
+/** What launched a character battle (decides how its result is booked). */
+export type BattleKind = 'campaign' | 'legend' | 'gauntlet' | 'event' | 'bounty' | 'tournament'
+
 /** Rules in force for one battle (computed when it starts, fixed until it ends). */
 export interface BattleSetup {
-  kind: 'campaign' | 'legend' | 'gauntlet'
+  kind: BattleKind
   /** Spells the opponent can cast. */
   spells: readonly SpellId[]
   /** Tactics the player drafted. */
@@ -64,6 +70,16 @@ export interface BattleSetup {
   hourglassBonusMs: number
   bootCharges: number
   wardCharges: number
+  /** Bounty contract imposed on the player, if any. */
+  restriction: RestrictionId | null
+  /** Arena weather for the whole battle. */
+  weather: WeatherId
+  /** Parley / elite ambush: −1 weakens, +1 empowers the opponent. */
+  bossBoost: -1 | 0 | 1
+  /** Multiplier on campaign coin rewards (parley choices, Ironman). */
+  rewardFactor: number
+  /** Ironman campaign battle: no takebacks, a loss wipes the campaign. */
+  ironman: boolean
 }
 
 /**
@@ -73,8 +89,20 @@ export interface BattleSetup {
 export interface BattleEffects {
   /** Opponent moves made so far (drives spell cadence; passes don't count). */
   bossMoves: number
-  /** Square the player may not move to or through on their current move. */
-  frozen: Square | null
+  /** Frost and glue traps on the board. */
+  traps: Trap[]
+  /** Opponent pieces stuck in glue. */
+  stuck: StuckPiece[]
+  /** Arena weather (snow squares, wind direction). */
+  weather: WeatherState
+  /** Plies played (weather cadence). */
+  plies: number
+  /** Glue traps you can still lay (trap kits). */
+  glueCharges: number
+  /** Extra long-leap charges (Sacrifice Altar, Awakening Draught). */
+  awakening: number
+  altarUsed: boolean
+  potionsUsed: number
   /** Spell the opponent is charging (shown as a warning before it lands). */
   warning: { spell: SpellId; inBossMoves: number } | null
   /** The opponent's next move is computed at full power. */
@@ -96,3 +124,6 @@ export type BattleEvent =
   | { kind: 'spell-blocked'; spell: SpellId }
   | { kind: 'tactic'; tactic: TacticId; detail: string }
   | { kind: 'clock'; side: 'human' | 'boss'; deltaMs: number; reason: string }
+  | { kind: 'trap'; detail: string; sprung: boolean }
+  | { kind: 'weather'; detail: string }
+  | { kind: 'potion'; potion: PotionId; detail: string }

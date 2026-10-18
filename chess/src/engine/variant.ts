@@ -7,13 +7,15 @@
 //  leap   — a knight makes a "camel" leap (3 + 1) over anything, onto an empty
 //           square or an enemy piece other than the king (Knight's Boot, Shadow Step).
 //  pass   — the side to move loses its turn (Katana Blade). Only when not in check.
+//  sacrifice — you remove one of your own pawns at the Sacrifice Altar; it is
+//           still your move. Never allowed if it would expose your king.
 //
 // Special plies are recorded as synthetic `Move` objects with real before /
 // after FENs, so undo, the time machine, analysis and review keep working.
 import { Chess, validateFen } from 'chess.js'
 import type { Color, Move, PieceSymbol, Square } from '../types/chess'
 
-export type SpecialKind = 'charge' | 'leap' | 'pass'
+export type SpecialKind = 'charge' | 'leap' | 'pass' | 'sacrifice'
 
 export interface SpecialMove {
   kind: SpecialKind
@@ -142,7 +144,11 @@ function syntheticMove(kind: SpecialKind, color: Color, from: Square, to: Square
   }
   const letter = piece === 'p' ? '' : piece.toUpperCase()
   const san =
-    kind === 'pass' ? '--' : `${letter}${from}~${captured ? 'x' : ''}${to}${promotion ? `=${promotion.toUpperCase()}` : ''}${suffix}`
+    kind === 'pass'
+      ? '--'
+      : kind === 'sacrifice'
+        ? `X${from}`
+        : `${letter}${from}~${captured ? 'x' : ''}${to}${promotion ? `=${promotion.toUpperCase()}` : ''}${suffix}`
   const move: Move = {
     color,
     from,
@@ -150,9 +156,9 @@ function syntheticMove(kind: SpecialKind, color: Color, from: Square, to: Square
     piece,
     ...(captured ? { captured } : {}),
     ...(promotion ? { promotion } : {}),
-    flags: kind === 'pass' ? 'z' : captured ? 'xc' : 'x',
+    flags: kind === 'pass' ? 'z' : kind === 'sacrifice' ? 's' : captured ? 'xc' : 'x',
     san,
-    lan: kind === 'pass' ? '--' : `${from}${to}${promotion ?? ''}`,
+    lan: kind === 'pass' ? '--' : kind === 'sacrifice' ? `X${from}` : `${from}${to}${promotion ?? ''}`,
     before,
     after,
     isCapture: () => captured !== undefined,
@@ -233,9 +239,30 @@ export function passTurn(fen: string): SpecialMove | null {
   return syntheticMove('pass', p.turn, king, king, 'k', fen, after)
 }
 
+/**
+ * Sacrifice Altar: `color` removes its own pawn on `square`. The turn does not
+ * pass. Refused when the pawn was shielding the king.
+ */
+export function sacrificePawn(fen: string, square: Square, color: Color): SpecialMove | null {
+  const p = parseFen(fen)
+  const piece = p.board.get(square)
+  if (p.turn !== color || !piece || piece.type !== 'p' || piece.color !== color) return null
+  const board = new Map(p.board)
+  board.delete(square)
+  const after = buildFen({ ...p, board, half: 0 })
+  return syntheticMove('sacrifice', color, square, square, 'p', fen, after)
+}
+
 /** Rebuilds a special ply from its stored record (match review). */
 export function specialFromEvent(e: VariantEvent): SpecialMove | null {
-  const all = e.kind === 'charge' ? generateCharges(e.before, e.color) : e.kind === 'leap' ? generateLeaps(e.before, e.color) : [passTurn(e.before)]
+  const all =
+    e.kind === 'charge'
+      ? generateCharges(e.before, e.color)
+      : e.kind === 'leap'
+        ? generateLeaps(e.before, e.color)
+        : e.kind === 'sacrifice'
+          ? [sacrificePawn(e.before, e.from, e.color)]
+          : [passTurn(e.before)]
   return all.find((s) => s !== null && s.from === e.from && s.to === e.to && s.move.after === e.after) ?? null
 }
 
@@ -253,7 +280,11 @@ export const toVariantEvent = (special: SpecialMove, ply: number): VariantEvent 
   after: special.move.after,
 })
 
-export const isSpecialMove = (move: Pick<Move, 'flags'>): boolean => move.flags.includes('x') || move.flags.includes('z')
+export const isSpecialMove = (move: Pick<Move, 'flags'>): boolean => move.flags.includes('x') || move.flags.includes('z') || move.flags.includes('s')
+
+/** Kind of a special ply recorded in the history. */
+export const specialKindOf = (move: Pick<Move, 'flags' | 'piece'>): SpecialKind =>
+  move.flags.includes('z') ? 'pass' : move.flags.includes('s') ? 'sacrifice' : move.piece === 'n' ? 'leap' : 'charge'
 
 // ── Frozen squares ───────────────────────────────────────────────────────────
 

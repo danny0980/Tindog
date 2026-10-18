@@ -8,6 +8,7 @@ import { haptic } from './haptics'
 import { playPieceSound } from './pieceSounds'
 
 export { ambientMusic, audioEngine, haptic }
+export { FOCUS_TRACKS, type FocusTrack, focusSoundscape } from './focusSounds'
 
 /** The material actually used for piece sounds (user override or theme default). */
 export const resolveMaterial = (setting: SoundMaterialSetting, theme: BoardTheme): SoundMaterial =>
@@ -64,6 +65,24 @@ export const sfx = {
   timeTravel: fanfares.playTimeTravel,
   spellWarning: fanfares.playSpellWarning,
   spellCast: fanfares.playSpellCast,
+  potion: fanfares.playPotion,
+  trap(): void {
+    fanfares.playTrap()
+    haptic('capture')
+  },
+  severeCheck(): void {
+    fanfares.playSevereCheck()
+    haptic('error', 'heavy')
+  },
+  killCam(win: boolean): void {
+    fanfares.playKillCam(win)
+    haptic(win ? 'success' : 'error', 'heavy')
+  },
+  /** A piece-free placement (glue trap). */
+  place(material: SoundMaterial): void {
+    playPieceSound(material, 'move')
+    haptic('tap')
+  },
   pickup(): void {
     haptic('pickup')
   },

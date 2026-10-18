@@ -50,6 +50,15 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'lord-of-the-cosmos', title: 'Lord of the Cosmos', description: 'Defeat The Infinite and clear the Cosmic Pantheon.', icon: 'orbit', reward: 1000, tier: 'platinum' },
   { id: 'relic-hunter', title: 'Relic Hunter', description: 'Collect five campaign relics.', icon: 'gem', reward: 150, tier: 'silver' },
   { id: 'three-star-general', title: 'Three-Star General', description: 'Earn three stars against ten different bosses.', icon: 'star', reward: 200, tier: 'gold' },
+  // ── Ultimate Edition ──
+  { id: 'iron-will', title: 'Iron Will', description: 'Clear a realm in Ironman mode without a single defeat.', icon: 'shield', reward: 600, tier: 'gold' },
+  { id: 'iron-crown', title: 'The Iron Crown', description: 'Clear all five realms in Ironman mode.', icon: 'crown', reward: 5000, tier: 'platinum' },
+  { id: 'bounty-hunter', title: 'Bounty Hunter', description: 'Complete five bounty contracts.', icon: 'target', reward: 250, tier: 'silver' },
+  { id: 'pilgrim', title: 'Pilgrim of the Realms', description: 'Resolve ten world-map events.', icon: 'map', reward: 200, tier: 'silver' },
+  { id: 'alchemist', title: 'Alchemist', description: 'Drink ten battle potions.', icon: 'sparkles', reward: 150, tier: 'silver' },
+  { id: 'blood-for-power', title: 'Blood for Power', description: 'Sacrifice a pawn at the altar.', icon: 'skull', reward: 40, tier: 'bronze' },
+  { id: 'trapper', title: 'Trapper', description: 'Catch three enemy pieces in glue traps.', icon: 'wand', reward: 120, tier: 'silver' },
+  { id: 'tournament-victor', title: 'Tournament Victor', description: 'Win a daily Chronos tournament.', icon: 'trophy', reward: 300, tier: 'gold' },
   { id: 'flawless-conqueror', title: 'Flawless Conqueror', description: 'Earn all 300 stars of the Grand Campaign.', icon: 'crown', reward: 2000, tier: 'platinum' },
 ]
 

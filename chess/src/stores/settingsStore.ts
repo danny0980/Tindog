@@ -32,6 +32,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiSoundsEnabled: true,
   uiVolume: 0.8,
   soundMaterial: 'theme',
+  focusTrack: 'off',
+  focusVolume: 0.5,
+  moodEffects: true,
   hapticsEnabled: true,
   haptics: DEFAULT_HAPTICS,
   oneHanded: false,
@@ -87,6 +90,9 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     sfxVolume: num(s.sfxVolume, d.sfxVolume, 0, 1),
     musicEnabled: bool(s.musicEnabled, d.musicEnabled),
     musicVolume: num(s.musicVolume, d.musicVolume, 0, 1),
+    focusTrack: oneOf(s.focusTrack, ['off', 'rain', 'fireplace', 'cosmic'], d.focusTrack),
+    focusVolume: num(s.focusVolume, d.focusVolume, 0, 1),
+    moodEffects: bool(s.moodEffects, d.moodEffects),
     uiSoundsEnabled: bool(s.uiSoundsEnabled, d.uiSoundsEnabled),
     uiVolume: num(s.uiVolume, d.uiVolume, 0, 1),
     soundMaterial: oneOf(s.soundMaterial, SOUND_MATERIALS, d.soundMaterial),
@@ -101,7 +107,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     showLegalMoves: bool(s.showLegalMoves, d.showLegalMoves),
     showCoordinates: bool(s.showCoordinates, d.showCoordinates),
     game: sanitizeGame(s.game),
-    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet'], d.legendsScreen),
+    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament'], d.legendsScreen),
     grandRealm: oneOf(s.grandRealm, GRAND_REALM_IDS, d.grandRealm),
   }
 }

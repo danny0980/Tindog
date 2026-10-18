@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ambientMusic, audioEngine } from '../audio'
+import { ambientMusic, audioEngine, focusSoundscape } from '../audio'
 import { configureHaptics } from '../audio/haptics'
 import { getBoardTheme } from '../constants/themes'
 import { enginePool } from '../engine/enginePool'
@@ -109,6 +109,7 @@ export function useAppEnvironment(): { idle: boolean; visible: boolean } {
     const unlock = () => {
       audioEngine.unlock()
       if (settingsStore.get().musicEnabled && !settingsStore.get().batterySaver) ambientMusic.start()
+      focusSoundscape.resume()
     }
     window.addEventListener('pointerdown', unlock, { once: true })
     window.addEventListener('keydown', unlock, { once: true })
@@ -117,6 +118,12 @@ export function useAppEnvironment(): { idle: boolean; visible: boolean } {
       window.removeEventListener('keydown', unlock)
     }
   }, [])
+
+  // Focus soundscape: plays while the app is visible (it starts once audio is unlocked).
+  const focusTrack = visible ? settings.focusTrack : 'off'
+  useEffect(() => {
+    focusSoundscape.play(focusTrack, settings.focusVolume)
+  }, [focusTrack, settings.focusVolume])
 
   const musicActive = settings.musicEnabled && !settings.batterySaver && visible
   useEffect(() => {

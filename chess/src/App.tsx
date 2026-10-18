@@ -4,7 +4,7 @@ import { AppHeader } from './components/layout/AppHeader'
 import { BottomNav } from './components/layout/BottomNav'
 import { ToastViewport } from './components/ui/ToastViewport'
 import { useAppEnvironment } from './hooks/useAppEnvironment'
-import { useGameController } from './hooks/useGameController'
+import { type BattleLaunch, useGameController } from './hooks/useGameController'
 import { useLayoutMode } from './hooks/useLayoutMode'
 import { useStore } from './hooks/useStore'
 import { profileLoadReport, profileStore } from './stores/profileStore'
@@ -12,9 +12,9 @@ import { showToast } from './stores/toastStore'
 import { lazyWithRetry } from './utils/lazyWithRetry'
 import { updateSettings } from './stores/settingsStore'
 import type { MatchRecord } from './types/profile'
-import type { BattleOptions } from './components/campaign/battleOptions'
+import type { ChallengeClock } from './components/campaign/battleOptions'
+import type { TournamentEntrant } from './types/rpg'
 import type { Boss, BossId } from './types/campaign'
-import type { TacticId } from './types/spells'
 import { beginGauntletBattle } from './stores/gauntletActions'
 import { gauntletStore } from './stores/gauntletStore'
 import { BASE_INCREMENT_MS, BOSS_CLOCK_MS } from './utils/gauntlet'
@@ -94,18 +94,41 @@ export default function App() {
 
   // Grand Campaign: launch a boss battle from the world map (its realm chunk is already loaded).
   const challengeBoss = useCallback(
-    (bossId: BossId, options: BattleOptions, tactics: TacticId[]) => {
+    (bossId: BossId, options: ChallengeClock, launch: BattleLaunch) => {
       game.startNewGame(
         {
-        ...game.gameSettings,
-        mode: 'ai',
-        bossId,
-        legendId: null,
-        legendStrength: 'authentic',
-        playerColor: options.color,
-        timeControlId: options.timeControlId,
+          ...game.gameSettings,
+          mode: 'ai',
+          bossId,
+          legendId: null,
+          legendStrength: 'authentic',
+          playerColor: options.color,
+          timeControlId: options.timeControlId,
+          ...(options.customMinutes !== undefined ? { customMinutes: options.customMinutes } : {}),
+          ...(options.customIncrementSeconds !== undefined ? { customIncrementSeconds: options.customIncrementSeconds } : {}),
         },
-        { kind: 'campaign', tactics },
+        launch,
+      )
+      navigate('play')
+    },
+    [game, navigate],
+  )
+
+  // Daily tournament: a rated 5 + 3 game against your bracket opponent; colours alternate by round.
+  const fightTournament = useCallback(
+    (opponent: TournamentEntrant, round: number) => {
+      if (!opponent.legendId) return
+      game.startNewGame(
+        {
+          ...game.gameSettings,
+          mode: 'ai',
+          legendId: opponent.legendId,
+          bossId: null,
+          legendStrength: opponent.strength,
+          playerColor: round % 2 === 0 ? 'w' : 'b',
+          timeControlId: 'blitz-5-3',
+        },
+        { kind: 'tournament', tactics: [] },
       )
       navigate('play')
     },
@@ -186,7 +209,7 @@ export default function App() {
         </div>
         <ErrorBoundary scope="view" resetKey={view} label={`the ${view} screen`}>
         <Suspense fallback={<ViewFallback />}>
-          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onFightGauntlet={fightGauntlet} onReturnToBoard={() => navigate('play')} />}
+          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}

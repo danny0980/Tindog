@@ -26,6 +26,11 @@ export interface AppSettings {
   uiSoundsEnabled: boolean
   uiVolume: number
   soundMaterial: SoundMaterialSetting
+  /** Ambient focus soundscape (rain, fireplace, cosmic hum) and its level. */
+  focusTrack: 'off' | 'rain' | 'fireplace' | 'cosmic'
+  focusVolume: number
+  /** Arena lighting follows the opponent's alignment; severe checks shake the screen. */
+  moodEffects: boolean
   // ── Haptics ──
   hapticsEnabled: boolean
   haptics: HapticSettings
@@ -47,4 +52,4 @@ export interface AppSettings {
   grandRealm: GrandRealmId
 }
 
-export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet'
+export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament'

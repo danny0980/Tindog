@@ -3,6 +3,7 @@ import { DRAW_REWARD_FACTOR, LOSS_REWARD, MAX_ELO_HISTORY, MAX_MATCH_HISTORY, PU
 import { DIFFICULTY_CONFIGS, PIECE_VALUES } from '../constants/game'
 import { RUSH_MAX_COINS, RUSH_POINTS_PER_COIN } from '../constants/rush'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
+import type { MatchAnalysisSummary } from '../types/rpg'
 import type { Color, Difficulty, GameMode, GameResult, Move, Outcome, Personality, TimeControl } from '../types/chess'
 import type { AchievementDef, MatchRecord, PlayerProfile } from '../types/profile'
 import type { Puzzle } from '../types/puzzle'
@@ -217,10 +218,11 @@ export function applyAnalysis(
   accuracy: number | null,
   won: boolean,
   now: Date = new Date(),
+  summary: MatchAnalysisSummary | null = null,
 ): { profile: PlayerProfile; unlocked: AchievementDef[] } {
   const matches =
     matchId && accuracy !== null
-      ? profile.matches.map((m) => (m.id === matchId ? { ...m, accuracy: Math.round(accuracy * 10) / 10 } : m))
+      ? profile.matches.map((m) => (m.id === matchId ? { ...m, accuracy: Math.round(accuracy * 10) / 10, ...(summary ? { analysis: summary } : {}) } : m))
       : profile.matches
   const ids = ['analyst']
   if (won && accuracy !== null && accuracy >= 90) ids.push('surgical-precision')

@@ -9,6 +9,10 @@ import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import { type ShopItem, itemPrice, legendUnlockFor, ownsItem, purchase } from '../utils/progression'
 import { getLegend } from '../data/legends'
+import { POTIONS, POTION_IDS } from '../data/arena'
+import { PORTRAIT_ICONS } from '../components/legends/portraitIcons'
+import type { PotionId } from '../types/rpg'
+import { MAX_STACK, buyPotion, potionCount } from '../utils/inventory'
 
 export function ShopView({ onOpenLegends }: { onOpenLegends: () => void }) {
   const profile = useStore(profileStore, (p) => p)
@@ -31,6 +35,18 @@ export function ShopView({ onOpenLegends }: { onOpenLegends: () => void }) {
       sfx.achievement()
       showToast('achievement', a.title, `${a.description} · +${a.reward} coins`, 5000)
     })
+  }
+
+  const buyPotionItem = (id: PotionId) => {
+    const out = buyPotion(profileStore.get(), id)
+    if (!out) {
+      sfx.error()
+      showToast('warning', POTIONS[id].name, potionCount(profileStore.get(), id) >= MAX_STACK ? `You can carry at most ${MAX_STACK}.` : `Costs ${POTIONS[id].price} coins.`)
+      return
+    }
+    profileStore.set(out)
+    sfx.coins()
+    showToast('success', `Bought ${POTIONS[id].name}`, 'Added to your potion belt.', 2200)
   }
 
   const action = (item: ShopItem, name: string, equipped: boolean) => {
@@ -90,6 +106,41 @@ export function ShopView({ onOpenLegends }: { onOpenLegends: () => void }) {
             </div>
             <div className="text-[10px] uppercase tracking-wider text-yellow-200/70">balance</div>
           </div>
+        </div>
+      </section>
+
+      <section aria-label="Apothecary">
+        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-slate-400">Apothecary</h3>
+        <p className="mb-3 text-xs text-slate-500">Battle potions for character battles (up to 3 per battle). Merchants on the world map sell them cheaper.</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {POTION_IDS.map((id) => {
+            const def = POTIONS[id]
+            const Icon = PORTRAIT_ICONS[def.icon]
+            const owned = potionCount(profile, id)
+            return (
+              <article key={id} className="glass flex flex-col gap-2 rounded-2xl p-3" data-shop-potion={id}>
+                <div className="flex items-center gap-2">
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-200 to-orange-600 text-ink-950">
+                    <Icon className="size-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-white">{def.name}</div>
+                    <div className="text-[11px] text-slate-400">Owned ×{owned}</div>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">{def.description}</p>
+                <Button
+                  size="sm"
+                  variant={profile.coins >= def.price && owned < MAX_STACK ? 'primary' : 'secondary'}
+                  className="mt-auto w-full"
+                  icon={<Coins className="size-4" />}
+                  onClick={() => buyPotionItem(id)}
+                >
+                  {def.price}
+                </Button>
+              </article>
+            )
+          })}
         </div>
       </section>
 

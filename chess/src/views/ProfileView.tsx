@@ -10,10 +10,17 @@ import { DIFFICULTIES, DIFFICULTY_CONFIGS } from '../constants/game'
 import { useStore } from '../hooks/useStore'
 import { profileStore } from '../stores/profileStore'
 import type { MatchRecord } from '../types/profile'
-import { rankTitle } from '../utils/progression'
+import { LegacyPanel } from '../components/profile/LegacyPanel'
+import { displayTitle } from '../data/titles'
+import { gauntletStore } from '../stores/gauntletStore'
+import { settingsStore } from '../stores/settingsStore'
 
 export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => void }) {
   const profile = useStore(profileStore, (p) => p)
+  const gauntletBest = useStore(gauntletStore, (g) => g.record.bestStreak)
+  const lowPower = useStore(settingsStore, (s) => s.batterySaver)
+  const ctx = { profile, gauntletBest }
+  const title = displayTitle(ctx)
   const { stats } = profile
   const winRate = stats.games ? Math.round((stats.wins / stats.games) * 100) : 0
   const circumference = 2 * Math.PI * 34
@@ -35,7 +42,9 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
             <Crown className="absolute -top-3 -right-2 size-7 rotate-12 text-amber-300 drop-shadow" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-accent">{rankTitle(profile.elo)}</div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-accent" data-player-title>
+              {title.name}
+            </div>
             <h2 className="truncate text-2xl font-extrabold text-white">{profile.name}</h2>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
               <span>
@@ -140,6 +149,8 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
           </div>
         ))}
       </section>
+
+      <LegacyPanel ctx={ctx} lowPower={lowPower} />
 
       <section className="glass rounded-2xl p-4">
         <AchievementGrid unlocked={profile.achievements} />

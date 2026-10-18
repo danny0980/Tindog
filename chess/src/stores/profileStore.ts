@@ -11,7 +11,8 @@ import type { EpochId, LegendId, LegendProgress } from '../types/legend'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import type { VariantEvent } from '../engine/variant'
 import { type LoadSource, createPersistentStore } from '../utils/store'
-import { PROFILE_VERSION, migrateProfile } from './migrations'
+import { PROFILE_VERSION, V3_STARTER_POTIONS as STARTER_POTIONS, migrateProfile } from './migrations'
+import { sanitizeAnalysisSummary, sanitizeFeats, sanitizeIronman, sanitizePotions, sanitizeTournament, sanitizeWorld } from './sanitizeRpg'
 import { arrayOf, asRecord, isRecord, num, oneOf, str, stringRecord } from '../utils/validate'
 
 export function createDefaultProfile(): PlayerProfile {
@@ -43,6 +44,14 @@ export function createDefaultProfile(): PlayerProfile {
     rush: { bestScore: 0, bestRound: 0, runs: 0, totalScore: 0 },
     legends: { defeated: {}, wins: {}, losses: {}, draws: {}, epochsVisited: [] },
     campaign: { bosses: {}, relics: [], equipped: [], realmsCleared: [] },
+    inventory: { potions: { ...STARTER_POTIONS } },
+    ironman: { enabled: false, since: null, wipes: 0, bestCleared: 0, realmsConquered: [], savedCampaign: null },
+    world: { cycle: '', events: [], bounties: [], resolved: [], purchases: [], completedBounties: [], blessings: [] },
+    title: null,
+    notebook: { notes: '' },
+    tournament: null,
+    tournamentsWon: 0,
+    feats: { potionsDrunk: 0, eventsResolved: 0, bountiesCompleted: 0, sacrifices: 0, trapsSprung: 0, killCams: 0 },
   }
 }
 
@@ -83,7 +92,7 @@ function sanitizeBossRecord(raw: unknown): BossRecord | null {
 
 const isRealmId = (v: unknown): v is GrandRealmId => typeof v === 'string' && (GRAND_REALM_IDS as readonly string[]).includes(v)
 
-function sanitizeCampaign(raw: unknown): CampaignProgress {
+export function sanitizeCampaign(raw: unknown): CampaignProgress {
   const c = asRecord(raw)
   const bosses: Partial<Record<BossId, BossRecord>> = {}
   for (const [key, value] of Object.entries(asRecord(c.bosses))) {
@@ -132,7 +141,7 @@ const SQUARE = /^[a-h][1-8]$/
 const isVariantEvent = (e: unknown): e is VariantEvent =>
   isRecord(e) &&
   typeof e.ply === 'number' &&
-  (e.kind === 'charge' || e.kind === 'leap' || e.kind === 'pass') &&
+  (e.kind === 'charge' || e.kind === 'leap' || e.kind === 'pass' || e.kind === 'sacrifice') &&
   (e.color === 'w' || e.color === 'b') &&
   typeof e.from === 'string' && SQUARE.test(e.from) &&
   typeof e.to === 'string' && SQUARE.test(e.to) &&
@@ -163,7 +172,13 @@ function sanitizeMatch(v: unknown): MatchRecord | null {
     legendId: isLegendId(v.legendId) ? v.legendId : null,
     bossId: isBossId(v.bossId) ? v.bossId : null,
     ...(Array.isArray(v.variant) ? { variant: v.variant.filter(isVariantEvent) } : {}),
+    ...withAnalysis(v.analysis),
   }
+}
+
+function withAnalysis(raw: unknown): Pick<MatchRecord, 'analysis'> {
+  const analysis = sanitizeAnalysisSummary(raw)
+  return analysis ? { analysis } : {}
 }
 
 /**
@@ -231,6 +246,14 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     },
     legends: sanitizeLegends(raw.legends),
     campaign: sanitizeCampaign(raw.campaign),
+    inventory: { potions: sanitizePotions(asRecord(raw.inventory).potions) },
+    ironman: sanitizeIronman(raw.ironman, sanitizeCampaign),
+    world: sanitizeWorld(raw.world),
+    title: typeof raw.title === 'string' ? raw.title.slice(0, 40) : null,
+    notebook: { notes: str(asRecord(raw.notebook).notes, '').slice(0, 4000) },
+    tournament: sanitizeTournament(raw.tournament),
+    tournamentsWon: num(raw.tournamentsWon, 0, 0),
+    feats: sanitizeFeats(raw.feats),
   }
 }
 

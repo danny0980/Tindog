@@ -149,7 +149,8 @@ export class StockfishEngine {
     this.send(`position fen ${fen}`)
     const bestMoveLine = this.waitFor((line) => line.startsWith('bestmove'))
     this.searching = true
-    const go = options.moveTimeMs ? `go depth ${options.depth} movetime ${options.moveTimeMs}` : `go depth ${options.depth}`
+    const limit = options.searchMoves && options.searchMoves.length > 0 ? ` searchmoves ${options.searchMoves.join(' ')}` : ''
+    const go = (options.moveTimeMs ? `go depth ${options.depth} movetime ${options.moveTimeMs}` : `go depth ${options.depth}`) + limit
     this.send(go)
 
     try {

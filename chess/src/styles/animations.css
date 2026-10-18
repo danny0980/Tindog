@@ -252,3 +252,110 @@
     }
   }
 }
+
+/* ── Ultimate Edition: arena weather, kill-cam, mood lighting, trophies ── */
+@theme {
+  --animate-snowfall: snowfall 6s linear infinite;
+  --animate-wind-streak: wind-streak 1.8s linear infinite;
+  --animate-fog-drift: fog-drift 14s ease-in-out infinite alternate;
+  --animate-killcam: killcam 2600ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  --animate-killcam-title: killcam-title 2600ms ease-out both;
+  --animate-quake: quake 520ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  --animate-trophy-spin: trophy-spin 9s linear infinite;
+
+  @keyframes snowfall {
+    from {
+      transform: translate3d(0, -10%, 0);
+    }
+    to {
+      transform: translate3d(-6%, 110%, 0);
+    }
+  }
+  @keyframes wind-streak {
+    from {
+      transform: translate3d(-120%, 0, 0);
+      opacity: 0;
+    }
+    30% {
+      opacity: 0.7;
+    }
+    to {
+      transform: translate3d(220%, 0, 0);
+      opacity: 0;
+    }
+  }
+  @keyframes fog-drift {
+    from {
+      transform: translate3d(-6%, 0, 0) scale(1.1);
+    }
+    to {
+      transform: translate3d(6%, 2%, 0) scale(1.2);
+    }
+  }
+  @keyframes killcam {
+    0% {
+      transform: scale(1);
+      filter: saturate(1);
+    }
+    35% {
+      transform: scale(1.55);
+      filter: saturate(1.4) contrast(1.1);
+    }
+    80% {
+      transform: scale(1.6);
+      filter: saturate(0.6) contrast(1.2);
+    }
+    100% {
+      transform: scale(1);
+      filter: saturate(1);
+    }
+  }
+  @keyframes killcam-title {
+    0%,
+    25% {
+      opacity: 0;
+      transform: scale(1.6);
+      letter-spacing: 0.6em;
+    }
+    40% {
+      opacity: 1;
+      transform: scale(1);
+      letter-spacing: 0.25em;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes quake {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    15% {
+      transform: translate3d(-6px, 2px, 0) rotate(-0.4deg);
+    }
+    30% {
+      transform: translate3d(6px, -2px, 0) rotate(0.4deg);
+    }
+    45% {
+      transform: translate3d(-4px, 1px, 0);
+    }
+    60% {
+      transform: translate3d(4px, -1px, 0);
+    }
+    80% {
+      transform: translate3d(-2px, 0, 0);
+    }
+  }
+  @keyframes trophy-spin {
+    from {
+      transform: rotateY(0deg);
+    }
+    to {
+      transform: rotateY(360deg);
+    }
+  }
+}

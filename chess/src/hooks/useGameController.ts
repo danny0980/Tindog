@@ -8,22 +8,46 @@ import { realmOfBoss } from '../data/campaign/realms'
 import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, applyRelicsToProfile } from '../data/campaign/relics'
 import { getLegend, strengthInfo } from '../data/legends'
 import { bossPersona, legendPersona } from '../data/personas'
-import { SPELLS, buildBattleSetup, getTactic, hashSeed, seededRandom } from '../data/spells'
-import { afterPly, bossSpecialMoves, createEffects, humanSpecialMoves, isMoveFrozen } from '../engine/spellEngine'
+import { POTIONS, RESTRICTIONS, WEATHER } from '../data/arena'
+import { displayTitle } from '../data/titles'
+import { gauntletStore } from '../stores/gauntletStore'
+import { type ArenaOptions, SPELLS, buildBattleSetup, getTactic, hashSeed, seededRandom } from '../data/spells'
+import {
+  afterPly,
+  altarCandidates,
+  applyPotion,
+  bossSearchMoves,
+  bossSpecialMoves,
+  createEffects,
+  frostSquares,
+  glueSquares,
+  humanSpecialMoves,
+  moveRefusal,
+  placeGlue,
+  restrictionHonoured,
+} from '../engine/spellEngine'
 import { analyzeTaunt } from '../engine/taunts'
-import { type SpecialMove, passTurn } from '../engine/variant'
-import { personaSay, personaTaunt } from '../stores/dialogueStore'
+import { type SpecialMove, kingSquare, passTurn, sacrificePawn } from '../engine/variant'
+import { personaLine, personaSay, personaTaunt } from '../stores/dialogueStore'
 import { type GauntletSummary, endGauntletRun, finishGauntletBattle } from '../stores/gauntletActions'
-import type { BattleEffects, BattleEvent, BattleSetup, TacticId } from '../types/spells'
-import type { TauntEvent } from '../types/taunts'
+import type { BattleEffects, BattleEvent, BattleKind, BattleSetup, TacticId } from '../types/spells'
+import type { PotionId } from '../types/rpg'
+import type { BoardArena, BoardPicker } from '../components/board/ChessBoard'
+import type { TauntEvent, TauntMood } from '../types/taunts'
 import type { GrandRealmId, RelicDef, RelicId, StarCount } from '../types/campaign'
 import type { Persona, PortraitSpec } from '../types/persona'
 import { applyBossResult } from '../utils/campaign'
+import { consumePotion } from '../utils/inventory'
+import { IRONMAN_COIN_FACTOR, applyIronmanResult } from '../utils/ironman'
+import { summarizeAnalysis } from '../utils/notebook'
+import { recordTournamentResult } from '../utils/tournament'
+import { consumeBlessings, resolveAmbush, resolveBounty } from '../utils/world'
+import { grant } from '../utils/progression'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import type { GameAnalysis, PositionEval } from '../types/analysis'
-import type { ClockTimes, Color, GameResult, GameSettings, Move, MoveInput, Outcome, TimeControl } from '../types/chess'
+import type { ClockTimes, Color, GameResult, GameSettings, Move, MoveInput, Outcome, Square, TimeControl } from '../types/chess'
 import type { AchievementDef, MatchRecord } from '../types/profile'
 import { fenAtPly, getCapturedPieces, givesCheck, opposite } from '../utils/chess'
 import { type Mood, deriveMood, gameTension } from '../utils/mood'
@@ -40,11 +64,16 @@ import { useGameAnalysis } from './useGameAnalysis'
 import { useStore } from './useStore'
 import { useTimeMachine } from './useTimeMachine'
 
+/** Battles booked by their own mode instead of the rating. */
+const UNRATED_KINDS: readonly BattleKind[] = ['gauntlet', 'event', 'bounty']
+/** How long the checkmate kill-cam plays before the results card. */
+export const KILL_CAM_MS = 2600
+
 const UNTIMED: TimeControl = { id: 'none', label: 'Unlimited', category: 'none', initialMs: 0, incrementMs: 0 }
 
 /** Extra rules for a character battle, chosen by the screen that launches it. */
 export interface BattleLaunch {
-  kind: BattleSetup['kind']
+  kind: BattleKind
   /** Tactics drafted before the battle (campaign) or granted by boons (gauntlet). */
   tactics: readonly TacticId[]
   /** Gauntlet: your clock (the run's time bank) overrides the time control for your side. */
@@ -53,7 +82,32 @@ export interface BattleLaunch {
   emp?: boolean
   /** Free takebacks; the Gauntlet otherwise forbids undo. */
   freeUndos?: number
+  /** Arena modifiers: bounty contract, weather, parley boost and reward factor. */
+  arena?: ArenaOptions
+  /** World-map ambush / bounty contract this battle settles. */
+  eventId?: string
+  bountyId?: string
+  /** The boss's answer to your parley choice (spoken as the battle begins). */
+  parleyReply?: { text: string; mood: TauntMood }
 }
+
+/** Light / dark lighting of the arena, from the opponent's alignment. */
+export type Alignment = 'light' | 'dark'
+
+/** A finished checkmate replayed as a slow-motion cinematic. */
+export interface KillCam {
+  id: number
+  /** Square of the mated king and the mating move. */
+  king: Square | null
+  move: Pick<Move, 'from' | 'to' | 'san'> | null
+  youWon: boolean
+  caption: string
+}
+
+/** Player actions that cost no move (potions, traps, the altar). */
+export type PickMode = 'glue' | 'altar' | null
+
+const LAUNCH_DEFAULTS = { emp: false, freeUndos: 0, eventId: null, bountyId: null } as const
 
 /** A short holographic banner over the board (spell warnings, casts, tactics). */
 export interface SpellFlash {
@@ -99,6 +153,10 @@ export interface GameEndSummary {
   } | null
   /** Endless Gauntlet bookkeeping when the battle was part of a run. */
   gauntlet: GauntletSummary | null
+  /** Ironman: did this defeat wipe the run? */
+  ironman: { wiped: boolean; lostBosses: number; factor: number } | null
+  /** Ambush, bounty or tournament payout. */
+  arena: { title: string; detail: string; coins: number; potion: PotionId | null; success: boolean } | null
 }
 
 const characterOf = (p: Persona): PlayerInfo['character'] => ({ key: p.key, name: p.name, portrait: p.portrait })
@@ -129,7 +187,13 @@ export function useGameController({ active }: { active: boolean }) {
   const [shieldUsed, setShieldUsed] = useState(false)
   // Spells & tactics: the battle's rules, and the effect state after every ply (index = ply).
   const [battle, setBattle] = useState<BattleSetup | null>(null)
-  const [launchExtras, setLaunchExtras] = useState<{ emp: boolean; freeUndos: number }>({ emp: false, freeUndos: 0 })
+  const [launchExtras, setLaunchExtras] = useState<{ emp: boolean; freeUndos: number; eventId: string | null; bountyId: string | null }>(LAUNCH_DEFAULTS)
+  const [pickMode, setPickMode] = useState<PickMode>(null)
+  const [killCam, setKillCam] = useState<KillCam | null>(null)
+  /** Bumped when the opponent lands a severe check (screen shake). */
+  const [severeCheck, setSevereCheck] = useState(0)
+  /** Per-battle feat counters, booked when the game ends. */
+  const battleFeatsRef = useRef({ sacrifices: 0, trapsSprung: 0 })
   const [effectsLog, setEffectsLog] = useState<BattleEffects[]>([])
   const effectsLogRef = useRef<BattleEffects[]>([])
   const [spellFlash, setSpellFlash] = useState<SpellFlash | null>(null)
@@ -177,12 +241,15 @@ export function useGameController({ active }: { active: boolean }) {
   const opponent = useMemo(() => {
     let profile = boss && persona ? applyRelicsToProfile(persona.profile, battleRelics) : persona ? persona.profile : standardOpponent(gameSettings.difficulty, gameSettings.personality)
     if (launchExtras.emp) profile = applyRelicsToProfile(profile, ['emp-spike'])
+    // Parley / elite ambush: the boss is weakened or empowered for the whole battle.
+    if (battle?.bossBoost === 1) profile = { ...profile, skillLevel: Math.min(20, profile.skillLevel + 3), depth: profile.depth + 2, toleranceCp: Math.max(5, profile.toleranceCp - 10) }
+    if (battle?.bossBoost === -1) profile = { ...profile, skillLevel: Math.max(0, profile.skillLevel - 3), depth: Math.max(2, profile.depth - 2), toleranceCp: profile.toleranceCp + 25 }
     // Overclock spells: this one move is computed at full power.
     if (overclocked) {
       profile = { ...profile, skillLevel: 20, depth: profile.depth + 4, moveTimeMs: Math.round(profile.moveTimeMs * 1.5), toleranceCp: Math.min(profile.toleranceCp, 15), noise: 0 }
     }
     return profile
-  }, [battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona])
+  }, [battle?.bossBoost, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona])
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
   const recordedGameRef = useRef<number | null>(null)
@@ -253,8 +320,8 @@ export function useGameController({ active }: { active: boolean }) {
         pgn,
         history,
         timeControl,
-        // Gauntlet battles are arcade: unrated, scored by the run instead.
-        rated: ai && !casual && battle?.kind !== 'gauntlet',
+        // Gauntlet, ambush and bounty battles are arcade (handicaps, boosts): unrated.
+        rated: ai && !casual && (battle === null || UNRATED_KINDS.indexOf(battle.kind) === -1),
         opening: openingName,
         variant: game.getVariantEvents(),
         legendId: legend?.id ?? null,
@@ -269,7 +336,7 @@ export function useGameController({ active }: { active: boolean }) {
       // Chronos campaign: bounty, epoch cosmetics, historical trophies and a parting remark.
       let legendSummary: GameEndSummary['legend'] = null
       let unlocked = out.unlocked
-      if (legend && outcome) {
+      if (legend && outcome && battle?.kind !== 'tournament') {
         const lr = applyLegendResult(
           profileStore.get(),
           legend.id,
@@ -285,14 +352,24 @@ export function useGameController({ active }: { active: boolean }) {
 
       // Grand Campaign: stars, bounty, relics and realm progression.
       let campaignSummary: GameEndSummary['campaign'] = null
+      let ironmanSummary: GameEndSummary['ironman'] = null
+      const humanMoves = history.filter((m) => m.color === humanColor && !m.flags.includes('s')).length
       if (boss && outcome && battle?.kind === 'campaign') {
+        const factor = battle.rewardFactor * (battle.ironman ? IRONMAN_COIN_FACTOR : 1)
         const br = applyBossResult(profileStore.get(), boss, {
           outcome,
-          humanMoves: history.filter((m) => m.color === humanColor).length,
+          humanMoves,
           clean: !casual,
           relics: battleRelics,
+          rewardFactor: factor,
         })
         profileStore.set(br.profile)
+        if (battle.ironman) {
+          const iron = applyIronmanResult(profileStore.get(), outcome, br.realmCleared)
+          profileStore.set(iron.profile)
+          ironmanSummary = { wiped: iron.wiped, lostBosses: iron.lostBosses, factor }
+          unlocked = [...unlocked, ...iron.unlocked]
+        }
         campaignSummary = {
           bossName: boss.name,
           stars: br.stars,
@@ -307,6 +384,70 @@ export function useGameController({ active }: { active: boolean }) {
       }
       // Endless Gauntlet: the bank carries on (or the run ends).
       const gauntletSummary = boss && outcome && battle?.kind === 'gauntlet' ? finishGauntletBattle(boss, outcome, getClockTimesRef.current()[humanColor]) : null
+
+      // World map, bounty board and the daily tournament.
+      let arenaSummary: GameEndSummary['arena'] = null
+      if (outcome && battle?.kind === 'event' && launchExtras.eventId) {
+        const r = resolveAmbush(profileStore.get(), launchExtras.eventId, outcome === 'win')
+        profileStore.set(r.profile)
+        unlocked = [...unlocked, ...r.unlocked]
+        arenaSummary = { title: 'Elite ambush', detail: outcome === 'win' ? 'The ambushers scatter.' : 'The ambushers vanish into the night.', coins: r.coins, potion: r.potion, success: outcome === 'win' }
+      }
+      if (outcome && battle?.kind === 'bounty' && launchExtras.bountyId) {
+        const honoured = restrictionHonoured(battle, humanMoves)
+        const success = outcome === 'win' && honoured
+        const r = resolveBounty(profileStore.get(), launchExtras.bountyId, success)
+        profileStore.set(r.profile)
+        unlocked = [...unlocked, ...r.unlocked]
+        const rule = battle.restriction ? RESTRICTIONS[battle.restriction].name : 'Contract'
+        arenaSummary = {
+          title: `Bounty · ${rule}`,
+          detail: success ? 'Contract fulfilled.' : outcome === 'win' ? 'You won, but broke the contract — try again.' : 'Contract failed — it stays on the board.',
+          coins: r.coins,
+          potion: r.potion,
+          success,
+        }
+      }
+      if (outcome && battle?.kind === 'tournament') {
+        const r = recordTournamentResult(profileStore.get(), outcome)
+        if (r) {
+          profileStore.set(r.profile)
+          unlocked = [...unlocked, ...r.unlocked]
+          arenaSummary = {
+            title: r.champion ? 'Tournament champion!' : r.advanced ? 'You advance' : 'Eliminated',
+            detail: r.champion ? 'The Chronos Cup is yours.' : r.advanced ? 'The next round awaits in the bracket.' : 'Better luck in tomorrow’s bracket.',
+            coins: r.coins,
+            potion: null,
+            success: r.advanced,
+          }
+        }
+      }
+      // Lifetime feats from this battle (altar sacrifices, glue catches, cinematic mates).
+      const killCamWin = outcome === 'win' && result.kind === 'checkmate'
+      const bf = battleFeatsRef.current
+      if (bf.sacrifices > 0 || bf.trapsSprung > 0 || killCamWin) {
+        const p = profileStore.get()
+        const feats = { ...p.feats, sacrifices: p.feats.sacrifices + bf.sacrifices, trapsSprung: p.feats.trapsSprung + bf.trapsSprung, killCams: p.feats.killCams + (killCamWin ? 1 : 0) }
+        const ids = [...(feats.sacrifices > 0 ? ['blood-for-power'] : []), ...(feats.trapsSprung >= 3 ? ['trapper'] : [])]
+        const granted = grant({ ...p, feats }, ids, new Date().toISOString())
+        profileStore.set(granted.profile)
+        unlocked = [...unlocked, ...granted.unlocked]
+      }
+      battleFeatsRef.current = { sacrifices: 0, trapsSprung: 0 }
+      // Kill-cam: replay the mating blow before the results card.
+      if (result.kind === 'checkmate' && !settingsStore.get().batterySaver) {
+        const last = history[history.length - 1]
+        const loser = opposite(result.winner)
+        setKillCam({
+          id: gameId,
+          king: last ? kingSquare(last.after, loser) : null,
+          move: last ? { from: last.from, to: last.to, san: last.san } : null,
+          youWon: ai ? outcome === 'win' : true,
+          caption: ai ? (outcome === 'win' ? `${persona?.name ?? 'Stockfish'} falls` : 'Checkmate') : `${result.winner === 'w' ? 'White' : 'Black'} wins`,
+        })
+        sfx.killCam(ai ? outcome === 'win' : true)
+        window.setTimeout(() => setKillCam((k) => (k?.id === gameId ? null : k)), KILL_CAM_MS)
+      }
       if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
       trackQuestEvents(matchQuestEvents(matchInput), 1400 + unlocked.length * 1100)
       setSummary({
@@ -321,6 +462,8 @@ export function useGameController({ active }: { active: boolean }) {
         legend: legendSummary,
         campaign: campaignSummary,
         gauntlet: gauntletSummary,
+        ironman: ironmanSummary,
+        arena: arenaSummary,
       })
       setGameOverDismissed(false)
 
@@ -329,10 +472,11 @@ export function useGameController({ active }: { active: boolean }) {
       else if (!ai || outcome === 'win') sfx.victory()
       else sfx.defeat()
       if (ai ? outcome === 'win' : result.kind !== 'draw') setCelebration((c) => c + 1)
-      if (out.coins > 0 || legendSummary?.coins || campaignSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
+      if (out.coins > 0 || legendSummary?.coins || campaignSummary?.coins || arenaSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
+      if (ironmanSummary?.wiped) window.setTimeout(() => showToast('warning', 'Ironman run lost', `Permadeath: ${ironmanSummary.lostBosses} conquered bosses fall back into darkness.`, 6000), 1200)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, battle, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, legend, persona, playerNames, timeControl],
+    [aiColor, battle, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, timeControl],
   )
 
   const handleFlag = useCallback(
@@ -393,17 +537,32 @@ export function useGameController({ active }: { active: boolean }) {
           const spell = SPELLS[e.spell]
           sfx.spellCast()
           flash(spell.name, 'danger')
-          showToast('warning', spell.name, e.square ? `${e.square.toUpperCase()} is frozen for your next move.` : spell.description, 3200)
+          const turns = spell.duration ?? 1
+          showToast('warning', spell.name, e.square ? `${e.square.toUpperCase()} is frozen for your next ${turns === 1 ? 'move' : `${turns} moves`}.` : spell.description, 3200)
           react({ kind: 'spell-cast', mood: 'smug', priority: 88, vars: { spell: spell.name } })
         } else if (e.kind === 'spell-blocked') {
           sfx.achievement()
           flash('Spell warded', 'accent')
           showToast('success', 'Spell Ward', `${SPELLS[e.spell].name} was blocked.`, 2800)
           react({ kind: 'spell-blocked', mood: 'angry', priority: 86, vars: { spell: SPELLS[e.spell].name } })
-        } else {
+        } else if (e.kind === 'tactic') {
           flash(getTactic(e.tactic).name, 'accent')
           showToast('success', getTactic(e.tactic).name, e.detail, 2600)
           if (e.tactic === 'katana-blade') react({ kind: 'tactic-used', mood: 'angry', priority: 84, vars: {} })
+        } else if (e.kind === 'trap') {
+          if (e.sprung) {
+            battleFeatsRef.current.trapsSprung += 1
+            sfx.trap()
+            flash('Caught in glue!', 'gold')
+            react({ kind: 'tactic-used', mood: 'angry', priority: 84, vars: {} })
+          }
+          showToast(e.sprung ? 'success' : 'info', e.sprung ? 'Glue trap' : 'Arena', e.detail, 2600)
+        } else if (e.kind === 'weather') {
+          flash(e.detail, 'accent')
+        } else {
+          sfx.potion()
+          flash(POTIONS[e.potion].name, 'gold')
+          showToast('success', POTIONS[e.potion].name, e.detail, 2400)
         }
       }
     },
@@ -419,7 +578,7 @@ export function useGameController({ active }: { active: boolean }) {
     (move: Move, before: ClockTimes): void => {
       const mover: 'human' | 'boss' = isAiMode && move.color === aiColor ? 'boss' : 'human'
       clockSnapshotsRef.current.push(before)
-      if (!move.flags.includes('z')) clock.addIncrement(move.color)
+      if (!move.flags.includes('z') && !move.flags.includes('s')) clock.addIncrement(move.color)
       timeMachine.goTo(null)
       sfx.move(material, move, givesCheck(move))
 
@@ -437,6 +596,17 @@ export function useGameController({ active }: { active: boolean }) {
       }
 
       let result = game.getLiveBoardResult()
+      // Severe check: the opponent checks you and few replies remain — the screen shudders.
+      if (!result && isAiMode && mover === 'boss' && givesCheck(move)) {
+        try {
+          if (new Chess(move.after).moves().length <= 3) {
+            setSevereCheck((n) => n + 1)
+            sfx.severeCheck()
+          }
+        } catch {
+          // Unparseable position: no shake.
+        }
+      }
       let passBoss = false
       if (battle) {
         const previous = effectsLogRef.current[ply - 1] ?? createEffects(battle)
@@ -477,19 +647,21 @@ export function useGameController({ active }: { active: boolean }) {
       const sideToMove = fen.split(' ')[1] === 'b' ? 'b' : 'w'
       const humanTurn = !isAiMode || sideToMove === humanColor
       const current = battle ? (effectsLogRef.current[game.getLiveHistory().length] ?? null) : null
-      if (battle && humanTurn && current?.frozen) {
+      if (battle && humanTurn && current && isAiMode) {
         const legal = new Chess(fen).moves({ verbose: true }).find((m) => m.from === input.from && m.to === input.to)
-        if (legal && isMoveFrozen(current, legal)) {
+        const refusal = legal ? moveRefusal(current, battle, fen, legal, 'human') : null
+        if (refusal) {
           sfx.error()
-          showToast('warning', 'Frozen square', `No piece may land on or pass through ${current.frozen.toUpperCase()} this move.`, 2400)
+          showToast('warning', 'Arena rule', refusal, 2400)
           return null
         }
       }
       let move = game.makeMove(input)
       if (!move && battle && humanTurn && current) {
-        const special = humanSpecialMoves(current, fen, humanColor).find((s) => s.from === input.from && s.to === input.to)
+        const special = humanSpecialMoves(current, battle, fen, humanColor).find((s) => s.from === input.from && s.to === input.to)
         if (special) move = game.applySpecial(special)
       }
+      if (move) setPickMode(null)
       if (!move) {
         sfx.error()
         return null
@@ -514,6 +686,13 @@ export function useGameController({ active }: { active: boolean }) {
     },
     [battle, clock, commitPly, flash, game, persona],
   )
+
+  /** Arena rules for the opponent's search (glue, snow, wind). */
+  const getOpponentAllowed = useCallback((): string[] | null => {
+    if (!battle) return null
+    const current = effectsLogRef.current[game.getLiveHistory().length]
+    return current ? bossSearchMoves(current, battle, game.getFen()) : null
+  }, [battle, game])
 
   const getOpponentSpecials = useCallback((): SpecialMove[] => {
     if (!battle) return []
@@ -551,6 +730,7 @@ export function useGameController({ active }: { active: boolean }) {
     onSpecial: applyOpponentSpecial,
     onEval: onOpponentEval,
     onChosen: onOpponentChosen,
+    getAllowedMoves: getOpponentAllowed,
   })
   const aiThinking = isAiTurn && playEngine.status === 'ready'
 
@@ -610,8 +790,9 @@ export function useGameController({ active }: { active: boolean }) {
   const undoPlies = (() => {
     if (!isPlaying) return 0
     if (!isAiMode) return game.history.length > 0 ? 1 : 0
-    // The Gauntlet forbids takebacks unless an Aegis boon granted one.
+    // The Gauntlet forbids takebacks unless an Aegis boon granted one; Ironman forbids them outright.
     if (isGauntletBattle && launchExtras.freeUndos <= 0) return 0
+    if (battle?.ironman) return 0
     const plies = game.turn === humanColor ? 2 : 1
     return game.history.length >= plies ? plies : 0
   })()
@@ -633,6 +814,7 @@ export function useGameController({ active }: { active: boolean }) {
     // Spell / tactic state rewinds with the position.
     effectsLogRef.current = effectsLogRef.current.slice(0, Math.max(1, game.getLiveHistory().length + 1))
     setEffectsLog(effectsLogRef.current)
+    setPickMode(null)
     turnStartRef.current = performance.now()
     bossEvalRef.current = null
     if (isGauntletBattle) {
@@ -683,7 +865,19 @@ export function useGameController({ active }: { active: boolean }) {
         : next.mode === 'ai' && next.legendId
           ? legendPersona(getLegend(next.legendId), next.legendStrength)
           : null
-      const kind: BattleSetup['kind'] = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
+      const kind: BattleKind = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
+      // Shrine blessings join the next campaign battle's tactics.
+      let tactics: readonly TacticId[] = launch?.tactics ?? []
+      if (kind === 'campaign' && challengerBoss) {
+        const blessed = consumeBlessings(profileStore.get())
+        if (blessed.blessings.length > 0) {
+          profileStore.set(blessed.profile)
+          tactics = [...tactics, ...blessed.blessings]
+          const names = blessed.blessings.map((t) => getTactic(t).name).join(', ')
+          window.setTimeout(() => showToast('success', 'Shrine blessing', names, 3200), 2200)
+        }
+      }
+      const ironman = kind === 'campaign' && profileStore.get().ironman.enabled
       // Campaign relics are fixed for the whole battle (other modes don't use them).
       const campaign = profileStore.get().campaign
       const relics = challengerBoss && kind === 'campaign' ? activeRelics(campaign.relics, campaign.equipped) : []
@@ -696,12 +890,15 @@ export function useGameController({ active }: { active: boolean }) {
         clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: launch.humanClockMs })
       }
       // Spells & tactics for character battles.
-      const setup = challenger ? buildBattleSetup(kind, challenger.spells, launch?.tactics ?? [], tc.initialMs > 0, campaign.relics) : null
+      const setup = challenger ? buildBattleSetup(kind, challenger.spells, tactics, tc.initialMs > 0, campaign.relics, { ...launch?.arena, ironman }) : null
       setBattle(setup)
       effectsLogRef.current = setup ? [createEffects(setup)] : []
       setEffectsLog(effectsLogRef.current)
-      setLaunchExtras({ emp: launch?.emp ?? false, freeUndos: launch?.freeUndos ?? 0 })
+      setLaunchExtras({ emp: launch?.emp ?? false, freeUndos: launch?.freeUndos ?? 0, eventId: launch?.eventId ?? null, bountyId: launch?.bountyId ?? null })
       setSpellFlash(null)
+      setPickMode(null)
+      setKillCam(null)
+      battleFeatsRef.current = { sacrifices: 0, trapsSprung: 0 }
       rngRef.current = seededRandom(hashSeed(`${challenger?.key ?? 'game'}:${Date.now()}`))
       turnStartRef.current = performance.now()
       bossEvalRef.current = null
@@ -715,11 +912,15 @@ export function useGameController({ active }: { active: boolean }) {
       setGameId((id) => id + 1)
       if (challenger) {
         sfx.timeTravel()
-        window.setTimeout(() => personaSay(challenger, 'intro'), 1700)
+        const reply = launch?.parleyReply
+        window.setTimeout(() => (reply ? personaLine(challenger, reply.text, reply.mood) : personaSay(challenger, 'intro')), 1700)
         if (setup && setup.spells.length > 0) {
           const names = setup.spells.map((id) => SPELLS[id].name).join(', ')
           window.setTimeout(() => showToast('warning', `${challenger.name} wields ${names}`, SPELLS[setup.spells[0] ?? 'frost-sigil'].trigger, 4200), 2600)
         }
+        if (setup && setup.weather !== 'clear') window.setTimeout(() => showToast('info', WEATHER[setup.weather].name, WEATHER[setup.weather].description, 4200), 3400)
+        if (setup?.restriction) window.setTimeout(() => showToast('warning', `Contract: ${RESTRICTIONS[setup.restriction ?? 'pawnless'].name}`, RESTRICTIONS[setup.restriction ?? 'pawnless'].description, 4200), 4200)
+        if (ironman) window.setTimeout(() => showToast('warning', 'Ironman battle', 'No takebacks. A defeat ends this run.', 3600), 900)
       } else {
         sfx.notify()
       }
@@ -737,6 +938,8 @@ export function useGameController({ active }: { active: boolean }) {
       }
       setReview(match)
       setBattle(null)
+      setPickMode(null)
+      setKillCam(null)
       effectsLogRef.current = []
       setEffectsLog([])
       // Campaign reviews show the boss once its realm chunk arrives.
@@ -761,7 +964,7 @@ export function useGameController({ active }: { active: boolean }) {
     const color = r ? r.humanColor : s && s.outcome !== null ? humanColorRef.current : null
     const accuracy = color ? result.accuracy[color] : null
     const won = r ? r.outcome === 'win' : s?.outcome === 'win'
-    const out = applyAnalysis(profileStore.get(), r?.id ?? s?.matchId ?? null, accuracy, won)
+    const out = applyAnalysis(profileStore.get(), r?.id ?? s?.matchId ?? null, accuracy, won, new Date(), color ? summarizeAnalysis(result, color) : null)
     profileStore.set(out.profile)
     announceAchievements(out.unlocked, 300)
     trackQuestEvents({ analyses: 1 }, 600)
@@ -828,7 +1031,8 @@ export function useGameController({ active }: { active: boolean }) {
       }
       if (isAiMode) {
         const profile = profileStore.get()
-        return { color, name: profile.name, subtitle: `${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood, character: null }
+        const title = displayTitle({ profile, gauntletBest: gauntletStore.get().record.bestStreak }).name
+        return { color, name: profile.name, subtitle: `${title} · ${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood, character: null }
       }
       return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood, character: null }
     }
@@ -840,20 +1044,128 @@ export function useGameController({ active }: { active: boolean }) {
       ? { from: evaluation.bestMove.slice(0, 2), to: evaluation.bestMove.slice(2, 4) }
       : null
 
-  // Spell / tactic overlays for the board (only on your live turn).
+  // Spell / tactic / arena overlays for the board.
   const yourLiveTurn = Boolean(battle) && isAiMode && isPlaying && timeMachine.isLive && game.turn === humanColor
-  const frozenSquare = yourLiveTurn ? (effects?.frozen ?? null) : null
   const specialTargets = useMemo(
-    () => (yourLiveTurn && effects ? humanSpecialMoves(effects, game.fen, humanColor).map((m) => ({ from: m.from, to: m.to, kind: m.kind })) : []),
-    [effects, game.fen, humanColor, yourLiveTurn],
+    () => (yourLiveTurn && effects && battle ? humanSpecialMoves(effects, battle, game.fen, humanColor).map((m) => ({ from: m.from, to: m.to, kind: m.kind })) : []),
+    [battle, effects, game.fen, humanColor, yourLiveTurn],
   )
+  const arena = useMemo<BoardArena | null>(() => {
+    if (!battle || !effects || !isAiMode || !timeMachine.isLive || review) return null
+    const fen = game.fen
+    return {
+      frozen: frostSquares(effects),
+      snow: effects.weather.id === 'snow' ? effects.weather.snow : [],
+      glue: glueSquares(effects),
+      stuck: effects.stuck.map((s) => s.square),
+      isBlocked: (m: Move) => moveRefusal(effects, battle, fen, m, 'human') !== null,
+    }
+  }, [battle, effects, game.fen, isAiMode, review, timeMachine.isLive])
+
+  // ── Potions, glue traps & the Sacrifice Altar (no move spent) ─────────────
+  /** Replaces the effect snapshot of the current ply (actions that cost no move). */
+  const replaceCurrentEffects = useCallback((next: BattleEffects) => {
+    const ply = game.getLiveHistory().length
+    effectsLogRef.current = [...effectsLogRef.current.slice(0, ply), next]
+    setEffectsLog(effectsLogRef.current)
+  }, [game])
+
+  const currentEffects = useCallback((): BattleEffects | null => (battle ? (effectsLogRef.current[game.getLiveHistory().length] ?? null) : null), [battle, game])
+
+  const drinkPotion = useCallback(
+    (potion: PotionId) => {
+      const fx = currentEffects()
+      if (!battle || !fx || !yourLiveTurn) return
+      const def = POTIONS[potion]
+      const out = applyPotion(fx, battle, potion)
+      if (!out.ok) {
+        sfx.error()
+        showToast('warning', def.name, out.reason, 2400)
+        return
+      }
+      const consumed = consumePotion(profileStore.get(), potion)
+      if (!consumed) {
+        showToast('warning', def.name, 'You have none left — merchants and bounties sell more.', 2400)
+        return
+      }
+      profileStore.set(consumed.profile)
+      announceAchievements(consumed.unlocked, 600)
+      replaceCurrentEffects(out.effects)
+      emitBattleEvents(out.events)
+      setPickMode(potion === 'trap-kit' ? 'glue' : null)
+    },
+    [battle, currentEffects, emitBattleEvents, replaceCurrentEffects, yourLiveTurn],
+  )
+
+  const layGlue = useCallback(
+    (square: Square) => {
+      const fx = currentEffects()
+      if (!fx || !yourLiveTurn) return
+      const out = placeGlue(fx, game.getFen(), square)
+      if (!out.ok) {
+        sfx.error()
+        showToast('warning', 'Glue trap', out.reason, 2400)
+        return
+      }
+      sfx.place(material)
+      replaceCurrentEffects(out.effects)
+      emitBattleEvents(out.events)
+      if (out.effects.glueCharges <= 0) setPickMode(null)
+    },
+    [currentEffects, emitBattleEvents, game, material, replaceCurrentEffects, yourLiveTurn],
+  )
+
+  const sacrifice = useCallback(
+    (square: Square) => {
+      const fx = currentEffects()
+      if (!fx || !yourLiveTurn || !altarCandidates(fx, game.getFen(), humanColor).includes(square)) return
+      const special = sacrificePawn(game.getFen(), square, humanColor)
+      const before = clock.getTimes()
+      const move = special ? game.applySpecial(special) : null
+      if (!move) return
+      battleFeatsRef.current.sacrifices += 1
+      setPickMode(null)
+      flash('Blood for power', 'danger')
+      commitPly(move, before)
+    },
+    [clock, commitPly, currentEffects, flash, game, humanColor, yourLiveTurn],
+  )
+
+  const altarSquares = useMemo(() => (yourLiveTurn && effects ? altarCandidates(effects, game.fen, humanColor) : []), [effects, game.fen, humanColor, yourLiveTurn])
+  const livePickMode: PickMode = yourLiveTurn ? pickMode : null
+  const picker = useMemo<BoardPicker | null>(() => {
+    if (livePickMode === 'altar') return { squares: altarSquares, tone: 'altar', onPick: sacrifice }
+    if (livePickMode === 'glue' && effects) {
+      const occupied = new Set<string>()
+      for (const row of new Chess(game.fen).board()) for (const cell of row) if (cell) occupied.add(cell.square)
+      const trapped = new Set(effects.traps.map((t) => t.square))
+      const squares: Square[] = []
+      for (const f of 'abcdefgh') for (let r = 1; r <= 8; r++) {
+        const sq = `${f}${r}` as Square
+        if (!occupied.has(sq) && !trapped.has(sq)) squares.push(sq)
+      }
+      return { squares, tone: 'glue', onPick: layGlue }
+    }
+    return null
+  }, [altarSquares, effects, game.fen, layGlue, livePickMode, sacrifice])
+
+  const alignment: Alignment | null = persona ? (persona.tone === 'cold' ? 'light' : 'dark') : null
 
   return {
     settings,
     gameSettings,
     battle,
     effects,
-    frozenSquare,
+    arena,
+    picker,
+    pickMode: livePickMode,
+    setPickMode,
+    altarSquares,
+    drinkPotion,
+    killCam,
+    severeCheck,
+    alignment,
+    yourLiveTurn,
     specialTargets,
     spellFlash,
     freeUndos: launchExtras.freeUndos,
@@ -889,7 +1201,7 @@ export function useGameController({ active }: { active: boolean }) {
     canUndo: undoPlies > 0,
     undoCost,
     canResign: isPlaying && game.history.length > 0,
-    showGameOver: game.status.kind === 'over' && !gameOverDismissed && summary !== null,
+    showGameOver: game.status.kind === 'over' && !gameOverDismissed && summary !== null && killCam === null,
     summary,
     celebration,
     evaluation,

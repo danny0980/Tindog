@@ -3,7 +3,6 @@ import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } fr
 import { type Arrow, Chessboard, type PieceDropHandlerArgs, type PieceHandlerArgs, type SquareHandlerArgs } from 'react-chessboard'
 import type { Color, Move, MoveInput, PendingPromotion, PromotionPiece, Square } from '../../types/chess'
 import type { BoardTheme, PieceSet } from '../../types/theme'
-import { crossesFrozen } from '../../engine/variant'
 import { findKingSquare, isPromotionMove } from '../../utils/chess'
 import { buildPieces } from '../../utils/pieces'
 import { PromotionDialog } from './PromotionDialog'
@@ -34,11 +33,47 @@ interface ChessBoardProps {
   shakeKey?: number
   /** Fired when the user picks up / selects one of their pieces (haptics). */
   onPickup?: () => void
-  /** Chronos freeze spell: no piece may land on or pass through this square. */
-  frozenSquare?: Square | null
+  /** Arena overlays (frost / snow / glue / stuck) and the move filter they impose. */
+  arena?: BoardArena | null
+  /** Square-picker mode (laying a glue trap, choosing the altar pawn): taps go to `onPick`. */
+  picker?: BoardPicker | null
   /** Rule-bending moves currently available to the player (Knight's Boot, Vanguard Charge). */
   specialTargets?: ReadonlyArray<{ from: Square; to: Square; kind: string }>
   children?: ReactNode
+}
+
+export interface BoardArena {
+  frozen: readonly Square[]
+  snow: readonly Square[]
+  glue: readonly Square[]
+  stuck: readonly Square[]
+  /** True when the arena forbids this (otherwise legal) move for you. */
+  isBlocked: (move: Move) => boolean
+}
+
+export interface BoardPicker {
+  squares: readonly Square[]
+  tone: 'glue' | 'altar'
+  onPick: (square: Square) => void
+}
+
+const FROST_STYLE: CSSProperties = {
+  background:
+    'repeating-linear-gradient(45deg, rgba(186,230,253,0.55) 0 6px, rgba(125,211,252,0.25) 6px 12px), radial-gradient(circle, rgba(224,242,254,0.9), rgba(56,189,248,0.4))',
+  boxShadow: 'inset 0 0 0 3px rgba(125,211,252,0.95), inset 0 0 22px rgba(14,165,233,0.85)',
+}
+const SNOW_STYLE: CSSProperties = {
+  background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0 3px, transparent 4px), radial-gradient(circle at 70% 60%, rgba(255,255,255,0.9) 0 2px, transparent 3px), radial-gradient(circle, rgba(241,245,249,0.75), rgba(203,213,225,0.45))',
+  boxShadow: 'inset 0 0 16px rgba(255,255,255,0.8)',
+}
+const GLUE_STYLE: CSSProperties = {
+  background: 'radial-gradient(circle, rgba(251,191,36,0.75) 0 30%, rgba(217,119,6,0.45) 45%, transparent 66%)',
+  boxShadow: 'inset 0 0 0 2px rgba(245,158,11,0.7)',
+}
+const STUCK_STYLE: CSSProperties = { boxShadow: 'inset 0 0 0 4px rgba(245,158,11,0.95), inset 0 -18px 18px rgba(217,119,6,0.55)' }
+const PICK_STYLE: Record<BoardPicker['tone'], CSSProperties> = {
+  glue: { boxShadow: 'inset 0 0 0 3px rgba(251,191,36,0.9)', background: 'rgba(251,191,36,0.18)' },
+  altar: { boxShadow: 'inset 0 0 0 3px rgba(244,63,94,0.95)', background: 'rgba(244,63,94,0.22)' },
 }
 
 const SQUARE_PATTERN = /^[a-h][1-8]$/
@@ -61,7 +96,8 @@ export function ChessBoard({
   arrows,
   shakeKey = 0,
   onPickup,
-  frozenSquare = null,
+  arena = null,
+  picker = null,
   specialTargets,
   children,
 }: ChessBoardProps) {
@@ -78,9 +114,9 @@ export function ChessBoard({
 
   const legalTargets = useMemo(() => {
     if (!selected) return new Map<Square, Move>()
-    const moves = position.moves({ square: selected, verbose: true }).filter((m) => !crossesFrozen(m, frozenSquare))
+    const moves = position.moves({ square: selected, verbose: true }).filter((m) => !arena?.isBlocked(m))
     return new Map(moves.map((m) => [m.to, m] as const))
-  }, [frozenSquare, position, selected])
+  }, [arena, position, selected])
 
   /** Destinations reachable only through a spell / tactic from the selected piece. */
   const specialFromSelected = useMemo(
@@ -109,7 +145,12 @@ export function ChessBoard({
 
   const handleSquareClick = useCallback(
     ({ square }: SquareHandlerArgs) => {
-      if (!isSquare(square) || !movableColor) return
+      if (!isSquare(square)) return
+      if (picker) {
+        if (picker.squares.includes(square)) picker.onPick(square)
+        return
+      }
+      if (!movableColor) return
       if (selected && (legalTargets.has(square) || specialFromSelected.has(square))) {
         attemptMove(selected, square)
         return
@@ -123,7 +164,7 @@ export function ChessBoard({
       if (selected && square !== selected) attemptMove(selected, square)
       setSelection(null)
     },
-    [attemptMove, canMoveFrom, fen, legalTargets, movableColor, onPickup, selected, specialFromSelected],
+    [attemptMove, canMoveFrom, fen, legalTargets, movableColor, onPickup, picker, selected, specialFromSelected],
   )
 
   const handlePieceDrag = useCallback(
@@ -177,19 +218,18 @@ export function ChessBoard({
         boxShadow: 'inset 0 0 14px rgba(167,139,250,0.6)',
       }),
     )
-    // Frozen square: an icy, pulsing seal.
-    if (frozenSquare) {
-      add(frozenSquare, {
-        background:
-          'repeating-linear-gradient(45deg, rgba(186,230,253,0.55) 0 6px, rgba(125,211,252,0.25) 6px 12px), radial-gradient(circle, rgba(224,242,254,0.9), rgba(56,189,248,0.4))',
-        boxShadow: 'inset 0 0 0 3px rgba(125,211,252,0.95), inset 0 0 22px rgba(14,165,233,0.85)',
-        animation: lowPower ? undefined : 'pulse-soft 1.6s ease-in-out infinite',
-      })
+    // Arena: snow drifts, honey-glue traps, stuck pieces and icy, pulsing frost seals.
+    if (arena) {
+      arena.snow.forEach((sq) => add(sq, SNOW_STYLE))
+      arena.glue.forEach((sq) => add(sq, GLUE_STYLE))
+      arena.stuck.forEach((sq) => add(sq, STUCK_STYLE))
+      arena.frozen.forEach((sq) => add(sq, { ...FROST_STYLE, animation: lowPower ? undefined : 'pulse-soft 1.6s ease-in-out infinite' }))
     }
+    if (picker) picker.squares.forEach((sq) => add(sq, { ...PICK_STYLE[picker.tone], animation: lowPower ? undefined : 'pulse-soft 1.4s ease-in-out infinite' }))
     if (hoverSquare && legalTargets.has(hoverSquare)) add(hoverSquare, h.hover)
     if (extraSquareStyles) Object.entries(extraSquareStyles).forEach(([square, style]) => add(square, style))
     return styles
-  }, [extraSquareStyles, frozenSquare, h, hoverSquare, lastMove, legalTargets, lowPower, position, selected, showLegalMoves, specialFromSelected])
+  }, [arena, extraSquareStyles, h, hoverSquare, lastMove, legalTargets, lowPower, picker, position, selected, showLegalMoves, specialFromSelected])
 
   const boardArrows = useMemo<Arrow[]>(
     () =>
@@ -206,12 +246,12 @@ export function ChessBoard({
       squareStyles,
       arrows: boardArrows,
       showNotation: showCoordinates,
-      allowDragging: movableColor !== null,
+      allowDragging: movableColor !== null && !picker,
       allowDrawingArrows: true,
       animationDurationInMs: lowPower ? 0 : 200,
       showAnimations: !lowPower,
       dragActivationDistance: 4,
-      canDragPiece: ({ square }: PieceHandlerArgs) => isSquare(square) && canMoveFrom(square),
+      canDragPiece: ({ square }: PieceHandlerArgs) => !picker && isSquare(square) && canMoveFrom(square),
       onPieceDrop: handlePieceDrop,
       onPieceDrag: handlePieceDrag,
       onSquareClick: handleSquareClick,
@@ -238,6 +278,7 @@ export function ChessBoard({
       lowPower,
       movableColor,
       orientation,
+      picker,
       pieces,
       showCoordinates,
       squareStyles,

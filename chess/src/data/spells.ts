@@ -1,6 +1,7 @@
 // Boss spells, battle tactics, relic synergies and the pre-battle draft.
 import type { BossId, RelicId } from '../types/campaign'
 import type { LegendId } from '../types/legend'
+import type { RestrictionId, WeatherId } from '../types/rpg'
 import type { BattleSetup, SpellDef, SpellId, Synergy, TacticDef, TacticId } from '../types/spells'
 
 export const SPELLS: Readonly<Record<SpellId, SpellDef>> = {
@@ -20,8 +21,8 @@ export const SPELLS: Readonly<Record<SpellId, SpellDef>> = {
     trigger: 'Every 5th move, with a one-move warning',
   },
   'void-lock': {
-    id: 'void-lock', mechanic: 'freeze', name: 'Void Lock', icon: 'eclipse', needsClock: false,
-    description: 'A square falls into the void for your next move: nothing may enter or pass it.',
+    id: 'void-lock', mechanic: 'freeze', name: 'Void Lock', icon: 'eclipse', needsClock: false, duration: 2,
+    description: 'A square falls into the void for your next two moves: nothing may enter or pass it.',
     trigger: 'Every 5th move, with a one-move warning',
   },
   'berserker-charge': {
@@ -179,9 +180,30 @@ export function dealDraft(seed: number, relics: readonly RelicId[], timed: boole
 }
 
 /** Battle rules from the opponent's spells, the drafted tactics, the clock and owned relics. */
-export function buildBattleSetup(kind: BattleSetup['kind'], spells: readonly SpellId[], tactics: readonly TacticId[], timed: boolean, relics: readonly RelicId[]): BattleSetup {
-  const usable = tactics.filter((t) => timed || !TACTICS[t].needsClock)
+/** Arena modifiers for one battle (bounties, weather, parley, Ironman). */
+export interface ArenaOptions {
+  restriction?: RestrictionId | null
+  weather?: WeatherId
+  bossBoost?: -1 | 0 | 1
+  rewardFactor?: number
+  ironman?: boolean
+}
+
+export function buildBattleSetup(
+  kind: BattleSetup['kind'],
+  spells: readonly SpellId[],
+  tactics: readonly TacticId[],
+  timed: boolean,
+  relics: readonly RelicId[],
+  arena: ArenaOptions = {},
+): BattleSetup {
+  const usable = [...new Set(tactics)].filter((t) => timed || !TACTICS[t].needsClock)
   return {
+    restriction: arena.restriction ?? null,
+    weather: arena.weather ?? 'clear',
+    bossBoost: arena.bossBoost ?? 0,
+    rewardFactor: arena.rewardFactor ?? 1,
+    ironman: arena.ironman ?? false,
     kind,
     spells,
     tactics: usable,

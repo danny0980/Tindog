@@ -14,6 +14,8 @@ export interface SearchOptions {
   moveTimeMs?: number
   multiPv?: number
   skillLevel?: number
+  /** Restrict the search to these UCI moves (arena rules: traps, weather). */
+  searchMoves?: readonly string[]
 }
 
 export interface SearchResult {

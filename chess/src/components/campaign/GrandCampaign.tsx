@@ -1,5 +1,5 @@
-import { ChevronRight, CloudOff, Gem, Lock, Map as MapIcon, RotateCcw, Star, TriangleAlert, Trophy } from 'lucide-react'
-import { type ReactNode, useEffect, useState } from 'react'
+import { ChevronRight, CloudOff, Gem, Lock, Map as MapIcon, RotateCcw, Skull, Star, TriangleAlert, Trophy } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { GRAND_REALMS, TOTAL_BOSSES, getGrandRealm } from '../../data/campaign/realms'
 import { RELICS } from '../../data/campaign/relics'
 import { useRealmRoster } from '../../hooks/useCampaignRoster'
@@ -13,15 +13,26 @@ import { clearedCount, isBossUnlocked, isRealmUnlocked, maxStars, nextBoss, star
 import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
-import type { BattleOptions } from './battleOptions'
+import type { BattleOptions, ChallengeClock } from './battleOptions'
 import { BattleDraft } from './BattleDraft'
 import { BossBattleAction, BossDossier } from './BossDossier'
+import type { BattleLaunch } from '../../hooks/useGameController'
+import { showToast } from '../../stores/toastStore'
+import { sfx } from '../../audio'
+import { POTIONS } from '../../data/arena'
+import { TACTICS } from '../../data/spells'
+import type { PotionId } from '../../types/rpg'
 import type { TacticId } from '../../types/spells'
+import { abandonIronman, startIronman } from '../../utils/ironman'
+import { BOUNTY_CLOCK, acceptBlessing, ambushWeather, buyWare, isBountyDone, isEventResolved, refreshWorld } from '../../utils/world'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import type { MapMarker } from './WorldMap'
+import { type WorldItem, WorldBoard, WorldEventSheet } from './WorldBoard'
 import { Reliquary } from './Reliquary'
 import { WorldMap } from './WorldMap'
 
 interface GrandCampaignProps {
-  onChallenge: (bossId: BossId, options: BattleOptions, tactics: TacticId[]) => void
+  onChallenge: (bossId: BossId, options: ChallengeClock, launch: BattleLaunch) => void
 }
 
 const updateCampaign = (fn: (c: CampaignProgress) => CampaignProgress) => profileStore.set((p) => ({ ...p, campaign: fn(p.campaign) }))
@@ -44,6 +55,16 @@ function realmLockReason(realm: GrandRealmId): string {
  */
 export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
   const progress = useStore(profileStore, (p) => p.campaign)
+  const world = useStore(profileStore, (p) => p.world)
+  const ironman = useStore(profileStore, (p) => p.ironman)
+  const coins = useStore(profileStore, (p) => p.coins)
+  const [worldItem, setWorldItem] = useState<WorldItem | null>(null)
+  const [ironmanConfirm, setIronmanConfirm] = useState<'start' | 'abandon' | null>(null)
+
+  // Deal today's map events and bounties (once per day, against your progress).
+  useEffect(() => {
+    profileStore.set((p) => refreshWorld(p))
+  }, [])
   const realmId = useStore(settingsStore, (s) => s.grandRealm)
   const realm = getGrandRealm(realmId)
   const { roster, error: rosterError, retry: retryRoster } = useRealmRoster(realmId)
@@ -64,6 +85,62 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
   useEffect(() => {
     setThemeOverride(previewTheme)
   }, [previewTheme])
+
+  const markers = useMemo<MapMarker[]>(
+    () => [
+      ...world.events
+        .filter((e) => e.realm === realmId)
+        .map((e) => ({ id: e.id, index: e.kind === 'ambush' ? e.bossIndex : e.anchorIndex, kind: e.kind, done: isEventResolved(world, e.id), label: e.title })),
+      ...world.bounties
+        .filter((b) => b.realm === realmId)
+        .map((b) => ({ id: b.id, index: b.bossIndex, kind: 'bounty' as const, done: isBountyDone(world, b.id), label: 'Bounty contract' })),
+    ],
+    [realmId, world],
+  )
+  const openMarker = (id: string) => {
+    const event = world.events.find((e) => e.id === id)
+    if (event) setWorldItem({ type: 'event', event })
+    const bounty = world.bounties.find((b) => b.id === id)
+    if (bounty) setWorldItem({ type: 'bounty', bounty })
+  }
+  const onBlessing = (eventId: string, blessing: TacticId) => {
+    const out = acceptBlessing(profileStore.get(), eventId, blessing)
+    if (!out.ok) return showToast('warning', 'Shrine', out.reason)
+    profileStore.set(out.profile)
+    sfx.achievement()
+    showToast('success', 'Blessing received', `${TACTICS[blessing].name} joins your next campaign battle.`, 3000)
+    setWorldItem(null)
+  }
+  const onBuy = (eventId: string, potion: PotionId) => {
+    const out = buyWare(profileStore.get(), eventId, potion)
+    if (!out.ok) return showToast('warning', 'Merchant', out.reason)
+    profileStore.set(out.profile)
+    sfx.coins()
+    showToast('success', `Bought ${POTIONS[potion].name}`, 'Added to your potion belt.', 2400)
+  }
+  const fightWorld = (boss: Boss, item: WorldItem) => {
+    setWorldItem(null)
+    if (item.type === 'event') {
+      onChallenge(boss.id, options, { kind: 'event', tactics: [], eventId: item.event.id, arena: { bossBoost: 1, weather: ambushWeather(item.event.id) } })
+      return
+    }
+    const { bounty } = item
+    const arena = { restriction: bounty.restriction }
+    if (bounty.restriction === 'clock-60') {
+      onChallenge(
+        boss.id,
+        { ...options, timeControlId: 'custom', customMinutes: BOUNTY_CLOCK.bossMinutes, customIncrementSeconds: BOUNTY_CLOCK.incrementSeconds },
+        { kind: 'bounty', tactics: [], bountyId: bounty.id, arena, humanClockMs: BOUNTY_CLOCK.humanMs },
+      )
+      return
+    }
+    onChallenge(boss.id, options, { kind: 'bounty', tactics: [], bountyId: bounty.id, arena })
+  }
+  const confirmIronman = () => {
+    profileStore.set((p) => (ironmanConfirm === 'start' ? startIronman(p) : abandonIronman(p)))
+    showToast(ironmanConfirm === 'start' ? 'warning' : 'info', ironmanConfirm === 'start' ? 'Ironman run begun' : 'Ironman run ended', ironmanConfirm === 'start' ? 'A fresh campaign — one defeat ends it. Your regular campaign is kept safe.' : 'Your regular campaign is back.', 3600)
+    setIronmanConfirm(null)
+  }
 
   const toggle = (id: RelicId) => updateCampaign((c) => toggleRelic(c, id))
   const select = (id: BossId) => {
@@ -102,9 +179,17 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
         <Metric icon={<Star className="size-4 fill-amber-300 text-amber-300" />} label="Stars" value={`${starCount(progress)}/${maxStars()}`} />
         <Metric icon={<Trophy className="size-4 text-accent" />} label="Bosses" value={`${clearedCount(progress)}/${TOTAL_BOSSES}`} />
         <Metric icon={<Gem className="size-4 text-amber-200" />} label="Relics" value={`${progress.relics.length}/${RELICS.length}`} />
-        <div className="ml-auto flex gap-2">
+        {ironman.enabled && (
+          <span className="flex items-center gap-1.5 rounded-full border border-red-400/40 bg-red-500/15 px-2.5 py-1 text-[11px] font-bold text-red-100" data-ironman-badge>
+            <Skull className="size-3.5" /> Ironman · ×3 coins · {ironman.wipes} lost
+          </span>
+        )}
+        <div className="ml-auto flex flex-wrap gap-2">
           <Button size="sm" onClick={() => setReliquaryOpen(true)} icon={<Gem className="size-4" />}>
             Reliquary
+          </Button>
+          <Button size="sm" variant={ironman.enabled ? 'danger' : 'secondary'} data-ironman-toggle onClick={() => setIronmanConfirm(ironman.enabled ? 'abandon' : 'start')} icon={<Skull className="size-4" />}>
+            {ironman.enabled ? 'End Ironman' : 'Ironman'}
           </Button>
           {frontier && realmUnlocked && (
             <Button size="sm" variant="primary" onClick={() => select(frontier.id)} icon={<ChevronRight className="size-4" />}>
@@ -166,6 +251,8 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
         </div>
       </header>
 
+      {realmUnlocked && <WorldBoard world={world} progress={progress} realm={realmId} roster={roster} onOpen={setWorldItem} />}
+
       <div className={wide ? 'grid grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] items-start gap-4' : ''}>
         {roster ? (
           <WorldMap
@@ -176,6 +263,8 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
             lockedReason={realmLockReason(realmId)}
             selected={selectedId}
             onSelect={select}
+            markers={realmUnlocked ? markers : []}
+            onMarker={openMarker}
           />
         ) : rosterError ? (
           <div className="glass flex h-96 flex-col items-center justify-center gap-3 rounded-3xl p-6 text-center" role="alert">
@@ -220,15 +309,48 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
           boss={drafting}
           progress={progress}
           timed={options.timeControlId !== 'none'}
+          blessings={world.blessings}
+          ironman={ironman.enabled}
           onToggleRelic={toggle}
           onClose={() => setDrafting(null)}
-          onConfirm={(tactics) => {
+          onConfirm={(tactics, parley) => {
             const boss = drafting
             setDrafting(null)
-            onChallenge(boss.id, options, tactics)
+            onChallenge(boss.id, options, {
+              kind: 'campaign',
+              tactics,
+              ...(parley ? { arena: { bossBoost: parley.bossBoost, rewardFactor: parley.rewardFactor }, parleyReply: { text: parley.reply, mood: parley.mood } } : {}),
+            })
           }}
         />
       )}
+
+      {worldItem && (
+        <WorldEventSheet
+          item={worldItem}
+          world={world}
+          progress={progress}
+          roster={roster}
+          coins={coins}
+          onClose={() => setWorldItem(null)}
+          onBlessing={onBlessing}
+          onBuy={onBuy}
+          onFight={fightWorld}
+        />
+      )}
+
+      <ConfirmDialog
+        open={ironmanConfirm !== null}
+        title={ironmanConfirm === 'start' ? 'Begin an Ironman run?' : 'End your Ironman run?'}
+        message={
+          ironmanConfirm === 'start'
+            ? 'Permadeath: you start a fresh campaign from boss #1 with no relics. Takebacks are disabled and a single defeat wipes the run — but victories pay triple coins and Ironman realm clears earn the Iron Will and Iron Crown. Your regular campaign is stored safely and returns when the run ends.'
+            : 'The run’s bosses and relics are discarded and your regular campaign returns. Your best Ironman result is kept in the Chronicle.'
+        }
+        confirmLabel={ironmanConfirm === 'start' ? 'Begin Ironman' : 'End the run'}
+        onConfirm={confirmIronman}
+        onCancel={() => setIronmanConfirm(null)}
+      />
 
       <Reliquary open={reliquaryOpen} progress={progress} onClose={() => setReliquaryOpen(false)} onToggle={toggle} />
     </div>

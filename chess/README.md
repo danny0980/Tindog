@@ -1,10 +1,167 @@
-# ♞ Chess Arena: AAA Edition (v5.0 · Legends of the Board — RPG & Roguelike Edition)
+# ♞ Chess Arena: AAA Edition (v6.0 · Chronos Chess — The Ultimate Edition)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.0: Chronos Chess — The Ultimate Edition
+
+Version 6.0 adds four layers on top of the v5 spell engine:
+- **Campaign world:** Ironman, world-map events, parley and a bounty board.
+- **Board mechanics:** traps, potions, the Sacrifice Altar and weather.
+- **Meta progression:** trophies, a personal notebook, titles and daily tournaments.
+- **Polish:** a checkmate kill-cam, mood lighting, focus soundscapes and a Chronicles Log.
+
+Every rule is a pure function with unit tests.
+
+### 1. Campaign world
+**Ironman / permadeath** (`src/utils/ironman.ts`). Open it from Grand Campaign → **Ironman**; you are asked to confirm.
+- **Starting a run:** your regular campaign is stored safely and the run begins from boss #1 with no relics.
+- **During the run:** takebacks are disabled, and victories pay **×3 coins** (stacking with a parley's reward factor).
+- **Defeat:** **a single campaign defeat wipes the run**. Bosses, stars, realms and relics earned in it are lost, the run restarts, and the wipe is counted.
+- **Ending the run:** your regular campaign comes back.
+- **Achievements:** clearing a realm in Ironman earns **Iron Will**; clearing all five earns **The Iron Crown**, plus a trophy.
+
+**World-map events** (`src/utils/world.ts`). Each unlocked realm gets three events a day. They are dealt against your progress, so every one sits beside a boss you can reach, and they appear both as floating markers on the map and on the **Today on the map** board.
+- **Shrine:** choose 1 of 2 blessings. The blessing becomes an extra tactic for your next campaign battle.
+- **Merchant:** buy potions at varying prices, each ware once per day.
+- **Elite ambush:** a boosted boss in random weather, with no draft. It pays coins plus a potion, one attempt per day, unrated.
+
+**Bounties & restrictions.** There are two contracts per realm per day:
+- **No pawn moves:** pawn moves are refused on the board.
+- **No castling:** castling is refused on the board.
+- **Win within 30 moves:** checked when the game ends.
+- **60 s vs 5 min:** you get 1:00 + 2 s per move; the boss gets 5:00.
+
+Bounties are unrated, can be retried until fulfilled, and pay coins plus a potion. If a rule would leave you no legal move, all moves are allowed.
+
+**Parley** (`src/data/parley.ts`). The pre-battle draft now opens with a short dialogue: 3 dilemmas per voice (fierce, cold, sly). Each one offers three choices:
+- **Taunt:** the boss is empowered and rewards are ×1.5.
+- **Bargain:** you gain a free tactic.
+- **Feint:** the boss is weakened and rewards are ×0.75.
+
+The boss speaks its answer as the battle begins. The empower and weaken effects change the engine's skill, depth and tolerance.
+
+### 2. Board mechanics (`src/engine/spellEngine.ts`)
+**Tile traps.**
+- **Frost traps** come from freeze spells and now last a number of moves (Void Lock lasts 2). No piece may land on a frost square or slide through it.
+- **Glue traps** are laid by you, from a Trap Kit, on any empty square. An enemy piece that lands on glue is **stuck for two of its turns**; unsprung glue fades after 6 enemy moves.
+- **How bosses obey the arena:** the boss's search is restricted with UCI `searchmoves`, so bosses respect glue, snow and wind. Book moves and the final choice are filtered too.
+
+**Potions** (belt under the HUD; at most 3 per battle; drinking one never costs a move):
+
+| Potion | Effect |
+|---|---|
+| Time Elixir | +30 s on your clock (timed battles only) |
+| Purge Potion | removes frost traps and dispels a charging spell or overclock |
+| Ward Tonic | +1 Spell Ward |
+| Glue Trap Kit | one glue trap to lay (tap the button, then an empty square) |
+| Awakening Draught | one 3 + 1 knight leap |
+
+New profiles, and v2 profiles on upgrade, receive a starter pack. Potions are sold in the **Shop → Apothecary**, by merchants, and through bounty and ambush rewards.
+
+**Sacrifice Altar.** The altar opens after the boss's 3rd move and can be used once per battle.
+- **Using it:** sacrifice one of your pawns (never one shielding your king). The pawn's removal is recorded as its own ply (`Xh2`), and it is still your move.
+- **What you get:** one knight is **awakened** (a long leap), and one spent tactic recharges: Katana, Second Wind, Vanguard, Ward or Boot.
+
+**Dynamic weather** (set by ambushes; it affects both sides):
+- **Snow:** every 4 plies, 2 empty squares on ranks 3–6 fill with snow. Pieces can land on them but not slide through.
+- **Wind:** turns every 6 plies. Straight slides of 4 or more squares into the wind are blown back; knights and diagonal moves are immune.
+- **Fog:** hides legal-move hints, the evaluation bar and the best-move arrows.
+
+Weather is animated over the board and is static in battery-saver mode.
+
+### 3. Meta progression (Profile → Legacy card)
+- **Hall of Trophies:** 17 trophies on 3D shelves that turn slowly on their pedestals.
+  - **Realm trophies:** a weapon from each milestone boss and a crown from each overlord.
+  - **Other trophies:** the Iron Crown and Iron Sigil, two Gauntlet cups, the Tournament Cup, the Chronos Hourglass and the Fair Folk tome.
+- **Personal notebook** (`src/utils/notebook.ts`):
+  - **Data:** engine analyses now store a compact summary with each match: brilliant moves, best moves, inaccuracies, mistakes, blunders, errors by phase, and pieces blundered.
+  - **What it shows:** an opening scorecard, your weakest phase, your blunder-prone piece, blunders per 100 moves, clock losses, and colour imbalance.
+  - **Recommendations:** keep or replace an opening, or a starter repertoire if you have little data.
+  - **Notes:** a free-text field that is saved with your profile.
+- **Titles & noble ranks** (`src/data/titles.ts`):
+  - **Ranks by peak Elo:** Squire, Knight 1400, Baron 1600, Count 1800, Duke 2000, Archduke 2200.
+  - **13 feat titles,** for example *Slayer of Chronos*, *Grandmaster of Shadows*, *Lord of the Cosmos*, *the Iron Monarch*, *Gauntlet Champion*, *Tournament Victor* and *Brilliant Mind*.
+  - **Where they appear:** your profile card, your player bar in games, and the Gauntlet leaderboard (local and global).
+- **Daily auto-tournament** (`src/utils/tournament.ts`, Legends → Chronos Tournament):
+  - **Bracket:** you and the 7 legends nearest your rating, in a seeded bracket.
+  - **Your matches:** played as rated 5 + 3 games, with colours alternating by round. A drawn match goes to the lower-rated player.
+  - **Other matches:** simulated from Elo expectation.
+  - **Prizes:** 40, 80 and 200 coins for the three rounds; winning the final earns *Tournament Victor*.
+- **New achievements:**
+  - **Ironman:** Iron Will, The Iron Crown.
+  - **World and tournament:** Bounty Hunter, Pilgrim of the Realms, Tournament Victor.
+  - **Board mechanics:** Alchemist, Blood for Power, Trapper.
+
+### 4. Polish
+- **Kill-cam:** a checkmate slow-zooms onto the mated king, darkens the edges and stamps **CHECKMATE** with the mating move, with a booming toll. The results card waits for it (2.6 s); battery-saver mode skips it.
+- **Mood-reactive arena:**
+  - **Lighting:** follows the opponent's alignment — warm dawn light for *light* (cold, principled) foes, crimson-violet for *dark* ones (fierce and sly).
+  - **Severe check** (you are in check with at most 3 replies): the board quakes, the edges flare red, and a seismic rumble plays with a heavy haptic. You can turn this off in Settings → Audio → *Arena atmosphere*.
+- **Focus soundscapes** (`src/audio/focusSounds.ts`, Settings → Audio): procedurally synthesised **rain**, **fireplace** (roar with random crackles) and **cosmic hum** (detuned drones and stellar wind). They play on their own bus with their own volume, and fade in and out.
+- **Chronicles Log:** a lore-book timeline of your victories over legends and bosses, conquered realms and timelines, Ironman runs and tournament wins. It also shows your **brilliant-move %**.
+
+### Engineering
+- **Module layout:**
+  - `src/types/rpg.ts`: types.
+  - `src/engine/spellEngine.ts`: arena rules.
+  - `src/utils/{ironman,world,inventory,tournament,notebook,chronicle}.ts`: pure logic.
+  - `src/data/{arena,parley,titles,trophies}.ts`: data.
+  - `src/components/roguelike/`: ArenaBar, KillCam, MoodBackdrop, WeatherOverlay.
+  - `src/components/campaign/WorldBoard.tsx`, `src/components/tournament/` and `src/components/profile/{TrophyHall,NotebookPanel,ChroniclePanel,TitlePicker,LegacyPanel}.tsx`: UI.
+- **Profile v3 migration** (`stores/migrations.ts`, step 2 → 3) adds inventory, Ironman, world, title, notebook, tournament and feat counters, and gifts the starter potions. Each new field is sanitised on its own (`stores/sanitizeRpg.ts`), so a corrupt value never resets anything else.
+- **Strict TypeScript:** no `any`, immutable reducers, and a `BattleKind` covering campaign, legend, gauntlet, event, bounty and tournament.
+- **Mobile-first:**
+  - **Potion belt:** sits above the thumb dock in one-handed mode with 40 px targets.
+  - **Square picker:** for glue and the altar, with pulsing targets; dragging is disabled while it is active.
+  - **Sheets:** world events open as safe-area sheets.
+- **Lazy loading:** TournamentView is lazy (1.5 kB gzip). GrandCampaign grew to 13.6 kB gzip, and the eager bundle grew by about 8.7 kB gzip.
+
+### Integration & verification guide
+
+```bash
+cd chess
+npm install
+npm run check            # typecheck + lint + data + legends + campaign + resilience + roguelike + ultimate
+npm run test:ultimate    # 107 checks: traps, weather, bounties, altar, potions, permadeath, events, parley, tournament, notebook, titles, trophies, v3 migration
+npm run build && npx vite preview   # production build on http://localhost:4173
+```
+
+The checks below were run in a browser against the production build.
+1. **World events.** Open Legends → Grand Campaign. The *Today on the map* board shows a shrine, a merchant, an ambush and two bounties, and markers float beside Hammurabi.
+   - **Shrine:** pick a blessing. The draft shows "Shrine blessing joins this battle".
+   - **Merchant:** buy a potion; your coins drop and the potion appears in the belt.
+2. **Ironman.** Click **Ironman** → *Begin Ironman*. The badge "Ironman · ×3 coins" appears.
+   - **Draft:** Hammurabi's draft shows the permadeath warning and a 3-choice **Parley**.
+   - **In battle:** the HUD shows *Ironman* and Undo is disabled.
+   - **Defeat:** resign. The results card says *Permadeath — the run is lost*, and the profile shows `ironman.wipes = 1`.
+3. **Potions and glue.** In any campaign battle, tap **Glue Trap Kit**, then e5. A honey trap appears and the HUD shows "1 glue trap". If the boss lands there, a *Stuck* chip appears and that piece can't move for two turns.
+4. **Altar.** After the boss's 3rd move, tap **Altar** and then one of your pawns. The pawn disappears (`Xh2`), it is still your move, violet leap rings appear on your knights, and a spent tactic recharges.
+5. **Bounties.** Accept a contract.
+   - **No castling:** O-O is refused with an "Arena rule" toast.
+   - **60 s:** your clock shows 1:00 and the boss's shows 5:00.
+   - **Result:** resign to see "Contract failed — it stays on the board".
+6. **Weather.** Fight an ambush. The weather chip appears (Snow, Wind ↑/→ or Fog).
+   - **Fog:** hides hints and the eval bar.
+   - **Snow:** drifts appear every 4 plies, and sliding through them is refused.
+7. **Kill-cam.** Play a local game with Fool's mate (f3 e5 g4 Qh4#). The board zooms to e1 with a *CHECKMATE · Qh4#* stamp, then the results card opens.
+8. **Tournament.** Open Legends → Chronos Tournament: the bracket shows the quarter-finals, semi-finals and final. Play your quarter-final. A win advances you and pays 40 coins; a loss simulates the rest of the bracket.
+9. **Legacy.** Open Profile → the Legacy card, with its Trophies, Notebook, Chronicle and Titles tabs. Pick a feat title and it shows on your card and player bar.
+10. **Audio.** Open Settings → Audio → *Focus soundscape*: Rain, Fireplace or Cosmic hum, with a volume slider. *Arena atmosphere* toggles the mood lighting and quake.
+11. **Mobile.** At 390×844 in one-handed mode the potion belt sits just above the thumb dock and there is no horizontal scroll.
+
+**Limitations.**
+- **Balance:** traps, weather and parley strengths are tuned by reasoning, not playtesting.
+- **Severe-check detection:** it uses a simple heuristic (at most 3 legal replies).
+- **Alignment:** it is derived from the opponent's taunt voice rather than authored per boss.
+- **Potions and undo:** potions drunk before a takeback stay spent.
+- **Saving the v3 profile:** a v2 profile is migrated in memory and written back as v3 on the next change.
+- **Tournament prizes:** they are paid for your own matches only.
 
 ---
 

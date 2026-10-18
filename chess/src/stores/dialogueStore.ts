@@ -75,6 +75,11 @@ export function personaTaunt(persona: Pick<Persona, 'key' | 'name' | 'tone'>, ev
   speak(persona, TAUNTS[persona.tone][event.kind], event.mood, urgent, (t) => fillTemplate(t, event.vars))
 }
 
+/** A scripted line (e.g. the boss's answer to your parley choice); always shown. */
+export function personaLine(persona: Pick<Persona, 'key' | 'name'>, text: string, mood: TauntMood): void {
+  speak(persona, [text], mood, true)
+}
+
 export function clearDialogue(id?: number): void {
   dialogueStore.set((current) => (current && (id === undefined || current.id === id) ? null : current))
 }

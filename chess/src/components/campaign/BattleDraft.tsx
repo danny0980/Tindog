@@ -1,7 +1,10 @@
-import { Check, Sparkles, Swords, TriangleAlert } from 'lucide-react'
+import { Check, MessageSquareQuote, Skull, Sparkles, Swords, TriangleAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { RELICS, relicSlots } from '../../data/campaign/relics'
+import { parleyFor } from '../../data/parley'
+import { bossPersona } from '../../data/personas'
 import { SPELLS, TACTICS, dealDraft, hashSeed, spellsForBoss, synergiesFor } from '../../data/spells'
+import type { ParleyChoice } from '../../types/rpg'
 import type { Boss, CampaignProgress, RelicId } from '../../types/campaign'
 import type { TacticId } from '../../types/spells'
 import { bossRecord } from '../../utils/campaign'
@@ -16,7 +19,11 @@ interface BattleDraftProps {
   /** Whether the chosen clock is running (clock-only tactics are left out of untimed battles). */
   timed: boolean
   onToggleRelic: (id: RelicId) => void
-  onConfirm: (tactics: TacticId[]) => void
+  /** Shrine blessings that will join this battle. */
+  blessings: readonly TacticId[]
+  /** Ironman run in progress (shown as a warning). */
+  ironman: boolean
+  onConfirm: (tactics: TacticId[], parley: ParleyChoice | null) => void
   onClose: () => void
 }
 
@@ -26,11 +33,13 @@ interface BattleDraftProps {
  * Starforged Crown). The deal is seeded per boss and attempt, so reopening
  * the screen can't reroll it.
  */
-export function BattleDraft({ boss, progress, timed, onToggleRelic, onConfirm, onClose }: BattleDraftProps) {
+export function BattleDraft({ boss, progress, timed, blessings, ironman, onToggleRelic, onConfirm, onClose }: BattleDraftProps) {
   const record = bossRecord(progress, boss.id)
   const attempt = record.wins + record.losses + record.draws
   const offer = useMemo(() => dealDraft(hashSeed(`${boss.id}#${attempt}#${timed ? 't' : 'u'}`), progress.relics, timed), [attempt, boss.id, progress.relics, timed])
   const [picked, setPicked] = useState<TacticId[]>([])
+  const parley = useMemo(() => parleyFor(bossPersona(boss).tone, `${boss.id}#${attempt}#parley`), [attempt, boss])
+  const [choice, setChoice] = useState<ParleyChoice | null>(null)
   const synergies = synergiesFor(progress.relics)
   const spells = spellsForBoss(boss)
   const slots = relicSlots(progress.relics)
@@ -46,12 +55,47 @@ export function BattleDraft({ boss, progress, timed, onToggleRelic, onConfirm, o
       onClose={onClose}
       size="lg"
       footer={
-        <Button variant="primary" size="lg" className="w-full" onClick={() => onConfirm(picked)} icon={<Swords className="size-5" />}>
+        <Button variant="primary" size="lg" className="w-full" onClick={() => onConfirm(choice?.grant ? [...picked, choice.grant] : picked, choice)} icon={<Swords className="size-5" />}>
           {picked.length > 0 ? `Battle with ${picked.map((t) => TACTICS[t].name).join(' + ')}` : 'Battle without a tactic'}
         </Button>
       }
     >
       <div className="space-y-4" data-draft>
+        {ironman && (
+          <div className="flex items-center gap-2 rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-xs text-red-100" data-ironman-warning>
+            <Skull className="size-4 shrink-0" /> Ironman: no takebacks — a defeat wipes this run. Victories pay triple coins.
+          </div>
+        )}
+
+        <section aria-label="Parley" data-parley>
+          <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-violet-200">
+            <MessageSquareQuote className="size-3.5" /> Parley
+          </h3>
+          <p className="mb-2 rounded-2xl bg-white/5 p-3 text-sm italic text-slate-200">
+            <span className="not-italic font-bold text-white">{boss.shortName}: </span>
+            {parley.prompt}
+          </p>
+          <div className="grid gap-1.5 sm:grid-cols-3">
+            {parley.choices.map((c) => {
+              const on = choice?.id === c.id
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  data-parley-choice={c.id}
+                  aria-pressed={on}
+                  onClick={() => setChoice(on ? null : c)}
+                  className={`flex flex-col gap-1 rounded-2xl border p-2.5 text-left text-xs transition ${on ? 'border-violet-300 bg-violet-400/20' : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'}`}
+                >
+                  <span className="text-sm font-semibold text-white">{c.label}</span>
+                  <span className="text-slate-300">{c.effect}</span>
+                </button>
+              )
+            })}
+          </div>
+          {!choice && <p className="mt-1 text-[11px] text-slate-500">Optional — say nothing and the battle is fought as usual.</p>}
+        </section>
+
         {spells.length > 0 && (
           <section aria-label="Boss spells">
             <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-red-300">Boss spells</h3>
@@ -118,6 +162,11 @@ export function BattleDraft({ boss, progress, timed, onToggleRelic, onConfirm, o
               )
             })}
           </div>
+          {blessings.length > 0 && (
+            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-sky-200" data-blessings>
+              <Sparkles className="size-3" /> Shrine blessing joins this battle: {blessings.map((t) => TACTICS[t].name).join(', ')}
+            </p>
+          )}
           {!timed && <p className="mt-1.5 text-[11px] text-slate-500">Clock tactics (Chronos Hourglass, Second Wind) only appear in timed battles.</p>}
         </section>
 

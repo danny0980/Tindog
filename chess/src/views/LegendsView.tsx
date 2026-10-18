@@ -1,8 +1,9 @@
-import { ArrowLeft, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Swords, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Swords, Trophy, WandSparkles } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
-import type { BattleOptions } from '../components/campaign/battleOptions'
+import type { ChallengeClock } from '../components/campaign/battleOptions'
+import type { BattleLaunch } from '../hooks/useGameController'
 import { CampaignSelect } from '../components/legends/CampaignSelect'
 import { EpochSelector } from '../components/legends/EpochSelector'
 import { FreePlayPanel } from '../components/legends/FreePlayPanel'
@@ -15,17 +16,19 @@ import { settingsStore, updateSettings } from '../stores/settingsStore'
 import { setThemeOverride } from '../stores/themeOverrideStore'
 import type { CampaignId, ChallengeOptions, LegendId } from '../types/legend'
 import type { Boss, BossId } from '../types/campaign'
-import type { TacticId } from '../types/spells'
 import type { LegendsScreen } from '../types/settings'
+import type { TournamentEntrant } from '../types/rpg'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
 const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
 const GauntletView = lazyWithRetry(() => import('../components/gauntlet/GauntletView'), (m) => m.default)
+const TournamentView = lazyWithRetry(() => import('../components/tournament/TournamentView'), (m) => m.default)
 
 interface LegendsViewProps {
   onChallenge: (legendId: LegendId, options: ChallengeOptions) => void
-  onChallengeBoss: (bossId: BossId, options: BattleOptions, tactics: TacticId[]) => void
+  onChallengeBoss: (bossId: BossId, options: ChallengeClock, launch: BattleLaunch) => void
   onFightGauntlet: (boss: Boss) => void
+  onFightTournament: (opponent: TournamentEntrant, round: number) => void
   onReturnToBoard: () => void
 }
 
@@ -40,12 +43,13 @@ const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: ty
   historical: { title: 'HISTORICAL TIMELINE', subtitle: 'Defeat each legend to open the next chapter of history', icon: Hourglass },
   fantasy: { title: 'FANTASY REALM', subtitle: 'Earn the elves’ trust, then storm the Obsidian Spire', icon: WandSparkles },
   freeplay: { title: 'FREE PLAY', subtitle: 'Quick battles against every legend you have defeated', icon: Swords },
+  tournament: { title: 'CHRONOS TOURNAMENT', subtitle: 'A daily 8-player knockout bracket of legends near your rating', icon: Trophy },
   gauntlet: { title: 'ENDLESS GAUNTLET', subtitle: 'Back-to-back bosses on one clock — how far can you go?', icon: InfinityIcon },
   grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon },
 }
 
 /** Chronos Chess hub: universe selector → campaign map + dossier, or free play. */
-export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onReturnToBoard }: LegendsViewProps) {
+export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onFightTournament, onReturnToBoard }: LegendsViewProps) {
   const progress = useStore(profileStore, (p) => p.legends)
   const campaignProgress = useStore(profileStore, (p) => p.campaign)
   const screen = useStore(settingsStore, (s) => s.legendsScreen)
@@ -101,6 +105,20 @@ export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onR
             }
           >
             <GauntletView onFight={onFightGauntlet} onReturnToBoard={onReturnToBoard} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+
+      {screen === 'tournament' && (
+        <ErrorBoundary scope="view" label="the tournament">
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-20" role="status" aria-label="Loading tournament">
+                <div className="size-10 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
+              </div>
+            }
+          >
+            <TournamentView onFight={onFightTournament} />
           </Suspense>
         </ErrorBoundary>
       )}

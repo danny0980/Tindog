@@ -68,6 +68,8 @@ export interface LeaderboardEntry {
   defeated: number
   bestStreak: number
   date: string
+  /** Noble rank or feat title shown beside the name. */
+  title?: string
 }
 
 export interface GauntletRecord {

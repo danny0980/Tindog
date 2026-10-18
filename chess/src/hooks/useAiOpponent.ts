@@ -28,6 +28,8 @@ interface AiOpponentOptions {
   onEval?: (cp: number) => void
   /** Evaluation of the move it is about to play (null for book moves). */
   onChosen?: (cp: number | null) => void
+  /** Arena rules: the UCI moves the opponent may play here (null = all legal moves). */
+  getAllowedMoves?: () => readonly string[] | null
 }
 
 /** How many spell moves are verified with an extra (shallow) search per turn. */
@@ -67,7 +69,7 @@ async function pickSpecial(
  * Requests and plays the engine's move whenever it is the AI's turn: first
  * from the opponent's opening repertoire, then from a (style-filtered) search.
  */
-export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, getHistory, onMove, onThink, getSpecials, onSpecial, onEval, onChosen }: AiOpponentOptions): void {
+export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, getHistory, onMove, onThink, getSpecials, onSpecial, onEval, onChosen, getAllowedMoves }: AiOpponentOptions): void {
   const onMoveRef = useRef(onMove)
   const onThinkRef = useRef(onThink)
   const profileRef = useRef(profile)
@@ -75,6 +77,7 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
   const onSpecialRef = useRef(onSpecial)
   const onEvalRef = useRef(onEval)
   const onChosenRef = useRef(onChosen)
+  const getAllowedRef = useRef(getAllowedMoves)
   useEffect(() => {
     onMoveRef.current = onMove
     onThinkRef.current = onThink
@@ -83,7 +86,8 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
     onSpecialRef.current = onSpecial
     onEvalRef.current = onEval
     onChosenRef.current = onChosen
-  }, [getSpecials, onChosen, onEval, onMove, onSpecial, onThink, profile])
+    getAllowedRef.current = getAllowedMoves
+  }, [getAllowedMoves, getSpecials, onChosen, onEval, onMove, onSpecial, onThink, profile])
 
   const { search, stop, status } = engine
 
@@ -95,8 +99,10 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
 
     // Opening repertoire: play the book move after a human-like pause.
     const side = fen.split(' ')[1] === 'b' ? 'b' : 'w'
+    const allowed = getAllowedRef.current?.() ?? null
+    const isAllowed = (m: MoveInput) => !allowed || allowed.includes(`${m.from}${m.to}${m.promotion ?? ''}`)
     const book = sanToInput(fen, repertoireMove(getHistory().map((m) => m.san), p.repertoire?.[side]))
-    if (book) {
+    if (book && isAllowed(book)) {
       void delay(p.minThinkMs).then(() => {
         if (cancelled || getFen() !== fen) return
         onChosenRef.current?.(null)
@@ -108,7 +114,7 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
     }
 
     Promise.all([
-      search(fen, { depth: p.depth, moveTimeMs: p.moveTimeMs, multiPv: p.multiPv, skillLevel: p.skillLevel }),
+      search(fen, { depth: p.depth, moveTimeMs: p.moveTimeMs, multiPv: allowed ? Math.min(p.multiPv, allowed.length) : p.multiPv, skillLevel: p.skillLevel, ...(allowed ? { searchMoves: allowed } : {}) }),
       delay(p.minThinkMs),
     ])
       .then(async ([result]) => {
@@ -127,7 +133,9 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
             return
           }
         }
-        const uci = chooseMove(fen, result, p)
+        let uci = chooseMove(fen, result, p)
+        // Safety net: never play a move the arena forbids, even if the engine ignored searchmoves.
+        if (allowed && !allowed.includes(uci)) uci = allowed.find((m) => result.lines.some((l) => l.pv[0] === m)) ?? allowed[0] ?? uci
         const parsed = parseUciMove(uci)
         if (!parsed) return
         const line = result.lines.find((l) => l.pv[0] === uci)

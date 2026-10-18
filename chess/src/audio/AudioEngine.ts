@@ -3,7 +3,8 @@
  *
  *   sfx bus ───┐
  *   music bus ─┤
- *   ui bus ────┼─► master ─► compressor ─► destination
+ *   ui bus ────┤
+ *   focus bus ─┼─► master ─► compressor ─► destination
  *   reverb ────┘    ▲
  *   (convolver) ◄──┴── reverb send (from sfx & music voices)
  *
@@ -16,6 +17,7 @@ class AudioEngine {
   private sfx: GainNode | null = null
   private music: GainNode | null = null
   private ui: GainNode | null = null
+  private focus: GainNode | null = null
   private reverbIn: GainNode | null = null
   private noise: AudioBuffer | null = null
   private volume = 0.8
@@ -87,6 +89,11 @@ class AudioEngine {
     return this.music
   }
 
+  /** Focus soundscapes (rain, fireplace, cosmic hum): their own level, after the master volume. */
+  get focusBus(): GainNode | null {
+    return this.focus
+  }
+
   get reverbBus(): GainNode | null {
     return this.reverbIn
   }
@@ -125,6 +132,10 @@ class AudioEngine {
     this.ui = ctx.createGain()
     this.ui.gain.value = this.uiGain()
     this.ui.connect(this.master)
+
+    this.focus = ctx.createGain()
+    this.focus.gain.value = 1
+    this.focus.connect(this.master)
 
     const convolver = ctx.createConvolver()
     convolver.buffer = this.impulse(ctx, 2.4, 2.8)

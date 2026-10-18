@@ -82,6 +82,8 @@ export interface BossBattleInput {
   clean: boolean
   /** Relics in effect for this battle. */
   relics: readonly RelicId[]
+  /** Coin multiplier (parley choices, Ironman). */
+  rewardFactor?: number
 }
 
 export interface BossResult {
@@ -119,7 +121,7 @@ export function applyBossResult(profile: PlayerProfile, boss: Boss, input: BossB
 
   const base = won ? (firstClear ? boss.rewards.first : boss.rewards.repeat) : 0
   const starBonus = (best - before.stars) * STAR_BONUS
-  const coins = Math.round((base + starBonus) * (won && input.relics.includes('fae-gold') ? FAE_GOLD_FACTOR : 1))
+  const coins = Math.round((base + starBonus) * (won && input.relics.includes('fae-gold') ? FAE_GOLD_FACTOR : 1) * (input.rewardFactor ?? 1))
 
   const relic = firstClear && boss.relic && !progress.relics.includes(boss.relic) ? getRelic(boss.relic) : null
   const realmCleared = firstClear && boss.rank === 'overlord' && !progress.realmsCleared.includes(boss.realm) ? boss.realm : null

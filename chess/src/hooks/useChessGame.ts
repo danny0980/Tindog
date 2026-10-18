@@ -1,6 +1,6 @@
 import { Chess, DEFAULT_POSITION } from 'chess.js'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { type SpecialMove, type VariantEvent, isSpecialMove, repetitionCount, specialFromEvent, toVariantEvent } from '../engine/variant'
+import { type SpecialMove, type VariantEvent, isSpecialMove, repetitionCount, specialFromEvent, specialKindOf, toVariantEvent } from '../engine/variant'
 import type { Color, GameResult, GameStatus, Move, MoveInput } from '../types/chess'
 import { getBoardResult, hasMatingMaterial, pgnResultToken } from '../utils/chess'
 
@@ -164,7 +164,7 @@ export function useChessGame() {
     (): VariantEvent[] =>
       historyRef.current.flatMap((m, i) => {
         if (!isSpecialMove(m)) return []
-        return [toVariantEvent({ kind: m.flags.includes('z') ? 'pass' : m.piece === 'n' ? 'leap' : 'charge', color: m.color, from: m.from, to: m.to, piece: m.piece, ...(m.captured ? { captured: m.captured } : {}), ...(m.promotion ? { promotion: m.promotion } : {}), san: m.san, move: m }, i + 1)]
+        return [toVariantEvent({ kind: specialKindOf(m), color: m.color, from: m.from, to: m.to, piece: m.piece, ...(m.captured ? { captured: m.captured } : {}), ...(m.promotion ? { promotion: m.promotion } : {}), san: m.san, move: m }, i + 1)]
       }),
     [],
   )
@@ -193,7 +193,7 @@ export function useChessGame() {
     history.forEach((move, i) => {
       if (move.color === 'w' || i === 0) movetext.push(move.color === 'w' ? `${Math.floor(i / 2) + 1}.` : `${Math.floor(i / 2) + 1}...`)
       movetext.push(move.san)
-      if (isSpecialMove(move)) movetext.push(`{Chronos ${move.flags.includes('z') ? 'pass' : move.piece === 'n' ? 'leap' : 'charge'}}`)
+      if (isSpecialMove(move)) movetext.push(`{Chronos ${specialKindOf(move)}}`)
     })
     movetext.push(pgnResultToken(result))
     return `${[...tags, ['Variant', 'Chronos Spells'] as [string, string]].map(([k, v]) => `[${k} "${v}"]`).join('\n')}\n\n${movetext.join(' ')}`

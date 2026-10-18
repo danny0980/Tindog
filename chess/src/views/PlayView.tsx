@@ -7,6 +7,10 @@ import { ChessBoard } from '../components/board/ChessBoard'
 import { EvalBar } from '../components/board/EvalBar'
 import { CampaignBattleStrip } from '../components/campaign/CampaignBattleStrip'
 import { SpellHud } from '../components/campaign/SpellHud'
+import { ArenaBar } from '../components/roguelike/ArenaBar'
+import { KillCamStage } from '../components/roguelike/KillCam'
+import { MoodBackdrop } from '../components/roguelike/MoodBackdrop'
+import { WeatherOverlay } from '../components/roguelike/WeatherOverlay'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
 import { ChessClock } from '../components/game/ChessClock'
 import { ControlPanel } from '../components/game/ControlPanel'
@@ -27,7 +31,9 @@ import { Modal } from '../components/ui/Modal'
 import { SwipeFeedback } from '../components/ui/SwipeFeedback'
 import type { GameController } from '../hooks/useGameController'
 import { useLayoutMode } from '../hooks/useLayoutMode'
+import { useStore } from '../hooks/useStore'
 import { type SwipeDirection, useSwipeGesture } from '../hooks/useSwipeGesture'
+import { profileStore } from '../stores/profileStore'
 import { updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import type { Color, GameSettings, MoveInput } from '../types/chess'
@@ -81,6 +87,12 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const turn = game.status.kind === 'playing' ? game.status.turn : null
   const { timeMachine } = game
   const total = game.history.length
+  const potions = useStore(profileStore, (p) => p.inventory.potions)
+  // Fog of war hides move hints and the evaluation bar for the whole battle.
+  const fog = game.battle?.weather === 'fog' && !game.review && game.status.kind === 'playing'
+  const showEval = game.evalEnabled && !fog
+  const moodFx = settings.moodEffects && !settings.batterySaver
+  const inDanger = moodFx && game.isAiMode && game.status.kind === 'playing' && game.status.inCheck && game.status.turn === game.humanColor
 
   // First-run gesture tutorial on touch layouts.
   const showGuide = guideOpen || (active && gestures && !settings.gestureHintSeen && !newGameOpen)
@@ -180,7 +192,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
 
   const analysisMoves = game.analysis.status === 'done' ? game.analysis.analysis.moves : null
   const currentMoveAnalysis = analysisMoves?.[timeMachine.displayPly - 1] ?? null
-  const arrows = game.bestMoveArrow ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
+  const arrows = game.bestMoveArrow && !fog ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
 
   const renderPlayer = (color: Color, hideClock = false) => {
     const character = game.players[color].character
@@ -203,9 +215,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   }
 
   const board = (
-    <div className="flex items-stretch gap-2">
-      {game.evalEnabled && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
+    <div key={moodFx && game.severeCheck > 0 ? `quake-${game.severeCheck}` : 'board'} className={`flex items-stretch gap-2 ${moodFx && game.severeCheck > 0 ? 'animate-quake' : ''}`}>
+      {showEval && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
       <div className="min-w-0 flex-1">
+        <KillCamStage cam={game.killCam} orientation={game.orientation}>
         <ChessBoard
           id="play-board"
           fen={game.fen}
@@ -217,17 +230,20 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           theme={game.theme}
           pieceSet={pieceSet}
           lowPower={settings.batterySaver}
-          showLegalMoves={settings.showLegalMoves}
+          showLegalMoves={settings.showLegalMoves && !fog}
           showCoordinates={settings.showCoordinates}
           arrows={arrows}
-          frozenSquare={game.frozenSquare}
+          arena={game.arena}
+          picker={game.picker}
           specialTargets={game.specialTargets}
         >
+          {game.effects && game.battle && !game.review && <WeatherOverlay weather={game.effects.weather} lowPower={settings.batterySaver} />}
           {hologram && !settings.batterySaver && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
           {game.spellFlash && !settings.batterySaver && timeMachine.isLive && (
             <BoardHologram key={`spell-${game.spellFlash.id}`} text={game.spellFlash.text} tone={game.spellFlash.tone} />
           )}
         </ChessBoard>
+        </KillCamStage>
       </div>
     </div>
   )
@@ -278,6 +294,21 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const spellHud = (compact: boolean) =>
     game.battle && game.effects && !game.review ? <SpellHud setup={game.battle} effects={game.effects} opponentName={game.opponentName} compact={compact} /> : null
 
+  const arenaBar = (compact: boolean) =>
+    game.battle && game.effects && !game.review && game.status.kind === 'playing' ? (
+      <ArenaBar
+        setup={game.battle}
+        effects={game.effects}
+        potions={potions}
+        enabled={game.yourLiveTurn}
+        pickMode={game.pickMode}
+        altarSquares={game.altarSquares.length}
+        onDrink={game.drinkPotion}
+        onPickMode={game.setPickMode}
+        compact={compact}
+      />
+    ) : null
+
   // The human's own colour sits at the bottom (the side being "held").
   const bottomColor = game.orientation
   const topColor = opposite(game.orientation)
@@ -293,8 +324,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           </div>
           {/* Size container: the board takes the largest square the leftover space allows. */}
           <div className="safe-px flex min-h-0 flex-1 items-center justify-center py-2 [container-type:size]">
-            <div className={game.evalEnabled ? 'w-[min(100cqw,calc(100cqh+1.4rem))]' : 'w-[min(100cqw,100cqh)]'}>{board}</div>
+            <div className={showEval ? 'w-[min(100cqw,calc(100cqh+1.4rem))]' : 'w-[min(100cqw,100cqh)]'}>{board}</div>
           </div>
+          {/* Potions & altar sit right above the thumb dock — in reach of one thumb. */}
+          {game.battle && <div className="safe-px shrink-0 pb-1">{arenaBar(true)}</div>}
           <ThumbDock
             swipe={swipe}
             gestures={gestures}
@@ -359,6 +392,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
             </div>
             {campaignStrip}
             {spellHud(false)}
+            {arenaBar(false)}
             <ControlPanel
               canUndo={game.canUndo}
               canResign={game.canResign}
@@ -379,6 +413,8 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           </aside>
         </div>
       )}
+
+      {active && moodFx && <MoodBackdrop alignment={game.review ? null : game.alignment} danger={inDanger} />}
 
       {feedback && <SwipeFeedback key={feedback.id} direction={feedback.direction} label={feedback.label} />}
 

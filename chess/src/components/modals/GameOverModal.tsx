@@ -1,4 +1,5 @@
 import { Coins, Crown, Eye, Infinity as InfinityIcon, Handshake, Hourglass, Map as MapIcon, Microscope, RotateCcw, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
 import { StarRow } from '../campaign/StarRow'
@@ -46,6 +47,11 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               {summary.gauntlet.ended ? 'Gauntlet results' : 'Continue the Gauntlet'}
             </Button>
           ) : null}
+          {summary.arena && !summary.campaign ? (
+            <Button variant="primary" className="w-full" onClick={onOpenCampaign} icon={<MapIcon className="size-4" />}>
+              Back to the map
+            </Button>
+          ) : null}
           {summary.campaign ? (
             <div className="grid grid-cols-2 gap-2">
               <Button variant="primary" onClick={onOpenCampaign} icon={<MapIcon className="size-4" />}>
@@ -56,7 +62,7 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               </Button>
             </div>
           ) : null}
-          <Button variant={summary.campaign || summary.gauntlet ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
+          <Button variant={summary.campaign || summary.gauntlet || summary.arena ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
             Analyze game
           </Button>
           <div className="grid grid-cols-3 gap-2">
@@ -175,6 +181,38 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               <div className="text-xs font-semibold text-emerald-300">
                 {getGrandRealm(summary.campaign.realmCleared).name} cleared!
                 {summary.campaign.rewards.length > 0 ? ` Unlocked: ${summary.campaign.rewards.join(' · ')}` : ''}
+              </div>
+            )}
+          </div>
+        )}
+
+        {summary.ironman && (
+          <div
+            className={`mt-3 w-full rounded-xl border p-3 text-left text-xs ${summary.ironman.wiped ? 'border-red-400/50 bg-red-500/15 text-red-100' : 'border-zinc-300/30 bg-zinc-300/10 text-zinc-100'}`}
+            data-ironman-summary
+          >
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
+              <Skull className="size-3.5" /> Ironman
+            </div>
+            <div className="mt-1 text-sm font-semibold">
+              {summary.ironman.wiped
+                ? `Permadeath — the run is lost (${summary.ironman.lostBosses} ${summary.ironman.lostBosses === 1 ? 'boss' : 'bosses'} fall back into darkness).`
+                : `The run survives · coins ×${summary.ironman.factor.toFixed(summary.ironman.factor % 1 === 0 ? 0 : 1)}`}
+            </div>
+          </div>
+        )}
+
+        {summary.arena && (
+          <div
+            className={`mt-3 w-full space-y-1 rounded-xl border p-3 text-left ${summary.arena.success ? 'border-emerald-300/40 bg-emerald-400/10' : 'border-white/10 bg-white/5'}`}
+            data-arena-summary
+          >
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">{summary.arena.title}</div>
+            <div className="text-sm font-semibold text-white">{summary.arena.detail}</div>
+            {(summary.arena.coins > 0 || summary.arena.potion) && (
+              <div className="flex flex-wrap gap-x-3 text-xs">
+                {summary.arena.coins > 0 && <span className="text-yellow-300">+{summary.arena.coins} coins</span>}
+                {summary.arena.potion && <span className="text-amber-200">+1 {POTIONS[summary.arena.potion].name}</span>}
               </div>
             )}
           </div>

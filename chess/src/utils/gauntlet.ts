@@ -180,8 +180,8 @@ export function insertLeaderboard(board: readonly LeaderboardEntry[], entry: Lea
 }
 
 /** Books a finished run into the personal record and local leaderboard. */
-export function recordRun(record: GauntletRecord, run: GauntletRun, name: string, now: Date): GauntletRecord {
-  const entry: LeaderboardEntry = { id: run.id, name, score: run.score, defeated: run.defeated, bestStreak: run.bestStreak, date: now.toISOString() }
+export function recordRun(record: GauntletRecord, run: GauntletRun, name: string, now: Date, title?: string): GauntletRecord {
+  const entry: LeaderboardEntry = { id: run.id, name, score: run.score, defeated: run.defeated, bestStreak: run.bestStreak, date: now.toISOString(), ...(title ? { title } : {}) }
   return {
     bestScore: Math.max(record.bestScore, run.score),
     bestDefeated: Math.max(record.bestDefeated, run.defeated),

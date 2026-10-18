@@ -18,7 +18,7 @@ const TIMEOUT_MS = 6_000
 
 export function sanitizeEntry(v: unknown): LeaderboardEntry | null {
   if (!isRecord(v)) return null
-  const { id, name, score, defeated, bestStreak, date } = v
+  const { id, name, score, defeated, bestStreak, date, title } = v
   if (typeof id !== 'string' || typeof name !== 'string' || typeof score !== 'number' || !Number.isFinite(score)) return null
   return {
     id: id.slice(0, 64),
@@ -27,6 +27,7 @@ export function sanitizeEntry(v: unknown): LeaderboardEntry | null {
     defeated: typeof defeated === 'number' && Number.isFinite(defeated) ? Math.max(0, Math.round(defeated)) : 0,
     bestStreak: typeof bestStreak === 'number' && Number.isFinite(bestStreak) ? Math.max(0, Math.round(bestStreak)) : 0,
     date: typeof date === 'string' ? date : new Date(0).toISOString(),
+    ...(typeof title === 'string' && title.length > 0 ? { title: title.slice(0, 40) } : {}),
   }
 }
 

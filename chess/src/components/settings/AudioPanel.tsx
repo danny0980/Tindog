@@ -1,6 +1,6 @@
-import { Bell, Crown, Handshake, Music, Play, Skull, Sparkles, Trophy, Volume2, VolumeX } from 'lucide-react'
+import { Bell, CloudRain, Crown, Flame, Handshake, Music, Orbit, Play, Skull, Sparkles, Trophy, Volume2, VolumeX, Wind } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { audioEngine, sfx } from '../../audio'
+import { FOCUS_TRACKS, type FocusTrack, audioEngine, focusSoundscape, sfx } from '../../audio'
 import { playAchievement, playCheck, playCoins, playDefeat, playDraw, playVictory } from '../../audio/fanfares'
 import { playPieceSound } from '../../audio/pieceSounds'
 import { getBoardTheme } from '../../constants/themes'
@@ -21,6 +21,8 @@ const MATERIALS: ReadonlyArray<{ id: SoundMaterialSetting; label: string; hint: 
 ]
 
 const unlock = () => audioEngine.unlock()
+
+const FOCUS_ICON: Record<FocusTrack, typeof Wind> = { off: VolumeX, rain: CloudRain, fireplace: Flame, cosmic: Orbit }
 
 /** Granular mixer: master + three tracks, piece-sound material and cue previews. */
 export function AudioPanel({ settings }: { settings: AppSettings }) {
@@ -74,6 +76,45 @@ export function AudioPanel({ settings }: { settings: AppSettings }) {
             playCoins()
           }}
         />
+      </Section>
+
+      <Section title="Focus soundscape">
+        <p className="mb-2 text-xs text-slate-400">Ambient sound to help you concentrate — synthesised live, no downloads.</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Focus soundscape">
+          {FOCUS_TRACKS.map((t) => {
+            const Icon = FOCUS_ICON[t.id]
+            const on = settings.focusTrack === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                data-focus={t.id}
+                title={t.description}
+                onClick={() => {
+                  unlock()
+                  updateSettings({ focusTrack: t.id })
+                  focusSoundscape.play(t.id, settings.focusVolume)
+                }}
+                className={`flex min-h-12 items-center gap-2 rounded-xl border p-2 text-left text-sm font-semibold transition ${on ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}
+              >
+                <Icon className="size-4 shrink-0" /> {t.name}
+              </button>
+            )
+          })}
+        </div>
+        <VolumeRow icon={<Volume2 className="size-4" />} label="Focus soundscape volume" value={settings.focusVolume} onChange={(v) => updateSettings({ focusVolume: v })} disabled={settings.focusTrack === 'off'} />
+      </Section>
+
+      <Section title="Arena atmosphere">
+        <label className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2">
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-white">Mood-reactive arena</span>
+            <span className="block text-xs text-slate-500">Lighting follows your opponent’s alignment; severe checks shake the board</span>
+          </span>
+          <input type="checkbox" className="size-5 accent-[var(--accent)]" checked={settings.moodEffects} onChange={(e) => updateSettings({ moodEffects: e.target.checked })} />
+        </label>
       </Section>
 
       <Section title="Piece sound material">

@@ -5,6 +5,7 @@ import type { BossId, CampaignProgress } from './campaign'
 import type { LegendId, LegendProgress } from './legend'
 import type { QuestProgress } from './quest'
 import type { RushRecord } from './rush'
+import type { FeatCounters, IronmanState, MatchAnalysisSummary, PotionInventory, TournamentState, WorldState } from './rpg'
 
 export interface MatchRecord {
   id: string
@@ -30,6 +31,8 @@ export interface MatchRecord {
   bossId: BossId | null
   /** Chronos special plies (spells / tactics) needed to replay the game for review. */
   variant?: VariantEvent[]
+  /** Engine-analysis summary (once analysed) for the notebook. */
+  analysis?: MatchAnalysisSummary
 }
 
 export interface EloPoint {
@@ -59,7 +62,7 @@ export interface PuzzleProgress {
 
 export interface PlayerProfile {
   /** Schema version (see stores/migrations.ts). */
-  version: 2
+  version: 3
   name: string
   elo: number
   peakElo: number
@@ -78,6 +81,16 @@ export interface PlayerProfile {
   rush: RushRecord
   legends: LegendProgress
   campaign: CampaignProgress
+  // ── v3 (Ultimate Edition) ──
+  inventory: { potions: PotionInventory }
+  ironman: IronmanState
+  world: WorldState
+  /** Title shown on your player card (null = your noble rank). */
+  title: string | null
+  notebook: { notes: string }
+  tournament: TournamentState | null
+  tournamentsWon: number
+  feats: FeatCounters
 }
 
 export type AchievementIcon =

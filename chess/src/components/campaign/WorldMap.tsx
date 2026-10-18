@@ -1,4 +1,4 @@
-import { Crown, Gem, Lock } from 'lucide-react'
+import { Crown, FlaskConical, Gem, Lock, ScrollText, Sparkles, Swords } from 'lucide-react'
 import { type CSSProperties, useEffect, useRef } from 'react'
 import { getBoardTheme } from '../../constants/themes'
 import { BOSSES_PER_ZONE } from '../../data/campaign/realms'
@@ -15,7 +15,26 @@ interface WorldMapProps {
   lockedReason: string
   selected: BossId | null
   onSelect: (id: BossId) => void
+  /** Today's world events and bounties, by the boss node they sit beside. */
+  markers?: ReadonlyArray<MapMarker>
+  onMarker?: (id: string) => void
 }
+
+export interface MapMarker {
+  id: string
+  index: number
+  kind: 'shrine' | 'merchant' | 'ambush' | 'bounty'
+  done: boolean
+  label: string
+}
+
+const MARKER_ICON = { shrine: Sparkles, merchant: FlaskConical, ambush: Swords, bounty: ScrollText } as const
+const MARKER_STYLE = {
+  shrine: 'from-sky-200 to-indigo-500',
+  merchant: 'from-amber-200 to-orange-500',
+  ambush: 'from-red-300 to-rose-700',
+  bounty: 'from-emerald-200 to-teal-600',
+} as const
 
 const ROW = 108
 const BANNER = 88
@@ -51,7 +70,7 @@ const hexA = (hex: string, alpha: number) =>
  * joined by a winding road. Conquered stretches of road glow; the next boss
  * pulses; milestone and overlord nodes are larger and show their relic.
  */
-export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason, selected, onSelect }: WorldMapProps) {
+export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason, selected, onSelect, markers = [], onMarker }: WorldMapProps) {
   const height = PAD * 2 + realm.zones.length * BANNER + roster.length * ROW
   const points = roster.map((_, i) => nodePosition(i))
   const next = nextBoss(roster, progress)
@@ -176,6 +195,28 @@ export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason,
             >
               {unlocked ? boss.shortName : '???'}
             </span>
+          </button>
+        )
+      })}
+
+      {markers.map((m) => {
+        const pos = points[m.index]
+        if (!pos) return null
+        const slot = markers.filter((o) => o.index === m.index).indexOf(m)
+        const side = pos.x > 50 ? -1 : 1
+        const Icon = MARKER_ICON[m.kind]
+        return (
+          <button
+            key={m.id}
+            type="button"
+            data-marker={m.kind}
+            onClick={() => onMarker?.(m.id)}
+            aria-label={`${m.label}${m.done ? ' (done)' : ''}`}
+            title={m.label}
+            className={`absolute z-[1] flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br text-ink-950 shadow-lg ring-2 ring-ink-900 transition hover:scale-110 ${MARKER_STYLE[m.kind]} ${m.done ? 'opacity-40 grayscale' : 'animate-float'}`}
+            style={{ left: `${pos.x + side * (17 + slot * 9)}%`, top: pos.y - 18 + slot * 14 }}
+          >
+            <Icon className="size-4" />
           </button>
         )
       })}

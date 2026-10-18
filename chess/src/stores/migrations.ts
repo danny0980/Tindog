@@ -42,7 +42,7 @@ export function runMigrations(raw: unknown, current: number, steps: Readonly<Par
 // ── Player profile ───────────────────────────────────────────────────────────
 
 /** Current shape of the saved player profile. */
-export const PROFILE_VERSION = 2
+export const PROFILE_VERSION = 3
 
 /**
  * v1 → v2 (Grand Campaign, app 4.0): adds the campaign progress block and
@@ -54,9 +54,29 @@ const profileV1ToV2: MigrationStep = (data) => ({
   matches: Array.isArray(data.matches) ? data.matches.map((m: unknown) => (isRecord(m) ? { bossId: null, ...m } : m)) : [],
 })
 
+/** Potions every existing player receives with the v3 upgrade. */
+export const V3_STARTER_POTIONS = { 'time-elixir': 1, 'purge-potion': 1, 'trap-kit': 1 } as const
+
+/**
+ * v2 → v3 (Ultimate Edition, app 6.0): adds the potion inventory (with a
+ * starter gift), Ironman, the world-map state, titles, the notebook, daily
+ * tournaments and feat counters. Campaign progress and matches are untouched.
+ */
+const profileV2ToV3: MigrationStep = (data) => ({
+  ...data,
+  inventory: isRecord(data.inventory) ? data.inventory : { potions: { ...V3_STARTER_POTIONS } },
+  ironman: isRecord(data.ironman) ? data.ironman : { enabled: false, since: null, wipes: 0, bestCleared: 0, realmsConquered: [], savedCampaign: null },
+  world: isRecord(data.world) ? data.world : { cycle: '', events: [], bounties: [], resolved: [], purchases: [], completedBounties: [], blessings: [] },
+  title: typeof data.title === 'string' ? data.title : null,
+  notebook: isRecord(data.notebook) ? data.notebook : { notes: '' },
+  tournament: isRecord(data.tournament) ? data.tournament : null,
+  tournamentsWon: typeof data.tournamentsWon === 'number' ? data.tournamentsWon : 0,
+})
+
 export const PROFILE_MIGRATIONS: Readonly<Partial<Record<number, MigrationStep>>> = {
   1: profileV1ToV2,
-  // 2: profileV2ToV3 — add the next step here when the profile shape changes,
+  2: profileV2ToV3,
+  // 3: profileV3ToV4 — add the next step here when the profile shape changes,
   // then bump PROFILE_VERSION.
 }
 

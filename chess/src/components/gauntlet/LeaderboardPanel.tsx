@@ -13,7 +13,10 @@ function Rows({ entries, highlight }: { entries: readonly LeaderboardEntry[]; hi
           className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs ${e.id === highlight ? 'bg-accent/15 text-white ring-1 ring-accent/50' : 'bg-white/[0.03] text-slate-300'}`}
         >
           <span className={`w-5 text-center font-mono font-bold ${i < 3 ? 'text-amber-300' : 'text-slate-500'}`}>{i + 1}</span>
-          <span className="min-w-0 flex-1 truncate font-semibold">{e.name}</span>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-semibold">{e.name}</span>
+            {e.title && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-accent/80">{e.title}</span>}
+          </span>
           <span className="text-slate-500">{e.defeated} bosses</span>
           <span className="w-16 text-right font-mono font-bold text-white">{e.score.toLocaleString()}</span>
         </li>

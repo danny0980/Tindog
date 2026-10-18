@@ -10,7 +10,7 @@ import { getLegend } from '../src/data/legends'
 import { bossPersona, legendPersona } from '../src/data/personas'
 import { BOSS_SPELLS, SPELLS, TACTICS, buildBattleSetup, dealDraft, spellsForBoss } from '../src/data/spells'
 import { TAUNTS, fillTemplate } from '../src/data/taunts'
-import { afterPly, bossSpecialMoves, chooseFrozenSquare, createEffects, humanSpecialMoves, isThreatened, type PlyContext } from '../src/engine/spellEngine'
+import { afterPly, bossSpecialMoves, chooseFrozenSquare, createEffects, frostSquares, humanSpecialMoves, isThreatened, type PlyContext } from '../src/engine/spellEngine'
 import { analyzeTaunt } from '../src/engine/taunts'
 import { generateCharges, generateLeaps, isKingAttacked, passTurn, pathSquares, repetitionCount, specialFromEvent, toVariantEvent } from '../src/engine/variant'
 import { createGlobalLeaderboard } from '../src/services/leaderboard'
@@ -60,10 +60,6 @@ check('threefold counted over the whole history', repetitionCount(reps.history({
 
 // ── Spell engine ─────────────────────────────────────────────────────────────
 const setupFor = (spells: BattleSetup['spells'], tactics: BattleSetup['tactics'] = [], timed = true, relics: Parameters<typeof buildBattleSetup>[4] = []) => buildBattleSetup('campaign', spells, tactics, timed, relics)
-const quietBlack = (fen: string): Move => {
-  const c = new Chess(fen)
-  return c.moves({ verbose: true }).find((m) => !m.captured && !m.san.includes('+')) as Move
-}
 const ctx = (setup: BattleSetup, mover: 'human' | 'boss', move: Move, extra: Partial<PlyContext> = {}): PlyContext => ({
   setup, mover, move, fen: move.after, humanColor: 'w', thinkMs: 1000, clocks: { w: 300_000, b: 300_000 }, rng: fixedRng(0.3), ...extra,
 })
@@ -85,15 +81,15 @@ function simulateBossMoves(setup: BattleSetup, count: number): { fx: BattleEffec
   return { fx, events }
 }
 const frost = simulateBossMoves(setupFor(['frost-sigil']), 5)
-check('freeze: warning on boss move 4, cast on move 5', frost.events.join() === '4:spell-warning,5:spell-cast' && frost.fx.frozen !== null, frost.events.join())
+check('freeze: warning on boss move 4, cast on move 5', frost.events.join() === '4:spell-warning,5:spell-cast' && frostSquares(frost.fx).length === 1, frost.events.join())
 check('frozen square is empty and leaves you legal moves', (() => {
-  const sq = frost.fx.frozen
-  return sq !== null && new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').get(sq) === undefined
+  const sq = frostSquares(frost.fx)[0]
+  return sq !== undefined && new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').get(sq) === undefined
 })())
 const thaw = afterPly(frost.fx, ctx(setupFor(['frost-sigil']), 'human', new Chess().move('e4')))
-check('freeze lasts only your next move', thaw.effects.frozen === null)
+check('freeze lasts only your next move', frostSquares(thaw.effects).length === 0)
 const warded = simulateBossMoves(setupFor(['frost-sigil'], ['spell-ward']), 5)
-check('Spell Ward blocks the first spell', warded.events.includes('5:spell-blocked') && warded.fx.frozen === null && warded.fx.wardCharges === 0)
+check('Spell Ward blocks the first spell', warded.events.includes('5:spell-blocked') && frostSquares(warded.fx).length === 0 && warded.fx.wardCharges === 0)
 const warded2 = setupFor(['frost-sigil'], ['spell-ward'], true, ['shield-of-kings'])
 check('Shield of Kings synergy: ward ×2', warded2.wardCharges === 2)
 const over = simulateBossMoves(setupFor(['total-computation']), 4)
@@ -136,11 +132,11 @@ check('Second Wind: +60 s under 30 s, once', swOut.events.some((e) => e.kind ===
 const bootSetup = setupFor([], ['knights-boot'], true, ['smoke-veil'])
 check('Knight’s Boot ×2 with the Smoke Veil relic', bootSetup.bootCharges === 2)
 let bootFx = createEffects(bootSetup)
-const bootLeap = humanSpecialMoves(bootFx, START, 'w').find((s) => s.to === 'c4')
+const bootLeap = humanSpecialMoves(bootFx, bootSetup, START, 'w').find((s) => s.to === 'c4')
 check('Knight’s Boot offers leaps', bootLeap !== undefined)
 bootFx = afterPly(bootFx, ctx(bootSetup, 'human', (bootLeap as NonNullable<typeof bootLeap>).move)).effects
 check('a leap spends one charge', bootFx.bootCharges === 1)
-check('frozen squares block special moves too', humanSpecialMoves({ ...createEffects(bootSetup), frozen: 'c4' }, START, 'w').every((s) => s.to !== 'c4'))
+check('frozen squares block special moves too', humanSpecialMoves({ ...createEffects(bootSetup), traps: [{ square: 'c4', kind: 'frost', victim: 'human', turnsLeft: 1 }] }, bootSetup, START, 'w').every((s) => s.to !== 'c4'))
 check('untimed battles drop clock tactics', setupFor([], ['chronos-hourglass', 'katana-blade'], false).tactics.join() === 'katana-blade')
 
 // ── Draft ────────────────────────────────────────────────────────────────────

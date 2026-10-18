@@ -143,3 +143,29 @@ export function playSpellCast(): void {
   noise({ duration: 0.35, gain: 0.08, filter: { type: 'bandpass', frequency: 2400, q: 4 } })
   ;[84, 87, 91].forEach((n, i) => tone({ at: 0.05 + i * 0.04, frequency: midiToHz(n), type: 'triangle', decay: 0.6, gain: 0.05, reverb: 0.9 }))
 }
+
+/** A potion is drunk: bubbling, rising glassy blips. */
+export function playPotion(): void {
+  ;[72, 76, 79, 84].forEach((n, i) => tone({ destination: ui(), at: i * 0.06, frequency: midiToHz(n), frequencyEnd: midiToHz(n + 5), type: 'sine', decay: 0.18, gain: 0.07, reverb: 0.4 }))
+  noise({ duration: 0.25, gain: 0.03, filter: { type: 'bandpass', frequency: 1200, q: 6 } })
+}
+
+/** A glue trap snaps shut: a sticky low squelch. */
+export function playTrap(): void {
+  tone({ frequency: 180, frequencyEnd: 70, type: 'square', decay: 0.25, gain: 0.08, filter: { type: 'lowpass', frequency: 700 } })
+  noise({ duration: 0.18, gain: 0.06, filter: { type: 'lowpass', frequency: 900 } })
+}
+
+/** The opponent lands a severe check: a short seismic rumble. */
+export function playSevereCheck(): void {
+  tone({ frequency: 55, frequencyEnd: 32, type: 'sine', decay: 0.6, gain: 0.3 })
+  noise({ duration: 0.4, gain: 0.05, filter: { type: 'lowpass', frequency: 300 } })
+}
+
+/** Kill-cam: a slow, booming toll with a dark choir swell. */
+export function playKillCam(win: boolean): void {
+  tone({ frequency: 65, frequencyEnd: 30, type: 'sine', decay: 1.6, gain: 0.4 })
+  noise({ duration: 0.6, gain: 0.07, filter: { type: 'lowpass', frequency: 500 }, reverb: 0.6 })
+  const notes = win ? [48, 55, 60, 64, 67] : [45, 52, 57, 60, 63]
+  chord(notes, 0.35, 2.2, 0.35, 'sawtooth', 1400)
+}

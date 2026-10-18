@@ -1,5 +1,6 @@
 // Gauntlet side effects: run state transitions, coin payout, local records and
 // (when configured) global leaderboard submission.
+import { displayTitle } from '../data/titles'
 import { globalLeaderboard } from '../services/leaderboard'
 import type { Boss } from '../types/campaign'
 import type { Outcome } from '../types/chess'
@@ -43,11 +44,12 @@ function closeRun(run: GauntletRun): { coins: number; newBest: boolean } {
   const newBest = run.score > state.record.bestScore
   const profile = profileStore.get()
   const now = new Date()
-  gauntletStore.set({ ...state, run: { ...run, phase: 'over', coins }, record: recordRun(state.record, run, profile.name, now) })
+  const title = displayTitle({ profile, gauntletBest: Math.max(state.record.bestStreak, run.bestStreak) }).name
+  gauntletStore.set({ ...state, run: { ...run, phase: 'over', coins }, record: recordRun(state.record, run, profile.name, now, title) })
   if (coins > 0) profileStore.set((p) => ({ ...p, coins: p.coins + coins, totalCoinsEarned: p.totalCoinsEarned + coins }))
   if (globalLeaderboard && run.score > 0) {
     globalLeaderboard
-      .submit({ id: run.id, name: profile.name, score: run.score, defeated: run.defeated, bestStreak: run.bestStreak, date: now.toISOString() })
+      .submit({ id: run.id, name: profile.name, score: run.score, defeated: run.defeated, bestStreak: run.bestStreak, date: now.toISOString(), title })
       .catch(() => showToast('warning', 'Leaderboard offline', 'Your run is saved locally; the global board could not be reached.'))
   }
   return { coins, newBest }

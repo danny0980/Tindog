@@ -3,6 +3,8 @@
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
 import { BOSSES_PER_REALM, GRAND_REALMS, getGrandRealm } from '../data/campaign/realms'
 import { BANNER_PAR_FACTOR, FAE_GOLD_FACTOR, getRelic, relicSlots } from '../data/campaign/relics'
+import { isHiddenBossId, parentsOf } from '../data/campaign/paths'
+import { type TierId, bestTier } from '../data/campaign/tiers'
 import type { Boss, BossId, BossRecord, CampaignProgress, GrandRealmId, RelicDef, RelicId, StarCount } from '../types/campaign'
 import type { Outcome } from '../types/chess'
 import type { AchievementDef, PlayerProfile } from '../types/profile'
@@ -23,22 +25,35 @@ export function isRealmUnlocked(realm: GrandRealmId, progress: CampaignProgress)
   return previous ? progress.realmsCleared.includes(previous.id) : false
 }
 
-/** Bosses unlock in order along their realm's path. */
+/**
+ * Bosses unlock along their realm's roads: a node opens when ANY node leading
+ * to it is conquered, so each zone's fork lets you pick a branch (see paths.ts).
+ * A hidden node opens once it is revealed.
+ */
 export function isBossUnlocked(boss: Boss, roster: readonly Boss[], progress: CampaignProgress): boolean {
   if (!isRealmUnlocked(boss.realm, progress)) return false
-  if (boss.index === 0) return true
-  const previous = roster[boss.index - 1]
-  return previous ? Boolean(bossRecord(progress, previous.id).firstClear) : false
+  if (boss.hidden) return isEchoRevealed(roster, progress)
+  const parents = parentsOf(boss.index)
+  if (parents.length === 0) return true
+  return parents.some((i) => {
+    const parent = roster[i]
+    return parent ? Boolean(bossRecord(progress, parent.id).firstClear) : false
+  })
 }
 
-/** Next boss to fight in a realm (first undefeated), or null when the realm is cleared. */
+/** Next boss to fight in a realm (first open, undefeated node), or null when every open node is conquered. */
 export const nextBoss = (roster: readonly Boss[], progress: CampaignProgress): Boss | null =>
-  roster.find((b) => !bossRecord(progress, b.id).firstClear) ?? null
+  roster.find((b) => !bossRecord(progress, b.id).firstClear && isBossUnlocked(b, roster, progress)) ?? null
+
+/** A realm's hidden Echo appears once every one of its nodes — both branches of every fork — is conquered. */
+export const isEchoRevealed = (roster: readonly Boss[], progress: CampaignProgress): boolean =>
+  roster.length > 0 && roster.every((b) => b.hidden || Boolean(bossRecord(progress, b.id).firstClear))
 
 // ── Counters ─────────────────────────────────────────────────────────────────
 
+/** Records of the realm's regular nodes (hidden Echoes are a bonus, outside the realm's count). */
 const records = (progress: CampaignProgress, realm?: GrandRealmId) =>
-  (Object.entries(progress.bosses) as [BossId, BossRecord][]).filter(([id]) => !realm || id.startsWith(`${realm}.`)).map(([, r]) => r)
+  (Object.entries(progress.bosses) as [BossId, BossRecord][]).filter(([id]) => !isHiddenBossId(id) && (!realm || id.startsWith(`${realm}.`))).map(([, r]) => r)
 
 export const clearedCount = (progress: CampaignProgress, realm?: GrandRealmId): number => records(progress, realm).filter((r) => r.firstClear).length
 export const starCount = (progress: CampaignProgress, realm?: GrandRealmId): number => records(progress, realm).reduce((sum, r) => sum + r.stars, 0)
@@ -82,8 +97,10 @@ export interface BossBattleInput {
   clean: boolean
   /** Relics in effect for this battle. */
   relics: readonly RelicId[]
-  /** Coin multiplier (parley choices, Ironman). */
+  /** Coin multiplier (parley choices, mutators, difficulty tier, Ironman). */
   rewardFactor?: number
+  /** Difficulty tier the battle was fought on (recorded on a win). */
+  tier?: TierId
 }
 
 export interface BossResult {
@@ -117,6 +134,7 @@ export function applyBossResult(profile: PlayerProfile, boss: Boss, input: BossB
     draws: before.draws + (input.outcome === 'draw' ? 1 : 0),
     bestMoves: won ? Math.min(before.bestMoves ?? Number.POSITIVE_INFINITY, input.humanMoves) : before.bestMoves,
     firstClear: before.firstClear ?? (won ? nowIso : null),
+    ...(won ? { bestTier: bestTier(before.bestTier, input.tier ?? 'normal') } : before.bestTier ? { bestTier: before.bestTier } : {}),
   }
 
   const base = won ? (firstClear ? boss.rewards.first : boss.rewards.repeat) : 0

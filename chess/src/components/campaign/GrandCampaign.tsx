@@ -15,6 +15,9 @@ import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import type { BattleOptions, ChallengeClock } from './battleOptions'
 import { BattleDraft } from './BattleDraft'
+import { echoBoss, parentsOf } from '../../data/campaign/paths'
+import { mutatorArena } from '../../data/campaign/mutators'
+import { TIERS } from '../../data/campaign/tiers'
 import { BossBattleAction, BossDossier } from './BossDossier'
 import type { BattleLaunch } from '../../hooks/useGameController'
 import { showToast } from '../../stores/toastStore'
@@ -41,8 +44,10 @@ const updateCampaign = (fn: (c: CampaignProgress) => CampaignProgress) => profil
 
 function lockReasonFor(boss: Boss, roster: readonly Boss[], progress: CampaignProgress): string {
   if (!isRealmUnlocked(boss.realm, progress)) return realmLockReason(boss.realm)
-  const previous = roster[boss.index - 1]
-  return previous ? `Defeat ${previous.name} (#${previous.index + 1}) to reach this boss.` : ''
+  if (boss.hidden) return 'Conquer every node of this realm — both branches of every fork — to reveal it.'
+  const parents = parentsOf(boss.index).map((i) => roster[i]).filter((b): b is Boss => Boolean(b))
+  if (parents.length === 0) return ''
+  return `Defeat ${parents.map((p) => `${p.name} (#${p.index + 1})`).join(' or ')} to reach this boss.`
 }
 
 function realmLockReason(realm: GrandRealmId): string {
@@ -80,7 +85,8 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
   const realmUnlocked = isRealmUnlocked(realmId, progress)
   const frontier = roster ? nextBoss(roster, progress) : null
   const selectedId = picked[realmId] ?? frontier?.id ?? roster?.[roster.length - 1]?.id ?? null
-  const selected = roster?.find((b) => b.id === selectedId) ?? null
+  const echo = roster ? echoBoss(roster) : null
+  const selected = roster?.find((b) => b.id === selectedId) ?? (echo && echo.id === selectedId ? echo : null)
 
   // Preview the selected boss's battleground (board, colours, soundtrack) app-wide.
   const previewTheme = selected?.themeId ?? null
@@ -316,13 +322,23 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
           ironman={ironman.enabled}
           onToggleRelic={toggle}
           onClose={() => setDrafting(null)}
-          onConfirm={(tactics, parley) => {
+          onConfirm={(tactics, parley, loadout) => {
             const boss = drafting
             setDrafting(null)
+            // Parley fury, mutators and the difficulty tier all fold into one arena: boost clamps to ±1, rewards multiply.
+            const twist = mutatorArena(loadout.mutators, parley ? { bossBoost: parley.bossBoost, rewardFactor: parley.rewardFactor } : {})
             onChallenge(boss.id, options, {
               kind: 'campaign',
               tactics,
-              ...(parley ? { arena: { bossBoost: parley.bossBoost, rewardFactor: parley.rewardFactor }, parleyReply: { text: parley.reply, mood: parley.mood } } : {}),
+              arena: {
+                ...(twist.weather ? { weather: twist.weather } : {}),
+                ...(twist.restriction ? { restriction: twist.restriction } : {}),
+                bossBoost: twist.bossBoost,
+                rewardFactor: Math.round(twist.rewardFactor * TIERS[loadout.tier].rewardFactor * 100) / 100,
+                tier: loadout.tier,
+                mutators: loadout.mutators,
+              },
+              ...(parley ? { parleyReply: { text: parley.reply, mood: parley.mood } } : {}),
             })
           }}
         />

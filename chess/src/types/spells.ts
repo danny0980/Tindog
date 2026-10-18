@@ -1,3 +1,5 @@
+import type { MutatorId } from '../data/campaign/mutators'
+import type { TierId } from '../data/campaign/tiers'
 import type { RelicId } from './campaign'
 import type { Square } from './chess'
 import type { PotionId, RestrictionId, StuckPiece, Trap, WeatherId, WeatherState } from './rpg'
@@ -80,6 +82,10 @@ export interface BattleSetup {
   rewardFactor: number
   /** Ironman campaign battle: no takebacks, a loss wipes the campaign. */
   ironman: boolean
+  /** Campaign difficulty tier the boss is tuned to. */
+  tier: TierId
+  /** Random mutators rolled for this battle (their rules are already in weather / restriction / bossBoost). */
+  mutators: readonly MutatorId[]
 }
 
 /**

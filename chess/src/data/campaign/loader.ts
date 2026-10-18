@@ -9,6 +9,7 @@
 // offer a retry — automatically when the device comes back online.
 import type { Boss, BossId, GrandRealmId } from '../../types/campaign'
 import { DEFAULT_RETRY_DELAYS, importWithRetry, isOnline } from '../../utils/retry'
+import { echoBoss, isHiddenBossId } from './paths'
 import { type Store, createStore } from '../../utils/store'
 import { realmOfBoss } from './realms'
 
@@ -60,7 +61,11 @@ export function createRosterLoader(importers: Record<GrandRealmId, RosterImporte
     return promise
   }
 
-  const getCachedBoss = (id: BossId): Boss | null => rosterStore.get()[realmOfBoss(id)]?.find((b) => b.id === id) ?? null
+  const getCachedBoss = (id: BossId): Boss | null => {
+    const roster = rosterStore.get()[realmOfBoss(id)]
+    if (!roster) return null
+    return roster.find((b) => b.id === id) ?? (isHiddenBossId(id) ? echoBoss(roster) : null)
+  }
 
   return { rosterStore, statusStore, load, getCachedBoss }
 }

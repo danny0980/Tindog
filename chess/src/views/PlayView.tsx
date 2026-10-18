@@ -12,6 +12,7 @@ import { KillCamStage } from '../components/roguelike/KillCam'
 import { MoodBackdrop } from '../components/roguelike/MoodBackdrop'
 import { WeatherOverlay } from '../components/roguelike/WeatherOverlay'
 import { SpellParticles } from '../components/fx/SpellParticles'
+import { ArenaBackdrop } from '../components/fx/ArtBackdrop'
 import { Vignette } from '../components/fx/Vignette'
 import { playFx } from '../components/fx/playFx'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
@@ -344,6 +345,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
 
   return (
     <>
+      <ArenaBackdrop />
       {oneHanded ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="safe-px shrink-0 space-y-2" {...swipe}>

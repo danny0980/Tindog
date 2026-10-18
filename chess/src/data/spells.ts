@@ -1,3 +1,5 @@
+import type { MutatorId } from './campaign/mutators'
+import type { TierId } from './campaign/tiers'
 // Boss spells, battle tactics, relic synergies and the pre-battle draft.
 import type { BossId, RelicId } from '../types/campaign'
 import type { LegendId } from '../types/legend'
@@ -187,6 +189,8 @@ export interface ArenaOptions {
   bossBoost?: -1 | 0 | 1
   rewardFactor?: number
   ironman?: boolean
+  tier?: TierId
+  mutators?: readonly MutatorId[]
 }
 
 export function buildBattleSetup(
@@ -204,6 +208,8 @@ export function buildBattleSetup(
     bossBoost: arena.bossBoost ?? 0,
     rewardFactor: arena.rewardFactor ?? 1,
     ironman: arena.ironman ?? false,
+    tier: arena.tier ?? 'normal',
+    mutators: arena.mutators ?? [],
     kind,
     spells,
     tactics: usable,

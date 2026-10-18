@@ -1,3 +1,4 @@
+import { isTierId } from '../data/campaign/tiers'
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
 import { GRAND_REALM_IDS } from '../data/campaign/realms'
@@ -29,6 +30,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   artPieces: null,
   artBoard: null,
   artPieceScale: 1.15,
+  battleLook: 'realm',
+  arenaBackdrop: null,
+  campaignTier: 'normal',
+  battleMutators: false,
   playerAvatar: null,
   masterVolume: 0.8,
   sfxEnabled: true,
@@ -96,6 +101,10 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     artPieces: isArtId(s.artPieces) ? s.artPieces : null,
     artBoard: isArtId(s.artBoard) ? s.artBoard : null,
     artPieceScale: num(s.artPieceScale, d.artPieceScale, 0.8, 1.5),
+    battleLook: oneOf(s.battleLook, ['realm', 'mine'], d.battleLook),
+    arenaBackdrop: isArtId(s.arenaBackdrop) ? s.arenaBackdrop : null,
+    campaignTier: isTierId(s.campaignTier) ? s.campaignTier : d.campaignTier,
+    battleMutators: bool(s.battleMutators, d.battleMutators),
     playerAvatar: isArtId(s.playerAvatar) ? s.playerAvatar : null,
     masterVolume: num(s.masterVolume, d.masterVolume, 0, 1),
     sfxEnabled: bool(s.sfxEnabled, d.sfxEnabled),

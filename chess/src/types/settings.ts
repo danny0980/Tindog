@@ -1,3 +1,4 @@
+import type { TierId } from '../data/campaign/tiers'
 import type { GameSettings } from './chess'
 import type { GrandRealmId } from './campaign'
 import type { CampaignId } from './legend'
@@ -24,6 +25,14 @@ export interface AppSettings {
   artBoard: string | null
   /** Size of art-pack pieces on the board (1 = fit the square; larger stand taller, like 3D pieces). */
   artPieceScale: number
+  /** Battles show the opponent's realm / era look ('realm') or your own board and pieces ('mine'). */
+  battleLook: 'realm' | 'mine'
+  /** Art-pack background shown behind the board in battles (null = none). */
+  arenaBackdrop: string | null
+  /** Grand Campaign difficulty tier. */
+  campaignTier: TierId
+  /** Roll random mutators before campaign battles. */
+  battleMutators: boolean
   /** Art-pack player avatar (null = the default icon). */
   playerAvatar: string | null
   // ── Audio mixer ──

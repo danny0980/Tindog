@@ -1,3 +1,4 @@
+import { isTierId } from '../data/campaign/tiers'
 import { STARTING_ELO, STORAGE_KEYS } from '../constants/game'
 import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../constants/themes'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from '../types/chess'
@@ -87,6 +88,7 @@ function sanitizeBossRecord(raw: unknown): BossRecord | null {
     draws: num(raw.draws, 0, 0),
     bestMoves: typeof raw.bestMoves === 'number' && Number.isFinite(raw.bestMoves) && raw.bestMoves > 0 ? raw.bestMoves : null,
     firstClear: typeof raw.firstClear === 'string' ? raw.firstClear : null,
+    ...(isTierId(raw.bestTier) ? { bestTier: raw.bestTier } : {}),
   }
 }
 

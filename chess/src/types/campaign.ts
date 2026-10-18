@@ -1,3 +1,4 @@
+import type { TierId } from '../data/campaign/tiers'
 import type { OpponentProfile } from './engine'
 import type { LegendId, QuoteTrigger } from './legend'
 import type { PortraitIcon, PortraitSpec } from './persona'
@@ -118,6 +119,8 @@ export interface Boss {
   /** Arrival-card caption and setting (zone, or the legend's epoch for cameos). */
   arrivalCaption: string
   settingName: string
+  /** A hidden node (a realm's Echo): revealed by a condition, not part of the realm's count. */
+  hidden?: true
 }
 
 export interface ArchetypeDef {
@@ -148,6 +151,8 @@ export interface BossRecord {
   bestMoves: number | null
   /** ISO date of the first victory. */
   firstClear: string | null
+  /** Hardest difficulty tier this boss was beaten on. */
+  bestTier?: TierId
 }
 
 export interface CampaignProgress {

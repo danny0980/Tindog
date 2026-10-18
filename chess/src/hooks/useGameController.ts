@@ -1,3 +1,4 @@
+import { TIERS, applyTier } from '../data/campaign/tiers'
 import { Chess } from 'chess.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ambientMusic, resolveMaterial, sfx } from '../audio'
@@ -235,8 +236,10 @@ export function useGameController({ active }: { active: boolean }) {
   )
   /** Whoever sets the scene (theme, pieces, music): the live opponent or the reviewed one. */
   const stage = persona ?? reviewPersona
-  const theme = getBoardTheme(stage?.themeId ?? settings.boardTheme)
-  const pieceSet = getPieceSet(stage?.pieceSetId ?? settings.pieceSet)
+  // Your loadout can replace the opponent's realm / era look with your own board and pieces.
+  const realmLook = settings.battleLook === 'realm' ? stage : null
+  const theme = getBoardTheme(realmLook?.themeId ?? settings.boardTheme)
+  const pieceSet = getPieceSet(realmLook?.pieceSetId ?? settings.pieceSet)
   const material = resolveMaterial(settings.soundMaterial, theme)
   const isPlaying = game.status.kind === 'playing' && review === null
   const aiColor = opposite(humanColor)
@@ -249,6 +252,8 @@ export function useGameController({ active }: { active: boolean }) {
   const opponent = useMemo(() => {
     let profile = boss && persona ? applyRelicsToProfile(persona.profile, battleRelics) : persona ? persona.profile : standardOpponent(gameSettings.difficulty, gameSettings.personality)
     if (launchExtras.emp) profile = applyRelicsToProfile(profile, ['emp-spike'])
+    // Campaign difficulty tier.
+    if (boss && battle) profile = applyTier(profile, battle.tier)
     // Parley / elite ambush: the boss is weakened or empowered for the whole battle.
     if (battle?.bossBoost === 1) profile = { ...profile, skillLevel: Math.min(20, profile.skillLevel + 3), depth: profile.depth + 2, toleranceCp: Math.max(5, profile.toleranceCp - 10) }
     if (battle?.bossBoost === -1) profile = { ...profile, skillLevel: Math.max(0, profile.skillLevel - 3), depth: Math.max(2, profile.depth - 2), toleranceCp: profile.toleranceCp + 25 }
@@ -257,7 +262,7 @@ export function useGameController({ active }: { active: boolean }) {
       profile = { ...profile, skillLevel: 20, depth: profile.depth + 4, moveTimeMs: Math.round(profile.moveTimeMs * 1.5), toleranceCp: Math.min(profile.toleranceCp, 15), noise: 0 }
     }
     return profile
-  }, [battle?.bossBoost, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona])
+  }, [battle, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona])
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
   const recordedGameRef = useRef<number | null>(null)
@@ -363,13 +368,16 @@ export function useGameController({ active }: { active: boolean }) {
       let ironmanSummary: GameEndSummary['ironman'] = null
       const humanMoves = history.filter((m) => m.color === humanColor && !m.flags.includes('s')).length
       if (boss && outcome && battle?.kind === 'campaign') {
-        const factor = battle.rewardFactor * (battle.ironman ? IRONMAN_COIN_FACTOR : 1)
+        // A broken mutator contract (Swift Hunt) forfeits the mutators' bonus: only the tier's factor stays.
+        const kept = restrictionHonoured(battle, humanMoves) ? battle.rewardFactor : TIERS[battle.tier].rewardFactor
+        const factor = kept * (battle.ironman ? IRONMAN_COIN_FACTOR : 1)
         const br = applyBossResult(profileStore.get(), boss, {
           outcome,
           humanMoves,
           clean: !casual,
           relics: battleRelics,
           rewardFactor: factor,
+          tier: battle.tier,
         })
         profileStore.set(br.profile)
         if (battle.ironman) {

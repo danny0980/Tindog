@@ -8,6 +8,15 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 
 ---
 
+## What's new in 6.4: Campaign expansion and the pre-battle loadout
+
+- **Branching roads.** Each zone of the Grand Campaign now forks after its gate into two branches that rejoin before the zone boss. Clear either branch to go on; the skipped one stays open for later (`src/data/campaign/paths.ts`).
+- **Hidden nodes.** Each realm hides an **Echo** of its overlord: 250 Elo stronger, searching deeper, paying double. It appears at the end of the road only when every node, both branches of every fork included, is conquered. Echoes are a bonus: they don't count toward the realm's clears or stars.
+- **Difficulty tiers.** Story, Normal, Heroic and Legendary (`src/data/campaign/tiers.ts`) tune each boss's engine and set coin rewards from ×0.5 to ×2.5. Each boss remembers the hardest tier you beat it on.
+- **Mutators.** Switch them on and two random twists are rolled for each battle, at most one of each kind: a weather (Blizzard, Gale, Fog of War), a contract (Iron Vow, Pawn Oath, Swift Hunt) and a fury (Enraged, Weary) (`src/data/campaign/mutators.ts`). Rolls are fixed per boss and day, with two re-rolls. Rewards multiply, and a broken contract forfeits the mutators' bonus.
+- **Pre-battle loadout.** The battle window has a *Loadout* tab with the difficulty tier, mutators and the battle's look. Choose the realm's own board and pieces or *My look*: any board or piece set you own, any art-pack set or board, your avatar, and an arena backdrop shown behind the board. Every choice applies instantly and is remembered.
+- **Scalable pickers.** Art-pack and look grids get a search box once a grid has more than 9 options. Previews are built only for visible items, and off-screen cells skip layout and paint, so dozens of art packs stay fast. Settings → Art pack can also choose the arena backdrop.
+
 ## What's new in 6.3: Board VFX
 
 - **Effects under every piece.** Each square can carry its own animated layers, drawn under the piece:

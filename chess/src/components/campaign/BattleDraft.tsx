@@ -12,6 +12,11 @@ import { PORTRAIT_ICONS } from '../legends/portraitIcons'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { RelicTile } from './RelicTile'
+import { BattleLoadout } from './BattleLoadout'
+import { type MutatorId, mutatorSeed, rollMutators } from '../../data/campaign/mutators'
+import type { TierId } from '../../data/campaign/tiers'
+import { useStore } from '../../hooks/useStore'
+import { settingsStore } from '../../stores/settingsStore'
 
 interface BattleDraftProps {
   boss: Boss
@@ -23,7 +28,7 @@ interface BattleDraftProps {
   blessings: readonly TacticId[]
   /** Ironman run in progress (shown as a warning). */
   ironman: boolean
-  onConfirm: (tactics: TacticId[], parley: ParleyChoice | null) => void
+  onConfirm: (tactics: TacticId[], parley: ParleyChoice | null, loadout: { tier: TierId; mutators: MutatorId[] }) => void
   onClose: () => void
 }
 
@@ -45,6 +50,13 @@ export function BattleDraft({ boss, progress, timed, blessings, ironman, onToggl
   const slots = relicSlots(progress.relics)
   const wearable = RELICS.filter((r) => progress.relics.includes(r.id) && r.scope !== 'passive')
 
+  const [tab, setTab] = useState<'draft' | 'loadout'>('draft')
+  const tier = useStore(settingsStore, (s) => s.campaignTier)
+  const mutatorsOn = useStore(settingsStore, (s) => s.battleMutators)
+  const [reroll, setReroll] = useState(0)
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const mutators = useMemo(() => (mutatorsOn ? rollMutators(mutatorSeed(boss.id, today, reroll), 2) : []), [boss.id, mutatorsOn, reroll, today])
+
   const toggle = (id: TacticId) =>
     setPicked((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : prev.length < offer.picks ? [...prev, id] : [...prev.slice(1), id]))
 
@@ -55,12 +67,28 @@ export function BattleDraft({ boss, progress, timed, blessings, ironman, onToggl
       onClose={onClose}
       size="lg"
       footer={
-        <Button variant="primary" size="lg" className="w-full" onClick={() => onConfirm(choice?.grant ? [...picked, choice.grant] : picked, choice)} icon={<Swords className="size-5" />}>
+        <Button variant="primary" size="lg" className="w-full" onClick={() => onConfirm(choice?.grant ? [...picked, choice.grant] : picked, choice, { tier, mutators })} icon={<Swords className="size-5" />}>
           {picked.length > 0 ? `Battle with ${picked.map((t) => TACTICS[t].name).join(' + ')}` : 'Battle without a tactic'}
         </Button>
       }
     >
-      <div className="space-y-4" data-draft>
+      <div className="mb-3 flex rounded-xl bg-white/5 p-0.5 text-sm" role="tablist">
+        {(['draft', 'loadout'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            data-draft-tab={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 rounded-lg px-3 py-1.5 font-semibold transition ${tab === t ? 'bg-accent text-ink-950' : 'text-slate-300'}`}
+          >
+            {t === 'draft' ? 'Battle plan' : `Loadout${mutators.length > 0 ? ` · ${mutators.length} mutators` : ''}`}
+          </button>
+        ))}
+      </div>
+      {tab === 'loadout' && <BattleLoadout mutators={mutators} onReroll={() => setReroll((r) => Math.min(2, r + 1))} rerollsLeft={2 - reroll} bestTier={record.bestTier} />}
+      <div className={`space-y-4 ${tab === 'draft' ? '' : 'hidden'}`} data-draft>
         {ironman && (
           <div className="flex items-center gap-2 rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-xs text-red-100" data-ironman-warning>
             <Skull className="size-4 shrink-0" /> Ironman: no takebacks — a defeat wipes this run. Victories pay triple coins.

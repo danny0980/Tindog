@@ -2,8 +2,9 @@ import { Crown, FlaskConical, Gem, Lock, ScrollText, Sparkles, Swords } from 'lu
 import { type CSSProperties, useEffect, useRef } from 'react'
 import { getBoardTheme } from '../../constants/themes'
 import { BOSSES_PER_ZONE } from '../../data/campaign/realms'
+import { columnOf, echoBoss, edgesOf, rowOf } from '../../data/campaign/paths'
 import type { Boss, BossId, CampaignProgress, GrandRealmDef } from '../../types/campaign'
-import { bossRecord, isBossUnlocked, nextBoss } from '../../utils/campaign'
+import { bossRecord, isBossUnlocked, isEchoRevealed, nextBoss } from '../../utils/campaign'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { StarRow } from './StarRow'
 
@@ -41,23 +42,20 @@ const BANNER = 88
 const PAD = 20
 const NUMERALS = ['I', 'II', 'III', 'IV']
 
-/** Node centre: a serpentine path (x in %, y in px). */
-const nodePosition = (index: number) => ({
-  x: 50 + 29 * Math.sin(index * 1.15 + 0.5),
-  y: PAD + (Math.floor(index / BOSSES_PER_ZONE) + 1) * BANNER + index * ROW + ROW / 2,
-})
-const bannerTop = (zone: number) => PAD + zone * (BANNER + BOSSES_PER_ZONE * ROW)
+/** Map rows per zone: gate, the fork's two branches side by side, merge, zone boss. */
+const ROWS_PER_ZONE = 4
 
-/** Cubic curve through every node, in the SVG's 100×height user space. */
-function pathThrough(points: ReadonlyArray<{ x: number; y: number }>): string {
-  return points
-    .map((p, i) => {
-      if (i === 0) return `M ${p.x} ${p.y}`
-      const prev = points[i - 1] ?? p
-      const mid = (prev.y + p.y) / 2
-      return `C ${prev.x} ${mid} ${p.x} ${mid} ${p.x} ${p.y}`
-    })
-    .join(' ')
+/** Node centre (x in %, y in px): the trunk winds, the fork spreads left and right. */
+const nodePosition = (index: number) => ({
+  x: columnOf(index),
+  y: PAD + (Math.floor(index / BOSSES_PER_ZONE) + 1) * BANNER + rowOf(index) * ROW + ROW / 2,
+})
+const bannerTop = (zone: number) => PAD + zone * (BANNER + ROWS_PER_ZONE * ROW)
+
+/** A curved road between two nodes, in the SVG's 100×height user space. */
+function road(a: { x: number; y: number }, b: { x: number; y: number }): string {
+  const mid = (a.y + b.y) / 2
+  return `M ${a.x} ${a.y} C ${a.x} ${mid} ${b.x} ${mid} ${b.x} ${b.y}`
 }
 
 const hexA = (hex: string, alpha: number) =>
@@ -66,19 +64,32 @@ const hexA = (hex: string, alpha: number) =>
     .padStart(2, '0')}`
 
 /**
- * Node-based conquest map of one realm: four themed zones of five bosses
- * joined by a winding road. Conquered stretches of road glow; the next boss
- * pulses; milestone and overlord nodes are larger and show their relic.
+ * Node-based conquest map of one realm: four themed zones of five bosses.
+ * Each zone forks after its gate into two branches that rejoin before the
+ * zone boss — clear either branch to go on. Roads from conquered nodes glow;
+ * the next boss pulses; milestone and overlord nodes are larger. Once every
+ * node is conquered, the realm's hidden Echo appears at the end of the road.
  */
 export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason, selected, onSelect, markers = [], onMarker }: WorldMapProps) {
-  const height = PAD * 2 + realm.zones.length * BANNER + roster.length * ROW
+  const echo = isEchoRevealed(roster, progress) ? echoBoss(roster) : null
+  const height = PAD * 2 + realm.zones.length * (BANNER + ROWS_PER_ZONE * ROW) + (echo ? ROW + 40 : 0)
   const points = roster.map((_, i) => nodePosition(i))
-  const next = nextBoss(roster, progress)
-  const reached = next ? next.index : roster.length - 1
+  const echoPoint = { x: 50, y: height - PAD - ROW / 2 - 10 }
+  const nodes = echo ? [...roster, echo] : roster
+  const next = nextBoss(roster, progress) ?? (echo && !bossRecord(progress, echo.id).firstClear ? echo : null)
+  const conquered = (i: number) => {
+    const b = roster[i]
+    return b ? Boolean(bossRecord(progress, b.id).firstClear) : false
+  }
+  const roads = edgesOf(roster.length).map(([from, to]) => ({ key: `${from}-${to}`, d: road(points[from] ?? echoPoint, points[to] ?? echoPoint), lit: conquered(from) }))
+  if (echo) {
+    const last = points[roster.length - 1]
+    if (last) roads.push({ key: 'echo', d: road(last, echoPoint), lit: true })
+  }
   const nodeRefs = useRef(new Map<BossId, HTMLButtonElement>())
 
   // Bring the frontier into view when a realm opens or the frontier advances.
-  const frontierId = next && next.index >= 2 ? next.id : null
+  const frontierId = next && (next.index >= 2 || next.hidden) ? next.id : null
   useEffect(() => {
     if (frontierId) nodeRefs.current.get(frontierId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [frontierId])
@@ -127,27 +138,34 @@ export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason,
             <stop offset="1" stopColor={realm.colors.via} />
           </linearGradient>
         </defs>
-        <path d={pathThrough(points)} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="3" strokeDasharray="2 7" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        {reached > 0 && (
-          <path
-            d={pathThrough(points.slice(0, reached + 1))}
-            fill="none"
-            stroke={`url(#road-${realm.id})`}
-            strokeWidth="4"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            style={{ filter: `drop-shadow(0 0 6px ${realm.colors.from})` }}
-          />
-        )}
+        {roads.map((r) => (
+          <path key={r.key} d={r.d} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="3" strokeDasharray="2 7" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        ))}
+        {roads
+          .filter((r) => r.lit)
+          .map((r) => (
+            <path
+              key={`lit-${r.key}`}
+              d={r.d}
+              fill="none"
+              stroke={r.key === 'echo' ? '#a78bfa' : `url(#road-${realm.id})`}
+              strokeWidth="4"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              data-road-lit={r.key}
+              style={{ filter: `drop-shadow(0 0 6px ${r.key === 'echo' ? '#7c3aed' : realm.colors.from})` }}
+            />
+          ))}
       </svg>
 
-      {roster.map((boss, i) => {
-        const pos = points[i] ?? { x: 50, y: 0 }
+      {nodes.map((boss, i) => {
+        const pos = boss.hidden ? echoPoint : (points[i] ?? { x: 50, y: 0 })
         const record = bossRecord(progress, boss.id)
         const unlocked = isBossUnlocked(boss, roster, progress)
         const isNext = next?.id === boss.id && unlocked
         const isSelected = selected === boss.id
         const size = boss.rank === 'overlord' ? 'lg' : boss.rank === 'milestone' ? 'md' : 'sm'
+        const label = boss.hidden ? '★' : String(boss.index + 1)
         return (
           <button
             key={boss.id}
@@ -158,9 +176,10 @@ export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason,
             type="button"
             role="listitem"
             data-boss={boss.id}
+            data-hidden-node={boss.hidden ? '' : undefined}
             onClick={() => onSelect(boss.id)}
             aria-pressed={isSelected}
-            aria-label={`${boss.index + 1}. ${unlocked ? boss.name : 'Locked boss'}${record.firstClear ? `, ${record.stars} stars` : ''}`}
+            aria-label={`${boss.hidden ? 'Hidden node' : boss.index + 1}. ${unlocked ? boss.name : 'Locked boss'}${record.firstClear ? `, ${record.stars} stars` : ''}`}
             className="group absolute flex w-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 outline-none"
             style={{ left: `${pos.x}%`, top: pos.y }}
           >
@@ -176,7 +195,7 @@ export function WorldMap({ realm, roster, progress, realmUnlocked, lockedReason,
                 className={`transition group-hover:scale-105 group-focus-visible:scale-105 ${unlocked ? '' : 'opacity-70'}`}
               />
               <span className="absolute -top-2 -left-2 flex size-5 items-center justify-center rounded-full bg-ink-900 font-mono text-[10px] font-bold text-white ring-1 ring-white/30">
-                {boss.index + 1}
+                {label}
               </span>
               {boss.rank !== 'regular' && (
                 <span

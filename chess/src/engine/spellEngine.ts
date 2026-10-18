@@ -157,8 +157,8 @@ export function blockReason(fx: BattleEffects, setup: BattleSetup, move: MoveSha
   if (side === 'human') {
     const frost = frostSquares(fx).find((sq) => path.includes(sq))
     if (frost) return `${frost.toUpperCase()} is frozen: no piece may land on it or pass through it.`
-    if (setup.restriction === 'pawnless' && move.piece === 'p') return 'Bounty contract: no pawn moves.'
-    if (setup.restriction === 'no-castling' && (move.flags.includes('k') || move.flags.includes('q'))) return 'Bounty contract: no castling.'
+    if (setup.restriction === 'pawnless' && move.piece === 'p') return 'Contract: no pawn moves.'
+    if (setup.restriction === 'no-castling' && (move.flags.includes('k') || move.flags.includes('q'))) return 'Contract: no castling.'
   } else if (fx.stuck.some((s) => s.square === move.from)) {
     return `The piece on ${move.from.toUpperCase()} is stuck in glue.`
   }

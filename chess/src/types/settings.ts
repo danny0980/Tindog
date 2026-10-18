@@ -22,6 +22,8 @@ export interface AppSettings {
   /** Art piece set and board chosen explicitly (null = follow the theme / battle). */
   artPieces: string | null
   artBoard: string | null
+  /** Size of art-pack pieces on the board (1 = fit the square; larger stand taller, like 3D pieces). */
+  artPieceScale: number
   /** Art-pack player avatar (null = the default icon). */
   playerAvatar: string | null
   // ── Audio mixer ──

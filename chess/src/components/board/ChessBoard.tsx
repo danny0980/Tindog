@@ -7,6 +7,8 @@ import { findKingSquare, isPromotionMove } from '../../utils/chess'
 import { buildPieces } from '../../utils/pieces'
 import { assetUrl } from '../../assets/artManifest'
 import { useBoardArt, useImagesStatus, usePieceArt } from '../../assets/useArt'
+import { useStore } from '../../hooks/useStore'
+import { settingsStore } from '../../stores/settingsStore'
 import { PromotionDialog } from './PromotionDialog'
 
 export interface BoardArrow {
@@ -112,7 +114,8 @@ export function ChessBoard({
   const selected = selection?.fen === fen && movableColor ? selection.square : null
   const pendingPromotion = promotion?.fen === fen && movableColor ? promotion : null
   const pieceArt = usePieceArt(pieceSet.id)
-  const pieces = useMemo(() => buildPieces(pieceSet, lowPower, pieceArt), [lowPower, pieceArt, pieceSet])
+  const artPieceScale = useStore(settingsStore, (s) => s.artPieceScale)
+  const pieces = useMemo(() => buildPieces(pieceSet, lowPower, pieceArt, artPieceScale), [lowPower, pieceArt, pieceSet, artPieceScale])
 
   // Art-pack board: a whole-board image, or tiled light/dark squares (+ optional frame).
   // Applied only once every file has loaded, so a broken file keeps the theme's colours.
@@ -279,7 +282,7 @@ export function ChessBoard({
       onSquareClick: handleSquareClick,
       onMouseOverSquare: ({ square }: SquareHandlerArgs) => setHoverSquare(isSquare(square) ? square : null),
       onMouseOutSquare: () => setHoverSquare(null),
-      boardStyle: { borderRadius: '0.75rem', overflow: 'hidden', ...(boardSkin.board ? { background: boardSkin.board } : {}) },
+      boardStyle: { borderRadius: '0.75rem', overflow: pieceArt && artPieceScale > 1 ? 'visible' : 'hidden', ...(boardSkin.board ? { background: boardSkin.board } : {}) },
       lightSquareStyle: boardSkin.light,
       darkSquareStyle: boardSkin.dark,
       dropSquareStyle: h.hover,

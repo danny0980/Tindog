@@ -14,6 +14,7 @@ export function ArtPackPicker({ compact = false }: { compact?: boolean }) {
   const artPack = useStore(settingsStore, (s) => s.artPack)
   const artPieces = useStore(settingsStore, (s) => s.artPieces)
   const artBoard = useStore(settingsStore, (s) => s.artBoard)
+  const artPieceScale = useStore(settingsStore, (s) => s.artPieceScale)
   const sets = Object.entries(manifest.pieceSets)
   const boards = Object.entries(manifest.boards)
   const portraits = Object.keys(manifest.portraits).length
@@ -75,6 +76,25 @@ export function ArtPackPicker({ compact = false }: { compact?: boolean }) {
             ))}
           </div>
         </div>
+      )}
+
+      {artPack && sets.length > 0 && (
+        <label className="block rounded-xl bg-white/[0.03] px-3 py-2">
+          <span className="flex items-center justify-between text-sm font-medium text-white">
+            Piece size on the board <span className="tabular-nums text-slate-400">{Math.round(artPieceScale * 100)}%</span>
+          </span>
+          <span className="block text-xs text-slate-500">Bigger pieces are easier to see; above 100% they stand taller than their square.</span>
+          <input
+            type="range"
+            min={0.8}
+            max={1.5}
+            step={0.05}
+            value={artPieceScale}
+            onChange={(e) => updateSettings({ artPieceScale: Number(e.target.value) })}
+            className="mt-1 w-full accent-[var(--accent)]"
+            data-art-scale
+          />
+        </label>
       )}
 
       {artPack && boards.length > 0 && (

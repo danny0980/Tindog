@@ -13,8 +13,10 @@ const isPieceCode = (code: string): code is PieceCode => (PIECE_CODES as readonl
  * Filters are dropped in battery saver mode — they are the most expensive
  * part of rendering the board.
  */
-export function buildPieces(set: PieceSet, lowPower: boolean, art: { id: string; set: ArtPieceSet } | null = null): PieceRenderObject {
-  const key = `${set.id}:${lowPower ? 'lp' : 'hq'}:${art?.id ?? '-'}`
+export function buildPieces(set: PieceSet, lowPower: boolean, art: { id: string; set: ArtPieceSet } | null = null, artScale = 1): PieceRenderObject {
+  const key = `${set.id}:${lowPower ? 'lp' : 'hq'}:${art?.id ?? '-'}:${artScale}`
+  // Art pieces grow from their base, so a bigger piece stands taller instead of spilling into the next file.
+  const artStyle = artScale === 1 ? undefined : { transform: `scale(${artScale})`, transformOrigin: '50% 92%' }
   const cached = cache.get(key)
   if (cached) return cached
   const pieces: PieceRenderObject = {}
@@ -26,7 +28,7 @@ export function buildPieces(set: PieceSet, lowPower: boolean, art: { id: string;
         fill: style.fill,
         svgStyle: { ...props?.svgStyle, filter: lowPower ? 'none' : style.filter },
       })
-    pieces[code] = art && isPieceCode(code) ? (props) => <ArtPiece code={code} art={art.set} fallback={vector(props)} /> : vector
+    pieces[code] = art && isPieceCode(code) ? (props) => <ArtPiece code={code} art={art.set} fallback={vector(props)} style={artStyle} /> : vector
   }
   cache.set(key, pieces)
   return pieces

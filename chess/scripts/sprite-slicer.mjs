@@ -657,36 +657,63 @@ export function sliceSheet(img, { order = 'KQRBNP' } = {}) {
     for (const t of TYPES) chosen[`${color}${t}`] = ids[map[t]]
   }
   const method = gapLum > 25 ? 'silhouette and colour' : 'silhouette and sheet order'
-  // One canvas size for the whole set: pieces keep their relative heights and stand on one floor.
+  // One canvas for the whole set, as tall as the tallest piece, so every piece stands on one floor.
+  // Smaller pieces are enlarged towards it — still smaller than the king, but big enough to
+  // read on a phone (a pawn half a king's height ends up at ~3/4).
   const used = Object.values(chosen).map((i) => blobs[i])
   const pad = Math.max(1, Math.round(Math.min(img.width, img.height) * 0.003))
-  const maxW = Math.max(...used.map((b) => b.maxX - b.minX + 1)) + pad * 2
   const maxH = Math.max(...used.map((b) => b.maxY - b.minY + 1)) + pad * 2
-  const size = Math.ceil(Math.max(maxW, maxH) * 1.04)
-  const pieces = {}
-  for (const [code, i] of Object.entries(chosen)) {
+  const plans = Object.entries(chosen).map(([code, i]) => {
     const b = blobs[i]
-    const out = new Uint8ClampedArray(size * size * 4)
-    const x0 = b.minX - pad
-    const y0 = b.minY - pad
     const w = b.maxX - b.minX + 1 + pad * 2
     const h = b.maxY - b.minY + 1 + pad * 2
-    const ox = Math.floor((size - w) / 2)
-    const oy = size - h - Math.floor(size * 0.02)
+    const scale = (maxH * (0.5 + 0.5 * (h / maxH))) / h
+    return { code, b, w, h, scale }
+  })
+  const size = Math.ceil(Math.max(maxH * 1.02, ...plans.map((q) => q.w * q.scale)))
+  const pieces = {}
+  for (const { code, b, w, h, scale } of plans) {
+    // The piece alone (premultiplied, so its soft rim scales cleanly): its own pixels plus its anti-aliased edge.
+    const crop = new Float32Array(w * h * 4)
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const sx = x0 + x
-        const sy = y0 + y
+        const sx = b.minX - pad + x
+        const sy = b.minY - pad + y
         if (sx < 0 || sy < 0 || sx >= img.width || sy >= img.height) continue
         const p = sy * img.width + sx
-        // This piece's pixels plus its soft anti-aliased rim — never a neighbour's.
         if (owner[p] !== b.id && (owner[p] !== -1 || img.data[p * 4 + 3] >= 128)) continue
-        const si = p * 4
+        const al = img.data[p * 4 + 3] / 255
+        const o = (y * w + x) * 4
+        crop[o] = img.data[p * 4] * al
+        crop[o + 1] = img.data[p * 4 + 1] * al
+        crop[o + 2] = img.data[p * 4 + 2] * al
+        crop[o + 3] = al
+      }
+    }
+    const tw = Math.max(1, Math.round(w * scale))
+    const th = Math.max(1, Math.round(h * scale))
+    const ox = Math.floor((size - tw) / 2)
+    const oy = size - th - Math.floor(size * 0.01)
+    const out = new Uint8ClampedArray(size * size * 4)
+    const at = (x, y, c) => crop[(Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) * 4 + c]
+    for (let y = 0; y < th; y++) {
+      const fy = Math.max(0, (y + 0.5) / scale - 0.5)
+      const y0 = Math.floor(fy)
+      const dy = fy - y0
+      for (let x = 0; x < tw; x++) {
+        const fx = Math.max(0, (x + 0.5) / scale - 0.5)
+        const x0 = Math.floor(fx)
+        const dx = fx - x0
+        const px = [0, 0, 0, 0]
+        for (let c = 0; c < 4; c++) {
+          px[c] = (at(x0, y0, c) * (1 - dx) + at(x0 + 1, y0, c) * dx) * (1 - dy) + (at(x0, y0 + 1, c) * (1 - dx) + at(x0 + 1, y0 + 1, c) * dx) * dy
+        }
         const di = ((oy + y) * size + (ox + x)) * 4
-        out[di] = img.data[si]
-        out[di + 1] = img.data[si + 1]
-        out[di + 2] = img.data[si + 2]
-        out[di + 3] = img.data[si + 3]
+        if (px[3] <= 0) continue
+        out[di] = px[0] / px[3]
+        out[di + 1] = px[1] / px[3]
+        out[di + 2] = px[2] / px[3]
+        out[di + 3] = px[3] * 255
       }
     }
     pieces[code] = { width: size, height: size, data: out }

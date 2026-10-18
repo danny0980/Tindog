@@ -24,6 +24,7 @@ import { TACTICS } from '../../data/spells'
 import type { PotionId } from '../../types/rpg'
 import type { TacticId } from '../../types/spells'
 import { abandonIronman, startIronman } from '../../utils/ironman'
+import { runViewTransition } from '../../utils/viewTransition'
 import { BOUNTY_CLOCK, acceptBlessing, ambushWeather, buyWare, isBountyDone, isEventResolved, refreshWorld } from '../../utils/world'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import type { MapMarker } from './WorldMap'
@@ -209,7 +210,7 @@ export default function GrandCampaign({ onChallenge }: GrandCampaignProps) {
             <button
               key={r.id}
               type="button"
-              onClick={() => updateSettings({ grandRealm: r.id })}
+              onClick={() => runViewTransition(() => updateSettings({ grandRealm: r.id }), r.order > realm.order ? 'forward' : 'back')}
               aria-pressed={active}
               data-realm={r.id}
               className={`flex min-w-[11.5rem] snap-start items-center gap-2.5 rounded-2xl border p-2.5 text-left transition lg:min-w-0 ${

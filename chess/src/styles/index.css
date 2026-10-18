@@ -191,3 +191,48 @@ html[data-theme='oled-black'] .bg-ink-800\/95 {
 html[data-theme='oled-black'] [data-piece^='b'] svg {
   filter: drop-shadow(0 0 1.2px rgb(255 255 255 / 0.7)) drop-shadow(0 0 3px rgb(56 189 248 / 0.25)) !important;
 }
+
+/* ── Cinematic intro controls ── */
+@utility cine-btn {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  background: rgb(0 0 0 / 0.45);
+  padding: 0.5rem 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  backdrop-filter: blur(6px);
+  transition: transform 150ms, background 150ms;
+  &:hover {
+    background: rgb(255 255 255 / 0.12);
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+}
+@utility cine-btn-primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #ffd27a, #ff7a2f 55%, #e2361f);
+  color: #1a0904;
+  box-shadow: 0 14px 40px -12px rgb(255 120 40 / 0.9);
+  &:hover {
+    background: linear-gradient(135deg, #ffe0a0, #ff8d48 55%, #ef4a2c);
+  }
+}
+@utility cine-link {
+  color: rgb(255 255 255 / 0.65);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  &:hover {
+    color: #fff;
+  }
+}
+/* Continuous chromatic aberration on the rift (desktop-class GPUs only). */
+@media (pointer: fine) {
+  .cine-rift-canvas {
+    filter: url(#fx-chromatic) contrast(1.08) saturate(1.15);
+  }
+}

@@ -359,3 +359,166 @@
     }
   }
 }
+
+/* ── Cinematic intro & post-processing FX ── */
+@theme {
+  --animate-cine-glitch: cine-glitch 0.42s steps(2, end) infinite;
+  --animate-cine-shatter: cine-shatter 1.6s cubic-bezier(0.3, 0, 0.6, 1) both;
+  --animate-cine-title: cine-title 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-cine-caption: cine-caption 1.3s ease-out both;
+  --animate-view-in: view-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes cine-glitch {
+    0% {
+      clip-path: inset(0 0 62% 0);
+      transform: translate3d(-6px, 0, 0);
+    }
+    25% {
+      clip-path: inset(30% 0 35% 0);
+      transform: translate3d(5px, 1px, 0);
+    }
+    50% {
+      clip-path: inset(70% 0 4% 0);
+      transform: translate3d(-3px, -1px, 0);
+    }
+    75% {
+      clip-path: inset(12% 0 50% 0);
+      transform: translate3d(7px, 0, 0);
+    }
+    100% {
+      clip-path: inset(0 0 0 0);
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  @keyframes cine-shatter {
+    0%,
+    55% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) rotate(0);
+      filter: none;
+    }
+    100% {
+      opacity: 0;
+      transform: translate3d(var(--shard-x, 40px), var(--shard-y, 80px), 0) rotate(var(--shard-r, 18deg));
+      filter: blur(3px);
+    }
+  }
+  @keyframes cine-title {
+    from {
+      opacity: 0;
+      transform: scale(1.18);
+      letter-spacing: 0.5em;
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+      letter-spacing: 0.18em;
+      filter: blur(0);
+    }
+  }
+  @keyframes cine-caption {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 10px, 0);
+    }
+    20%,
+    80% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes view-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 12px, 0) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* Native view transitions between screens (direction-aware). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+html[data-vt='forward']::view-transition-old(root) {
+  animation-name: vt-out-left;
+}
+html[data-vt='forward']::view-transition-new(root) {
+  animation-name: vt-in-right;
+}
+html[data-vt='back']::view-transition-old(root) {
+  animation-name: vt-out-right;
+}
+html[data-vt='back']::view-transition-new(root) {
+  animation-name: vt-in-left;
+}
+html[data-vt='zoom']::view-transition-old(root) {
+  animation-name: vt-zoom-out;
+}
+html[data-vt='zoom']::view-transition-new(root) {
+  animation-name: vt-zoom-in;
+}
+@keyframes vt-out-left {
+  to {
+    opacity: 0;
+    transform: translate3d(-6%, 0, 0);
+    filter: blur(4px);
+  }
+}
+@keyframes vt-in-right {
+  from {
+    opacity: 0;
+    transform: translate3d(6%, 0, 0);
+    filter: blur(4px);
+  }
+}
+@keyframes vt-out-right {
+  to {
+    opacity: 0;
+    transform: translate3d(6%, 0, 0);
+    filter: blur(4px);
+  }
+}
+@keyframes vt-in-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-6%, 0, 0);
+    filter: blur(4px);
+  }
+}
+@keyframes vt-zoom-out {
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(6px);
+  }
+}
+@keyframes vt-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(6px);
+  }
+}
+/* Header and navigation stay put while the content transitions. */
+.vt-static-header {
+  view-transition-name: app-header;
+}
+.vt-static-nav {
+  view-transition-name: app-nav;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

@@ -1,15 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { KillCam } from '../../hooks/useGameController'
-import type { Color, Square } from '../../types/chess'
-
-/** Percent position of a square's centre on the board, for this orientation. */
-function squareCenter(square: Square, orientation: Color): { x: number; y: number } {
-  const file = 'abcdefgh'.indexOf(square[0] ?? 'a')
-  const rank = Number(square[1]) - 1
-  const col = orientation === 'w' ? file : 7 - file
-  const row = orientation === 'w' ? 7 - rank : rank
-  return { x: (col + 0.5) * 12.5, y: (row + 0.5) * 12.5 }
-}
+import type { Color } from '../../types/chess'
+import { squareCenter } from '../../utils/boardGeometry'
 
 /**
  * Cinematic checkmate: the board slow-zooms onto the mated king while a

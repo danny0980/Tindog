@@ -2,6 +2,7 @@ import { ArrowLeft, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Swords,
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
+import { runViewTransition } from '../utils/viewTransition'
 import type { ChallengeClock } from '../components/campaign/battleOptions'
 import type { BattleLaunch } from '../hooks/useGameController'
 import { CampaignSelect } from '../components/legends/CampaignSelect'
@@ -69,7 +70,8 @@ export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onF
   useEffect(() => () => setThemeOverride(null), [])
 
   const open = (next: LegendsScreen) => {
-    updateSettings({ legendsScreen: next })
+    // Drilling into a path zooms in; going back to the hub zooms out.
+    runViewTransition(() => updateSettings({ legendsScreen: next }), next === 'select' ? 'back' : 'zoom')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 

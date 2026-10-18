@@ -33,6 +33,7 @@ import { type GauntletSummary, endGauntletRun, finishGauntletBattle } from '../s
 import type { BattleEffects, BattleEvent, BattleKind, BattleSetup, TacticId } from '../types/spells'
 import type { PotionId } from '../types/rpg'
 import type { BoardArena, BoardPicker } from '../components/board/ChessBoard'
+import { type BoardFx, boardFxFor } from '../components/fx/boardFx'
 import type { TauntEvent, TauntMood } from '../types/taunts'
 import type { GrandRealmId, RelicDef, RelicId, StarCount } from '../types/campaign'
 import type { Persona, PortraitSpec } from '../types/persona'
@@ -192,6 +193,13 @@ export function useGameController({ active }: { active: boolean }) {
   const [killCam, setKillCam] = useState<KillCam | null>(null)
   /** Bumped when the opponent lands a severe check (screen shake). */
   const [severeCheck, setSevereCheck] = useState(0)
+  /** The latest on-board particle effect (spell, frost, glue, potion, check, mate). */
+  const [boardFx, setBoardFx] = useState<BoardFx | null>(null)
+  const boardFxIdRef = useRef(0)
+  const pushBoardFx = useCallback((fx: Omit<BoardFx, 'id'>) => {
+    boardFxIdRef.current += 1
+    setBoardFx({ id: boardFxIdRef.current, ...fx })
+  }, [])
   /** Per-battle feat counters, booked when the game ends. */
   const battleFeatsRef = useRef({ sacrifices: 0, trapsSprung: 0 })
   const [effectsLog, setEffectsLog] = useState<BattleEffects[]>([])
@@ -446,6 +454,7 @@ export function useGameController({ active }: { active: boolean }) {
           caption: ai ? (outcome === 'win' ? `${persona?.name ?? 'Stockfish'} falls` : 'Checkmate') : `${result.winner === 'w' ? 'White' : 'Black'} wins`,
         })
         sfx.killCam(ai ? outcome === 'win' : true)
+        pushBoardFx({ kind: 'mate', square: last ? kingSquare(last.after, loser) : null })
         window.setTimeout(() => setKillCam((k) => (k?.id === gameId ? null : k)), KILL_CAM_MS)
       }
       if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
@@ -476,7 +485,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (ironmanSummary?.wiped) window.setTimeout(() => showToast('warning', 'Ironman run lost', `Permadeath: ${ironmanSummary.lostBosses} conquered bosses fall back into darkness.`, 6000), 1200)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, battle, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, timeControl],
+    [aiColor, battle, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl],
   )
 
   const handleFlag = useCallback(
@@ -525,6 +534,8 @@ export function useGameController({ active }: { active: boolean }) {
   const emitBattleEvents = useCallback(
     (events: readonly BattleEvent[]) => {
       for (const e of events) {
+        const fx = boardFxFor(e)
+        if (fx) pushBoardFx(fx)
         if (e.kind === 'clock') {
           clock.adjust(e.side === 'human' ? humanColor : aiColor, e.deltaMs)
           showToast('info', e.reason, `${e.side === 'human' ? 'You gain' : `${persona?.name ?? 'Opponent'} gains`} ${Math.round(e.deltaMs / 1000)} s`, 2400)
@@ -566,7 +577,7 @@ export function useGameController({ active }: { active: boolean }) {
         }
       }
     },
-    [aiColor, clock, flash, humanColor, persona, react],
+    [aiColor, clock, flash, humanColor, persona, pushBoardFx, react],
   )
 
   // ── Moves ──────────────────────────────────────────────────────────────────
@@ -601,6 +612,7 @@ export function useGameController({ active }: { active: boolean }) {
         try {
           if (new Chess(move.after).moves().length <= 3) {
             setSevereCheck((n) => n + 1)
+            pushBoardFx({ kind: 'check', square: kingSquare(move.after, humanColor) })
             sfx.severeCheck()
           }
         } catch {
@@ -636,7 +648,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (mover === 'boss' || passBoss) turnStartRef.current = performance.now()
       if (result) finishGame(result)
     },
-    [aiColor, battle, clock, emitBattleEvents, finishGame, game, humanColor, isAiMode, material, persona, react, timeMachine],
+    [aiColor, battle, clock, emitBattleEvents, finishGame, game, humanColor, isAiMode, material, persona, pushBoardFx, react, timeMachine],
   )
 
   /** The player's (or a local game's) move; also accepts spell / tactic moves the board offers. */
@@ -1168,6 +1180,7 @@ export function useGameController({ active }: { active: boolean }) {
     yourLiveTurn,
     specialTargets,
     spellFlash,
+    boardFx,
     freeUndos: launchExtras.freeUndos,
     theme,
     pieceSet,

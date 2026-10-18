@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppHeader } from './components/layout/AppHeader'
 import { BottomNav } from './components/layout/BottomNav'
@@ -25,6 +25,10 @@ import { localDateKey } from './utils/date'
 import { getDailyPuzzles } from './utils/puzzles'
 import { claimableCount } from './utils/quests'
 import { PlayView } from './views/PlayView'
+import { FxDefs } from './components/fx/FxDefs'
+import type { IntroExit } from './components/cinematic/CinematicIntro'
+import { navDirection, runViewTransition, supportsViewTransitions } from './utils/viewTransition'
+import { closeIntroOverlay, introStore, openIntro } from './stores/introStore'
 
 // Secondary screens are code-split so the board loads first on slow mobile connections;
 // failed chunk downloads are retried and, failing that, caught by a view ErrorBoundary.
@@ -35,6 +39,8 @@ const SettingsModal = lazyWithRetry(() => import('./components/modals/SettingsMo
 const LegendsView = lazyWithRetry(() => import('./views/LegendsView'), (m) => m.LegendsView)
 const RushView = lazyWithRetry(() => import('./views/RushView'), (m) => m.RushView)
 const QuestsView = lazyWithRetry(() => import('./views/QuestsView'), (m) => m.QuestsView)
+// The cinematic intro (renderer, textures, score) is its own chunk, fetched only when it plays.
+const CinematicIntro = lazyWithRetry(() => import('./components/cinematic/CinematicIntro'), (m) => m.default)
 
 function ViewFallback() {
   return (
@@ -48,6 +54,8 @@ export default function App() {
   const [view, setView] = useState<AppView>('play')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
+  // First launch (or after this update) opens on the cinematic intro.
+  const introOpen = useStore(introStore, (open) => open)
   useAppEnvironment()
   const layout = useLayoutMode()
   // The one-handed layout is a fixed-height screen (board flexes, dock pinned to the thumb zone).
@@ -68,10 +76,30 @@ export default function App() {
     else if (profileLoadReport.source === 'reset') showToast('warning', 'Save data unreadable', 'Starting fresh — the damaged save was kept aside, not deleted.', 7000)
   }, [])
 
+  // Screen changes slide in the direction of travel (View Transitions API, with a CSS fallback).
+  const viewRef = useRef<AppView>('play')
+  useEffect(() => {
+    viewRef.current = view
+  }, [view])
   const navigate = useCallback((next: AppView) => {
-    setView(next)
+    const current = viewRef.current
+    if (current !== next) runViewTransition(() => setView(next), navDirection(current, next))
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
+
+  const closeIntro = useCallback(
+    (target: IntroExit) => {
+      updateSettings({ introSeen: true })
+      if (target === 'grand') updateSettings({ legendsScreen: 'grand' })
+      if (target === 'gauntlet') updateSettings({ legendsScreen: 'gauntlet' })
+      runViewTransition(() => {
+        closeIntroOverlay()
+        setView(target === 'play' ? 'play' : 'legends')
+      }, 'zoom')
+    },
+    [],
+  )
+
 
   // Chronos Chess: launch a legend battle from the timeline.
   const challengeLegend = useCallback(
@@ -190,7 +218,8 @@ export default function App() {
         lockViewport ? 'h-dvh overflow-hidden' : 'min-h-dvh'
       }`}
     >
-      <AppHeader view={view} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} />
+      <FxDefs />
+      <AppHeader view={view} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} onOpenIntro={openIntro} />
 
       <main className="flex min-h-0 flex-1 flex-col">
         {/* PlayView stays mounted (hidden) so board state and animations persist. */}
@@ -209,12 +238,15 @@ export default function App() {
         </div>
         <ErrorBoundary scope="view" resetKey={view} label={`the ${view} screen`}>
         <Suspense fallback={<ViewFallback />}>
+          {/* Browsers without view transitions get a gentle CSS entrance instead. */}
+          <div key={view} className={`flex min-h-0 flex-1 flex-col ${view === 'play' ? 'hidden' : ''} ${supportsViewTransitions() ? '' : 'animate-view-in'}`}>
           {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}
           {view === 'profile' && <ProfileView onReview={reviewMatch} />}
           {view === 'shop' && <ShopView onOpenLegends={() => navigate('legends')} />}
+          </div>
         </Suspense>
         </ErrorBoundary>
       </main>
@@ -235,6 +267,13 @@ export default function App() {
         </ErrorBoundary>
       )}
       <ToastViewport />
+      {introOpen && (
+        <ErrorBoundary scope="view" label="the cinematic intro">
+          <Suspense fallback={<div className="fixed inset-0 z-[80] bg-black" aria-label="Loading intro" role="status" />}>
+            <CinematicIntro onExit={closeIntro} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
     </div>
   )
 }

@@ -124,6 +124,6 @@ export type BattleEvent =
   | { kind: 'spell-blocked'; spell: SpellId }
   | { kind: 'tactic'; tactic: TacticId; detail: string }
   | { kind: 'clock'; side: 'human' | 'boss'; deltaMs: number; reason: string }
-  | { kind: 'trap'; detail: string; sprung: boolean }
+  | { kind: 'trap'; detail: string; sprung: boolean; square: Square | null }
   | { kind: 'weather'; detail: string }
   | { kind: 'potion'; potion: PotionId; detail: string }

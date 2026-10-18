@@ -1,4 +1,4 @@
-import { Coins, Music, Settings, Volume2, VolumeX } from 'lucide-react'
+import { Clapperboard, Coins, Music, Settings, Volume2, VolumeX } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { profileStore } from '../../stores/profileStore'
 import { settingsStore, updateSettings } from '../../stores/settingsStore'
@@ -9,9 +9,10 @@ interface AppHeaderProps {
   view: AppView
   onNavigate: (view: AppView) => void
   onOpenSettings: () => void
+  onOpenIntro: () => void
 }
 
-export function AppHeader({ view, onNavigate, onOpenSettings }: AppHeaderProps) {
+export function AppHeader({ view, onNavigate, onOpenSettings, onOpenIntro }: AppHeaderProps) {
   const coins = useStore(profileStore, (p) => p.coins)
   const elo = useStore(profileStore, (p) => p.elo)
   const sfxEnabled = useStore(settingsStore, (s) => s.sfxEnabled)
@@ -19,7 +20,7 @@ export function AppHeader({ view, onNavigate, onOpenSettings }: AppHeaderProps) 
   const iconButton = 'glass flex size-10 items-center justify-center rounded-xl text-slate-300 transition hover:text-white active:scale-95'
 
   return (
-    <header className="safe-px mx-auto flex w-full max-w-7xl items-center gap-3 py-2.5">
+    <header className="vt-static-header safe-px mx-auto flex w-full max-w-7xl items-center gap-3 py-2.5">
       <button type="button" onClick={() => onNavigate('play')} className="flex items-center gap-2.5" aria-label="Chess Arena home">
         <div className="idle-pause flex size-9 animate-glow items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent-2 text-xl text-ink-950">
           <span aria-hidden="true">♞</span>
@@ -54,6 +55,9 @@ export function AppHeader({ view, onNavigate, onOpenSettings }: AppHeaderProps) 
         </button>
         <button type="button" onClick={() => onNavigate('shop')} className="glass flex h-10 items-center gap-1.5 rounded-xl px-3 font-mono text-sm font-bold text-yellow-300" title="Coins">
           <Coins className="size-4" /> {coins}
+        </button>
+        <button type="button" onClick={onOpenIntro} className={`${iconButton} hidden sm:flex`} aria-label="Cinematic intro" title="Cinematic intro" data-open-intro>
+          <Clapperboard className="size-5" />
         </button>
         <button
           type="button"

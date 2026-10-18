@@ -215,7 +215,7 @@ function advanceWeather(next: BattleEffects, fen: string, rng: () => number, eve
 }
 
 /** Sacrifice Altar: +1 awakened leap and one spent tactic recharged. */
-function applyAltar(next: BattleEffects, setup: BattleSetup, events: BattleEvent[]): void {
+function applyAltar(next: BattleEffects, setup: BattleSetup, events: BattleEvent[], square: Square): void {
   next.altarUsed = true
   next.awakening += 1
   const has = (t: string) => setup.tactics.some((x) => x === t)
@@ -236,7 +236,7 @@ function applyAltar(next: BattleEffects, setup: BattleSetup, events: BattleEvent
     next.bootCharges = 1
     recharged = 'Knight’s Boot'
   }
-  events.push({ kind: 'trap', sprung: false, detail: `Altar: a knight awakens (one long leap)${recharged ? ` · ${recharged} recharged` : ''}` })
+  events.push({ kind: 'trap', sprung: false, square, detail: `Altar: a knight awakens (one long leap)${recharged ? ` · ${recharged} recharged` : ''}` })
 }
 
 /** Applies one ply to the battle state. */
@@ -260,7 +260,7 @@ export function afterPly(effects: BattleEffects, ctx: PlyContext): PlyOutcome {
   if (ctx.mover === 'human') {
     // The altar costs no move: the turn stays yours and nothing else ticks.
     if (move.flags.includes('s')) {
-      applyAltar(next, setup, events)
+      applyAltar(next, setup, events, move.from)
       return { effects: next, events, passBoss: false }
     }
     // Frost fades as you use up your moves; a capture frees a glued square.
@@ -272,7 +272,7 @@ export function afterPly(effects: BattleEffects, ctx: PlyContext): PlyOutcome {
         events.push({ kind: 'tactic', tactic: 'knights-boot', detail: `Long leap ${move.from} → ${move.to}` })
       } else if (move.piece === 'n' && next.awakening > 0) {
         next.awakening -= 1
-        events.push({ kind: 'trap', sprung: false, detail: `Awakened leap ${move.from} → ${move.to}` })
+        events.push({ kind: 'trap', sprung: false, square: move.to, detail: `Awakened leap ${move.from} → ${move.to}` })
       } else if (move.piece === 'p' && next.vanguardCharges > 0) {
         next.vanguardCharges -= 1
         events.push({ kind: 'tactic', tactic: 'vanguard-charge', detail: `Pawn charge ${move.from} → ${move.to}` })
@@ -324,7 +324,7 @@ export function afterPly(effects: BattleEffects, ctx: PlyContext): PlyOutcome {
   })
   if (glue) {
     next.stuck = [...next.stuck, { square: move.to, turnsLeft: STUCK_TURNS }]
-    events.push({ kind: 'trap', sprung: true, detail: `Caught in glue on ${move.to.toUpperCase()}: stuck for ${STUCK_TURNS} turns` })
+    events.push({ kind: 'trap', sprung: true, square: move.to, detail: `Caught in glue on ${move.to.toUpperCase()}: stuck for ${STUCK_TURNS} turns` })
   }
 
   if (next.overclock) {
@@ -413,7 +413,7 @@ export function placeGlue(fx: BattleEffects, fen: string, square: Square): Actio
   return {
     ok: true,
     effects: { ...fx, glueCharges: fx.glueCharges - 1, traps: [...fx.traps, { square, kind: 'glue', victim: 'boss', turnsLeft: GLUE_LIFETIME }] },
-    events: [{ kind: 'trap', sprung: false, detail: `Glue trap laid on ${square.toUpperCase()}` }],
+    events: [{ kind: 'trap', sprung: false, square, detail: `Glue trap laid on ${square.toUpperCase()}` }],
   }
 }
 

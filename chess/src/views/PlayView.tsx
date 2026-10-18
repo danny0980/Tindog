@@ -1,5 +1,5 @@
 import { Download, History, Share2, X } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
 import { BoardHologram } from '../components/board/BoardHologram'
@@ -11,6 +11,9 @@ import { ArenaBar } from '../components/roguelike/ArenaBar'
 import { KillCamStage } from '../components/roguelike/KillCam'
 import { MoodBackdrop } from '../components/roguelike/MoodBackdrop'
 import { WeatherOverlay } from '../components/roguelike/WeatherOverlay'
+import { SpellParticles } from '../components/fx/SpellParticles'
+import { Vignette } from '../components/fx/Vignette'
+import { playFx } from '../components/fx/playFx'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
 import { ChessClock } from '../components/game/ChessClock'
 import { ControlPanel } from '../components/game/ControlPanel'
@@ -36,7 +39,7 @@ import { type SwipeDirection, useSwipeGesture } from '../hooks/useSwipeGesture'
 import { profileStore } from '../stores/profileStore'
 import { updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
-import type { Color, GameSettings, MoveInput } from '../types/chess'
+import type { Color, GameSettings, MoveInput, Square } from '../types/chess'
 import { describeResult, givesCheck, opposite } from '../utils/chess'
 import { pgnFilename, sharePgn, shareText } from '../utils/share'
 import { statusSummary } from '../utils/status'
@@ -69,6 +72,8 @@ function buildShareSummary(game: GameController): string {
   return lines.join('\n')
 }
 
+const NO_SQUARES: readonly Square[] = []
+
 const SWIPE_LABELS: Record<SwipeDirection, string> = { left: 'Undo', right: 'Board flipped', up: 'Moves', down: 'Menu' }
 
 export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet }: PlayViewProps) {
@@ -92,7 +97,30 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const fog = game.battle?.weather === 'fog' && !game.review && game.status.kind === 'playing'
   const showEval = game.evalEnabled && !fog
   const moodFx = settings.moodEffects && !settings.batterySaver
+  // Post-processing bursts on the board: quake + chromatic aberration on
+  // critical checks and mates, bloom when a spell or tactic flares.
+  const boardFxRef = useRef<HTMLDivElement>(null)
+  const boardLensRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!moodFx || game.severeCheck === 0) return
+    playFx(boardFxRef.current, 'quake')
+    playFx(boardLensRef.current, 'chroma')
+  }, [game.severeCheck, moodFx])
+  const mateCam = game.killCam?.id ?? null
+  useEffect(() => {
+    if (moodFx && mateCam !== null) playFx(boardLensRef.current, 'chroma')
+  }, [mateCam, moodFx])
+  const flashId = game.spellFlash?.id ?? null
+  useEffect(() => {
+    if (moodFx && flashId !== null) playFx(boardLensRef.current, 'bloom')
+  }, [flashId, moodFx])
   const inDanger = moodFx && game.isAiMode && game.status.kind === 'playing' && game.status.inCheck && game.status.turn === game.humanColor
+  const playing = game.status.kind === 'playing' && !game.review
+  const myClock = game.clock.enabled ? game.clock.times[game.humanColor] : Number.POSITIVE_INFINITY
+  /** 0–1: drives the vignette (check, time trouble, a charging spell, a character battle). */
+  const tension = playing
+    ? Math.max(inDanger ? 1 : 0, game.status.kind === 'playing' && game.status.inCheck ? 0.6 : 0, myClock < 20_000 ? 0.8 : 0, game.effects?.warning ? 0.5 : 0, game.persona ? 0.2 : 0)
+    : 0
 
   // First-run gesture tutorial on touch layouts.
   const showGuide = guideOpen || (active && gestures && !settings.gestureHintSeen && !newGameOpen)
@@ -215,9 +243,9 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   }
 
   const board = (
-    <div key={moodFx && game.severeCheck > 0 ? `quake-${game.severeCheck}` : 'board'} className={`flex items-stretch gap-2 ${moodFx && game.severeCheck > 0 ? 'animate-quake' : ''}`}>
+    <div ref={boardFxRef} className="flex items-stretch gap-2">
       {showEval && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
-      <div className="min-w-0 flex-1">
+      <div ref={boardLensRef} className="min-w-0 flex-1">
         <KillCamStage cam={game.killCam} orientation={game.orientation}>
         <ChessBoard
           id="play-board"
@@ -238,6 +266,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           specialTargets={game.specialTargets}
         >
           {game.effects && game.battle && !game.review && <WeatherOverlay weather={game.effects.weather} lowPower={settings.batterySaver} />}
+          <SpellParticles fx={game.boardFx} orientation={game.orientation} frozen={game.arena?.frozen ?? NO_SQUARES} lowPower={settings.batterySaver} />
           {hologram && !settings.batterySaver && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
           {game.spellFlash && !settings.batterySaver && timeMachine.isLive && (
             <BoardHologram key={`spell-${game.spellFlash.id}`} text={game.spellFlash.text} tone={game.spellFlash.tone} />
@@ -415,6 +444,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
       )}
 
       {active && moodFx && <MoodBackdrop alignment={game.review ? null : game.alignment} danger={inDanger} />}
+      {active && moodFx && <Vignette tension={tension} danger={inDanger} />}
 
       {feedback && <SwipeFeedback key={feedback.id} direction={feedback.direction} label={feedback.label} />}
 

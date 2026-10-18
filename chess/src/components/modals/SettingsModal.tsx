@@ -1,4 +1,5 @@
 import {
+  Clapperboard,
   BatteryLow,
   BatteryMedium,
   Gauge,
@@ -19,6 +20,7 @@ import { useStore } from '../../hooks/useStore'
 import { profileStore, resetProfile } from '../../stores/profileStore'
 import { settingsStore, updateSettings } from '../../stores/settingsStore'
 import { showToast } from '../../stores/toastStore'
+import { openIntro } from '../../stores/introStore'
 import { AudioPanel } from '../settings/AudioPanel'
 import { HapticsPanel } from '../settings/HapticsPanel'
 import { Section } from '../settings/Section'
@@ -87,6 +89,18 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
                 />
               </label>
+            </Section>
+            <Section title="Cinematic">
+              <Button
+                className="w-full"
+                icon={<Clapperboard className="size-4" />}
+                onClick={() => {
+                  onClose()
+                  openIntro()
+                }}
+              >
+                Replay the cinematic intro
+              </Button>
             </Section>
             <Section title="Mobile ergonomics">
               <Toggle

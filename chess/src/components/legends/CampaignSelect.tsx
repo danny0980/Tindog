@@ -1,4 +1,5 @@
-import { ChevronRight, Hourglass, Swords, WandSparkles } from 'lucide-react'
+import { ChevronRight, Clapperboard, Hourglass, Swords, WandSparkles } from 'lucide-react'
+import { openIntro } from '../../stores/introStore'
 import type { ReactNode } from 'react'
 import { CAMPAIGNS, LEGENDS, campaignLegends, isCampaignComplete, isLegendUnlocked, nextChapter } from '../../data/legends'
 import type { CampaignProgress } from '../../types/campaign'
@@ -36,6 +37,23 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
       <GrandCampaignCard progress={campaign} onOpen={() => onOpen('grand')} />
       <GauntletCard onOpen={() => onOpen('gauntlet')} />
       <TournamentCard onOpen={() => onOpen('tournament')} />
+      <button
+        type="button"
+        onClick={openIntro}
+        data-path="intro"
+        className="glass group relative flex items-center gap-4 overflow-hidden rounded-3xl p-5 text-left transition duration-300 hover:-translate-y-1 hover:border-white/25 lg:col-span-3"
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(100deg,rgba(120,72,30,0.35),rgba(20,10,30,0.2)_45%,rgba(255,90,30,0.3))]" aria-hidden="true" />
+        <div className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-200 via-orange-500 to-red-700 text-ink-950">
+          <Clapperboard className="size-7" />
+        </div>
+        <div className="relative min-w-0 flex-1">
+          <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Cinematic</div>
+          <div className="font-display text-xl font-extrabold tracking-wide text-white">The Visual Evolution</div>
+          <div className="text-xs text-slate-400">From a quiet study game to the Chronos Realm — watch the intro again</div>
+        </div>
+        <ChevronRight className="relative size-5 text-accent transition group-hover:translate-x-1" />
+      </button>
       {CAMPAIGNS.map((campaign) => {
         const legends = campaignLegends(campaign.id)
         const done = legends.filter((l) => defeated[l.id]).length

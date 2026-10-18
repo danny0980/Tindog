@@ -1,10 +1,115 @@
-# ♞ Chess Arena: AAA Edition (v6.0 · Chronos Chess — The Ultimate Edition)
+# ♞ Chess Arena: AAA Edition (v6.1 · Chronos Chess — The Visual Evolution)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.1: The Visual Evolution — cinematic intro & post-processing
+
+The app now opens on a ~20-second **cinematic intro**, rendered live on a 2D canvas with no video or image files. It starts as a hyper-real study game and is torn apart into the Chronos realm.
+
+### 🎬 The sequence (`src/components/cinematic/`)
+The intro starts behind a gate (*Begin the cinematic*), so the first tap also unlocks audio on mobile.
+
+| Time | Phase | What you see and hear |
+|---|---|---|
+| 0–8.6 s | **Classic study** | A macro shot of a varnished maple and walnut board that pulls back slowly. <br>• **Wood grain:** procedural, with growth rings warped by noise and the grain alternating direction per square. <br>• **Lighting:** a brass inlay, a warm specular pool, and a volumetric lamplight beam with drifting dust motes. <br>• **Moves:** the Italian Game is played with physical weight: lift arc, settle, a damped micro-tremor that ripples into neighbouring pieces, and a wooden thock. <br>• **Sound:** a fireplace room tone. |
+| 8.6–12.4 s | **The rift** | The board rattles and a seeded temporal crack spreads branch by branch from e4/e5. <br>• **Fracturing HUD:** holographic panels (*Timeline integrity*, *Engine eval*, *Reality anchor*) glitch, scramble their data and shatter. <br>• **Post-processing:** chromatic aberration. <br>• **Sound:** a rising tear with glitch blips. <br>• **At 10.6 s:** a blue and gold **shockwave**, a white flash, a camera kick, a heavy haptic and a sub-bass impact. Then the realm floods outward from the crack behind a glowing front. |
+| 12.4–18.5 s | **Chronos realm** | Obsidian and cracked-basalt tiles with pulsing lava seams. <br>• **Pieces:** rune-lit — crystal-gold for White, obsidian and fire for Black. <br>• **Effects:** a turning rune circle, rising embers, spell motes, an aurora sky and bloom. <br>• **The game turns violent:** Nxe5 makes the e5 pawn shatter into shards, and Bxf2+ triggers a chromatic burst. <br>• **Sound:** an orchestral loop in D minor (brass, strings, choir, timpani). |
+| 18.5 s → | **Finale** | The letterbox bars open and the **CHRONOS CHESS** title card appears. <br>• **Buttons:** **Grand Campaign**, **Endless Gauntlet** or **To the board**. <br>• **Background:** the realm keeps animating behind the title. |
+
+**Skipping and replaying.**
+- **Skip:** the *Skip* button (or `Esc`) jumps to the finale at any time. The gate itself also offers *Skip to the Grand Campaign / Gauntlet / board*.
+- **First launch:** the intro plays once automatically (`settings.introSeen`).
+- **Replay:** from the header 🎬 button, the **Legends → The Visual Evolution** card, or **Settings → General → Cinematic**.
+- **Reduced motion:** with `prefers-reduced-motion`, the intro goes straight to the title card, without camera moves, shake, flashes or glitch.
+
+**Architecture.**
+- **Pure core:** `timeline.ts` holds the phases, the scripted moves, lift and tremor physics, the camera path, the pinhole projection and the beats. The renderer only draws what it says, so every beat is deterministic and unit-tested.
+- **Rendering:**
+  - **`renderer.ts`:** the board is drawn as horizontal texture strips. This is exact because the camera has no yaw or roll, so every board row projects to one horizontal line. The strips are clipped to the projected board outline.
+  - **Bloom:** emissive elements (lava, runes, crack and shockwave) are also drawn into a quarter-resolution buffer, which is upscaled additively.
+- **Assets:** `textures.ts` paints the boards and lit piece sprites once from seeded value noise.
+- **Sound:** `introAudio.ts` synthesises the score.
+- **Performance** (aimed at 60 fps):
+  - **No garbage during frames:** particles live in typed arrays (`components/fx/particles.ts`) and are recycled.
+  - **Adaptive quality:** `QualityGovernor` drops DPR, particle count, strip count and bloom when frames run slow, and raises them again when there's headroom. Phones start at medium.
+  - **Loading:** the intro is a lazy chunk (~11 kB gzip) that is only downloaded when it plays.
+  - **Pausing:** the loop pauses with the tab.
+
+### ✨ Post-processing in game (`src/components/fx/`)
+- **SVG filters:** `FxDefs` mounts `#fx-chromatic` (red and blue channels pulled apart) and `#fx-bloom` (a blurred, brightened copy screened over the original) once.
+- **Bursts:** `playFx` plays them as Web Animations bursts, so the board is never remounted:
+  - **Chromatic aberration and quake:** on **critical checks** (in check with at most 3 replies) and on checkmate.
+  - **Bloom:** on every spell, tactic or potion flash.
+- **Spell particles:** `SpellParticles` is a canvas over the board.
+  - **Bursts per event:** Frost Sigil ice crystals on the frozen square (plus a slow frost drift while it stays sealed), spell sparks and runes, ward runes, amber glue, blood embers from the altar, potion bubbles, check sparks, and checkmate shards.
+  - **Cost at rest:** the loop stops when nothing is alive.
+- **Vignette:** a tension vignette darkens with check, time trouble, a charging spell or a character battle, and tints red when you're in danger.
+- **Opting out:** everything respects *Settings → Audio → Arena atmosphere* and battery-saver mode.
+
+### 🌀 View transitions (`src/utils/viewTransition.ts`)
+- **API:** screen changes run inside the **View Transitions API** (Chromium, Safari 18+), using `flushSync` so the snapshot is exact.
+- **Direction:**
+  - **Tabs** slide and blur in the direction you travel.
+  - **Paths** zoom in: World Map, Gauntlet, Tournament, and the realm switcher.
+  - **Profile Legacy tabs** (the Trophies room): slide left or right.
+  - **Closing the intro:** zooms into the destination.
+- **Header and nav** keep their own `view-transition-name`, so they stay still.
+- **Fallbacks:** browsers without the API get a CSS entrance animation, and reduced motion or battery saver switch transitions off.
+
+### Integration & verification guide
+
+```bash
+cd chess
+npm install
+npm run check              # typecheck + lint + data + 6 test suites (now incl. cinematic)
+npm run test:cinematic     # 47 checks: phases, move physics, beats, camera & projection, crack, particles, quality governor, FX mapping, transitions
+npm run build && npx vite preview   # http://localhost:4173
+```
+
+1. **First launch.** Open the app in a fresh profile (a private window, or clear `chess-arena:settings:v2`). The gate appears; click **Begin the cinematic** with sound on.
+   - **Study:** the study game plays from 0 to 8 s (e4, e5, Nf3, Nc6, Bc4) with dust in the light beam.
+   - **Rift:** at about 9 s the crack, glitching HUD panels and chromatic fringe appear. At 10.6 s come the shockwave and flash.
+   - **Realm:** from 12.4 s you see the realm, lava, runes, embers and the orchestra. The Nxe5 capture shatters a piece, and Bxf2+ flashes chromatic.
+   - **Finale:** at 18.5 s the title card and buttons appear.
+2. **Exits.** **Grand Campaign** lands on the world map with a zoom transition. Reload: the intro doesn't auto-play again.
+3. **Replay and skip.** Use the header 🎬 (or Legends → *The Visual Evolution*, or Settings → *Replay the cinematic intro*). Press **Skip** (or `Esc`) to jump to the finale, then **Endless Gauntlet**.
+4. **Mobile.** At 390×844 (touch), check the gate, the *Skip* button in the top-right safe area, and the finale buttons wrapping.
+5. **In-game effects.** In a campaign battle:
+   - **Bloom and bubbles:** drink a potion.
+   - **Frost:** fight Malakor; when Frost Sigil lands, ice crystals burst and keep drifting on the sealed square.
+   - **Critical check:** a severe check from the boss quakes the board with a chromatic split.
+   - **Checkmate:** mate adds shards to the kill-cam.
+6. **Transitions.** Switch tabs (slide), open Legends paths (zoom) and switch realms (slide). Header and nav stay still.
+
+**Tested here** (headless Chromium against the production build):
+- Every phase rendered; screenshots were checked.
+- The HUD panels appear in the rift.
+- Every exit lands on the right screen, and `introSeen` persists.
+- The header button and `Esc` work.
+- View transitions run with the right direction.
+- Potion particles draw and the loop goes idle after it settles.
+- No page errors.
+
+Measured frame rates (software rendering, no GPU):
+
+| Setup | Frame rate |
+|---|---|
+| Desktop, 1280×720, high quality | ~40–58 fps |
+| Mobile emulation | ~60 fps |
+
+Real GPUs should do better, and the governor lowers quality when needed.
+
+**Limitations.**
+- **Rendering:** it's 2D canvas, not WebGL. Pieces are lit glyph sprites (billboards), not 3D models.
+- **Board edges:** the strip renderer is exact for board rows; any slight softness at the edges is hidden by the outline clip.
+- **SVG filters:** filters on large elements cost a lot on weak GPUs, so the continuous rift aberration is enabled only on fine-pointer (desktop-class) devices, and in-game filters are short bursts.
+- **Score:** the orchestral loop is synthesised, so it suggests an orchestra rather than imitating one.
 
 ---
 

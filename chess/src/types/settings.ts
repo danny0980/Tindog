@@ -38,6 +38,8 @@ export interface AppSettings {
   oneHanded: boolean
   gesturesEnabled: boolean
   gestureHintSeen: boolean
+  /** The cinematic intro has been shown (it plays once automatically). */
+  introSeen: boolean
   // ── Performance ──
   batterySaver: boolean
   autoBatterySaver: boolean

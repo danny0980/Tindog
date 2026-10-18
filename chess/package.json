@@ -1,7 +1,7 @@
 {
   "name": "chess-arena",
   "private": true,
-  "version": "6.0.0",
+  "version": "6.1.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-stockfish.mjs",
@@ -11,7 +11,7 @@
     "lint": "oxlint",
     "validate:data": "node scripts/validate-data.mjs",
     "generate:puzzles": "node scripts/generate-puzzles.mjs 120",
-    "check": "npm run typecheck && npm run lint && npm run validate:data && npm run test:legends && npm run test:campaign && npm run test:resilience && npm run test:roguelike && npm run test:ultimate",
+    "check": "npm run typecheck && npm run lint && npm run validate:data && npm run test:legends && npm run test:campaign && npm run test:resilience && npm run test:roguelike && npm run test:ultimate && npm run test:cinematic",
     "preview": "vite preview",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run cap:sync && cap open android",
@@ -20,7 +20,8 @@
     "test:campaign": "node scripts/run-ts-test.mjs tests/campaign.test.ts",
     "test:resilience": "node scripts/run-ts-test.mjs tests/resilience.test.ts",
     "test:roguelike": "node scripts/run-ts-test.mjs tests/roguelike.test.ts",
-    "test:ultimate": "node scripts/run-ts-test.mjs tests/ultimate.test.ts"
+    "test:ultimate": "node scripts/run-ts-test.mjs tests/ultimate.test.ts",
+    "test:cinematic": "node scripts/run-ts-test.mjs tests/cinematic.test.ts"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.3",

@@ -1,0 +1,29 @@
+import type { AchievementDef } from '../types/profile'
+
+export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
+  { id: 'first-blood', title: 'First Blood', description: 'Win your first game against Stockfish.', icon: 'sword', reward: 50, tier: 'bronze' },
+  { id: 'checkmate-in-10', title: 'Checkmate in 10', description: 'Deliver checkmate within your first 10 moves.', icon: 'zap', reward: 100, tier: 'silver' },
+  { id: 'speed-demon', title: 'Speed Demon', description: 'Win a Bullet or Blitz game against Stockfish.', icon: 'timer', reward: 75, tier: 'silver' },
+  { id: 'advanced-conqueror', title: 'Advanced Conqueror', description: 'Defeat Stockfish on Advanced.', icon: 'shield', reward: 150, tier: 'gold' },
+  { id: 'slayer-of-expert', title: 'Slayer of Expert AI', description: 'Defeat Stockfish on Expert.', icon: 'skull', reward: 300, tier: 'platinum' },
+  { id: 'mind-reader', title: 'Mind Reader', description: 'Beat all four AI personalities.', icon: 'brain', reward: 250, tier: 'gold' },
+  { id: 'queens-guard', title: "Queen's Guard", description: 'Win a game without losing your queen.', icon: 'crown', reward: 60, tier: 'bronze' },
+  { id: 'pawn-star', title: 'Pawn Star', description: 'Promote a pawn in a finished game.', icon: 'gem', reward: 25, tier: 'bronze' },
+  { id: 'knightmare', title: 'Knightmare', description: 'Deliver checkmate with a knight.', icon: 'horse', reward: 100, tier: 'silver' },
+  { id: 'peacemaker', title: 'Peacemaker', description: 'Draw a game.', icon: 'handshake', reward: 25, tier: 'bronze' },
+  { id: 'time-lord', title: 'Time Lord', description: 'Win a game on time.', icon: 'hourglass', reward: 50, tier: 'bronze' },
+  { id: 'comeback-kid', title: 'Comeback Kid', description: 'Win after being down 5 or more points of material.', icon: 'trending', reward: 150, tier: 'gold' },
+  { id: 'hat-trick', title: 'Hat Trick', description: 'Win 3 games in a row.', icon: 'flame', reward: 100, tier: 'silver' },
+  { id: 'dedicated', title: 'Dedicated', description: 'Finish 10 games.', icon: 'repeat', reward: 50, tier: 'bronze' },
+  { id: 'veteran', title: 'Veteran', description: 'Finish 50 games.', icon: 'medal', reward: 200, tier: 'gold' },
+  { id: 'rising-star', title: 'Rising Star', description: 'Reach a 1500 Elo rating.', icon: 'star', reward: 100, tier: 'silver' },
+  { id: 'master-class', title: 'Master Class', description: 'Reach an 1800 Elo rating.', icon: 'trophy', reward: 250, tier: 'platinum' },
+  { id: 'puzzle-apprentice', title: 'Puzzle Apprentice', description: 'Solve your first puzzle.', icon: 'puzzle', reward: 25, tier: 'bronze' },
+  { id: 'on-fire', title: 'On Fire', description: 'Solve daily puzzles 3 days in a row.', icon: 'flame', reward: 100, tier: 'silver' },
+  { id: 'puzzle-master', title: 'Puzzle Master', description: 'Solve 25 puzzles.', icon: 'target', reward: 200, tier: 'gold' },
+  { id: 'analyst', title: 'Analyst', description: 'Run a full post-game analysis.', icon: 'search', reward: 25, tier: 'bronze' },
+  { id: 'surgical-precision', title: 'Surgical Precision', description: 'Win with 90%+ accuracy in an analysed game.', icon: 'target', reward: 150, tier: 'gold' },
+  { id: 'collector', title: 'Collector', description: 'Own 3 premium cosmetics.', icon: 'palette', reward: 100, tier: 'silver' },
+]
+
+export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

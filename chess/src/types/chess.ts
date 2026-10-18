@@ -6,26 +6,34 @@ export type GameMode = 'ai' | 'local'
 
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert'
 
+export type Personality = 'balanced' | 'aggressive' | 'defensive' | 'tactical' | 'positional'
+
 export type ColorChoice = Color | 'random'
 
 export type PromotionPiece = Extract<PieceSymbol, 'q' | 'r' | 'b' | 'n'>
 
+export type TimeControlCategory = 'none' | 'bullet' | 'blitz' | 'rapid' | 'classical' | 'custom'
+
 export interface TimeControl {
   id: string
   label: string
-  category: 'none' | 'bullet' | 'blitz' | 'rapid'
+  category: TimeControlCategory
   /** Initial time per side in milliseconds (0 = untimed). */
   initialMs: number
-  /** Increment added after each move in milliseconds. */
+  /** Fischer increment added after each move in milliseconds. */
   incrementMs: number
 }
 
 export interface GameSettings {
   mode: GameMode
   difficulty: Difficulty
+  personality: Personality
   /** Colour the human plays in AI mode. */
   playerColor: ColorChoice
   timeControlId: string
+  /** Used when timeControlId === 'custom'. */
+  customMinutes: number
+  customIncrementSeconds: number
 }
 
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient'
@@ -60,10 +68,10 @@ export interface CapturedSummary {
   materialDiff: number
 }
 
-export interface EngineConfig {
-  skillLevel: number
-  depth: number
-  moveTimeMs: number
-  /** Minimum perceived "thinking" time so instant replies don't feel jarring. */
-  minThinkMs: number
+export interface MoveInput {
+  from: Square
+  to: Square
+  promotion?: PieceSymbol
 }
+
+export type Outcome = 'win' | 'loss' | 'draw'

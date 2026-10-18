@@ -1,166 +1,285 @@
-# ♞ Chess Arena
+# ♞ Chess Arena: AAA Edition
 
-A responsive chess app built with **React 19 + Vite + TypeScript (strict)**, styled with **Tailwind CSS v4**, powered by **chess.js** for rules, **react-chessboard** for the board, and **Stockfish 19 (WASM, in a Web Worker)** as the AI opponent. It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
+A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
-## Features
+- No `any` types.
+- No audio files, because every sound is synthesised at runtime.
+- Works offline once loaded, apart from the Google Fonts stylesheet.
 
-- **Player vs AI**: Stockfish at four levels (Beginner, Intermediate, Advanced, Expert). You can play White, Black or a random colour.
-- **Player vs Player**: local pass-and-play on one device.
-- **Moving pieces**: drag-and-drop, or tap a piece and then tap its destination. Legal moves show as dots, captures as rings, and the last move is highlighted. The king's square glows red when in check.
-- **Promotion**: a dialog lets you choose queen, rook, bishop or knight (underpromotion works).
-- **Status banner**: shows whose turn it is, Check, Checkmate, Stalemate and the draw types (threefold repetition, insufficient material, fifty-move rule), plus resignation and timeouts.
-- **Captured pieces**: shown for each side, with the material advantage (`+N`).
-- **Controls**: New Game, Flip Board, Undo and Resign (Resign asks for confirmation). In AI mode, Undo takes back your move and the engine's reply.
-- **Move log**: SAN notation in two columns. It collapses on mobile, and a button copies the game as **PGN**.
-- **Chess clock**: Unlimited, Bullet 1+0, Blitz 3+2, Blitz 5+0, Rapid 10+0 or Rapid 15+10.
-  - Increments are supported, and Undo restores the clock times.
-  - It shows tenths of a second under 10 seconds.
-  - It doesn't drift, because it measures elapsed time with `performance.now()` instead of counting interval ticks.
-  - A flag against a side with no mating material is scored as a draw.
-- **Sound and haptics**: move, capture, check and game-end sounds are generated with the Web Audio API, so there are no audio files and they work offline. Phones that support it also vibrate. Sound can be muted.
-- **Settings persistence**: your last game setup and the sound preference are saved in `localStorage`.
-- **Native-app readiness**:
-  - Safe-area insets are handled for notches and home indicators.
-  - The viewport uses `100dvh`.
-  - Pull-to-refresh and rubber-banding are disabled, along with double-tap zoom and text selection.
-  - Touch gestures on the board are captured.
-  - Modals open as bottom sheets on phones.
+---
+
+## Feature overview
+
+### 1. Visuals & aesthetics
+
+**Dynamic themes engine.** Five board themes switch instantly with no reload:
+
+| Theme | Sound set | Price |
+|---|---|---|
+| Classic Wood | wood | free |
+| Minimalist | soft | free |
+| Obsidian Marble | marble | 200 coins |
+| Cyberpunk Neon | synth | 400 coins |
+| Royal Gold | metal | 750 coins |
+
+Each theme sets the square textures, frame, highlight colours, app accent colours, background, particle colours and sound material.
+
+There are also four piece styles: Staunton, Obsidian, Neon Hologram and Gilded. These are the board's SVG pieces re-coloured and given glow filters.
+
+**Cinematic effects:**
+- Canvas confetti bursts with sparkles on victory, checkmate and solved puzzles.
+- Holographic "CHECK", "CHECKMATE", "STALEMATE" and "TIME!" text appears over the board.
+- Legal moves and last moves get themed glow highlights.
+- Engine avatars have a shimmer scan line.
+
+**Advantage (eval) bar.** A live Stockfish evaluation on a separate analysis worker, debounced and cached. It shows `+1.3` or `M3` style scores and follows the time machine.
+
+**Animated avatars.** Each player's avatar reacts to the game:
+- **Mood:** calm, confident, dominating, worried, desperate, thinking.
+- **Pressure:** in check, time trouble.
+- **Result:** victory, defeat, draw.
+
+Moods come from the evaluation, check status and clocks.
+
+**Responsive and safe areas:**
+- Uses `viewport-fit=cover` and `env(safe-area-inset-*)`.
+- Phones get a bottom tab bar; desktop gets a header nav.
+- Dialogs open as bottom sheets on phones.
+- Layout uses `dvh` units, so landscape and portrait both work.
+
+### 2. Audio & feedback
+
+- **Procedural sound engine** (`src/audio/`), built on one AudioContext with:
+  - SFX and music buses
+  - a compressor
+  - a synthetic convolution reverb
+- **Material-specific piece sounds:**
+
+  | Material | How it's made |
+  |---|---|
+  | Wood | Filtered noise knock plus a low thump |
+  | Marble | Bright stone click plus a ringing partial |
+  | Metal | Inharmonic struck-bar partials |
+  | Synth | Neon blip |
+  | Soft | Minimalist sine click |
+
+  Captures, castling and promotions each have their own sound. Pitch varies slightly from hit to hit so repeats sound natural.
+- **Adaptive ambient soundtrack:** generative pad chords and sparse bells. A tension value, driven by the eval swing, checks and low time, switches to a minor progression, opens the filter and adds more bells.
+- **Fanfares** for victory, defeat, stalemate/draw and timeout, plus sounds for check, achievements, coins, puzzles and low-time ticks.
+- **Haptics:** uses the native Taptic Engine or vibrator through `@capacitor/haptics`, and falls back to the Vibration API on the web.
+- **Master volume and toggles:** a master volume slider, and separate SFX, music and haptics switches. A mute button in the header turns off sound effects and music together.
+
+### 3. AI & gameplay
+
+**AI personalities**, each combined with four difficulty levels:
+- Balanced
+- Aggressive Attacker
+- Defensive Wall
+- Tactical Master
+- Positional Grandmaster
+
+How move choice works:
+1. Stockfish returns several candidate lines (MultiPV 4).
+2. Every move within a centipawn window of the best (wider at lower levels) is re-scored on style. The style features are:
+   - checks and captures
+   - pressure on the enemy king and how far pieces advance
+   - king shelter and castling
+   - trades
+   - centre control and development
+   - quiet moves and early queen moves
+3. Forced mates are never passed up.
+
+The code is in `src/engine/personalities.ts`.
+
+**Post-game analysis and blunder check:**
+- Every position is evaluated, then each move is classified as **Brilliant / Best / Excellent / Good / Book / Forced / Inaccuracy / Mistake / Blunder**. This uses Lichess-style win-chance loss and checks whether a Brilliant move was a real sacrifice.
+- You get per-side accuracy and an interactive evaluation graph you can click to jump.
+- A "key moments" strip lets you jump to the important moves.
+- When reviewing a position, an arrow shows the engine's best move, along with "best was …" hints.
+
+**Opening explorer:**
+- 189 ECO-coded lines.
+- Matched by position, so transpositions are recognised too.
+- A notification pops up live when a new opening is reached.
+- The current opening is shown in the status card.
+
+**Time machine:**
+- A scrubber slider and first / previous / play / next / last controls.
+- Auto-replay, plus `← → Home End` keys.
+- Click any move or any point on the eval graph to jump there.
+- The board, captured pieces and eval all follow the selected move.
+
+**Chess clocks:**
+- Presets: Bullet 1+0 and 2+1, Blitz 3+2 and 5+3, Rapid 10+5 and 15+10, Classical 30+20.
+- A **custom Fischer** control: 1 to 90 minutes, plus a 0 to 30 s increment.
+- The clock doesn't drift, because it measures `performance.now()`.
+- Undo restores the clock times.
+- Clocks pause when the app is in the background or you switch tabs.
+- A flag against a side with no mating material is scored as a draw.
+
+### 4. Progression & meta
+
+- **Elo rating and profile card:**
+  - Standard Elo against each difficulty's nominal rating (800 / 1400 / 2000 / 2600). K = 40 for your first 30 games, then 20.
+  - Taking a move back makes the game **casual** (unrated).
+  - Rank titles, peak rating and an Elo history graph.
+  - A win/draw/loss donut chart, streaks and wins per difficulty.
+- **Achievements:** 23 trophies in four tiers (bronze to platinum), each paying coins. Examples:
+  - First Blood
+  - Checkmate in 10
+  - Speed Demon
+  - Slayer of Expert AI
+  - Knightmare
+  - Comeback Kid
+  - Mind Reader
+  - On Fire
+
+  Unlocking one shows a popup with a sound.
+- **Cosmetics shop:** spend coins earned from wins (15 to 120 by difficulty), daily puzzles and achievements on board themes and piece styles. Buying something equips it immediately.
+- **Daily puzzles:**
+  - 3 per day (mate-in-2, mate-in-2, mate-in-3), refreshing at local midnight.
+  - Streaks and a practice library.
+  - Two-level hints, a step-by-step solution, and a "wrong move" shake.
+  - On the final move, any checkmate is accepted.
+  - All **120 puzzles are generated and verified by Stockfish** (`scripts/generate-puzzles.mjs`), so every one is a forced mate with a single correct first move.
+- **PGN and export:**
+  - Full PGN with the Event, Date, players, Result, TimeControl and Opening headers.
+  - Saved in match history: the last 60 games, each with Review, Copy and Download.
+  - Export uses the native share sheet when available, otherwise it downloads the file.
+  - "Share" builds a text summary of the result, opening, accuracy and rating change.
+
+### 5. Mobile & Capacitor readiness
+
+**Touch:** drag-and-drop and tap-to-select both work. The board captures touch gestures, and pull-to-refresh, double-tap zoom and long-press callouts are disabled.
+
+**Performance and battery saver:**
+- **Stockfish workers:** two pooled, reference-counted workers (play and analysis). A worker is terminated after it has been idle for a while (45 s, or 10 s in battery saver).
+- **Background behaviour:** searches stop and audio is suspended while the app is in the background.
+- **Battery saver mode** (manual, or automatic below 20% battery where the Battery API exists):
+  - removes backdrop blur, glow filters, particles, holograms and looping animations
+  - stops the music
+  - slows the clock tick to 250 ms
+  - uses shallower engine analysis
+- **Idle throttling:** after 45 s without input, decorative animation loops pause.
+- **Render loops:** the confetti `requestAnimationFrame` loop only exists while a burst is playing.
+- **Code splitting:** the Puzzles, Profile and Shop screens are code-split.
+
+---
 
 ## 1. Project structure
 
 ```
 chess/
-├── capacitor.config.ts          # Capacitor native-shell configuration
-├── index.html                   # viewport-fit=cover, theme-color, PWA/iOS meta
+├── capacitor.config.ts            # Capacitor native shell config
+├── index.html                     # viewport-fit=cover, PWA / iOS meta, fonts
 ├── package.json
+├── scripts/
+│   ├── copy-stockfish.mjs         # postinstall: Stockfish WASM → public/stockfish
+│   ├── generate-puzzles.mjs       # Stockfish self-play → verified mate puzzles
+│   └── validate-data.mjs          # checks every opening line and puzzle solution
 ├── public/
 │   ├── favicon.svg
-│   └── stockfish/               # (generated, git-ignored) engine .js + .wasm
-├── scripts/
-│   └── copy-stockfish.mjs       # postinstall: copies Stockfish WASM into public/
-├── src/
-│   ├── main.tsx                 # React root
-│   ├── App.tsx                  # Layout: board column + side panel + modals
-│   ├── index.css                # Tailwind v4 theme, glass utility, safe-area utilities
-│   ├── components/
-│   │   ├── ChessBoard.tsx       # react-chessboard wrapper: highlights, click/drag, promotion
-│   │   ├── PromotionDialog.tsx
-│   │   ├── PlayerBar.tsx        # Name, turn indicator, captured pieces, clock
-│   │   ├── CapturedPieces.tsx
-│   │   ├── ChessClock.tsx
-│   │   ├── GameStatusBanner.tsx
-│   │   ├── ControlPanel.tsx     # New / Flip / Undo / Resign
-│   │   ├── MoveHistory.tsx      # Collapsible SAN move log + PGN copy
-│   │   ├── NewGameModal.tsx     # Mode, difficulty, colour, time control
-│   │   ├── GameOverModal.tsx
-│   │   ├── ConfirmDialog.tsx
-│   │   ├── Modal.tsx            # Accessible portal modal (bottom sheet on mobile)
-│   │   ├── Header.tsx
-│   │   └── PieceIcon.tsx        # Reuses the board's SVG piece set
-│   ├── hooks/
-│   │   ├── useGameController.ts # Orchestrates game + engine + clock + sounds
-│   │   ├── useChessGame.ts      # Owns the chess.js instance, exposes immutable snapshots
-│   │   ├── useStockfish.ts      # Engine lifecycle (Web Worker)
-│   │   └── useChessClock.ts     # Drift-free chess clock with increments
-│   ├── utils/
-│   │   ├── stockfishEngine.ts   # Serialized UCI client over postMessage
-│   │   ├── chess.ts             # Result/status helpers, captured pieces, formatting
-│   │   ├── sound.ts             # Web Audio sound effects + vibration
-│   │   └── storage.ts           # Safe localStorage helpers
-│   ├── constants/
-│   │   └── game.ts              # Difficulty → engine config, time controls, defaults
-│   └── types/
-│       └── chess.ts             # Shared domain types
-├── tsconfig.json / tsconfig.app.json / tsconfig.node.json   # strict mode
-└── vite.config.ts               # base: './' for Capacitor, Tailwind plugin
+│   └── stockfish/                 # (generated, git-ignored) engine .js + .wasm
+└── src/
+    ├── main.tsx · App.tsx         # app shell, navigation, lazy views
+    ├── audio/                     # procedural audio engine
+    │   ├── AudioEngine.ts         #   context, buses, reverb, unlock/suspend
+    │   ├── synth.ts               #   tone / noise voice primitives
+    │   ├── pieceSounds.ts         #   wood · marble · metal · synth · soft impacts
+    │   ├── fanfares.ts            #   victory, defeat, draw, timeout, check…
+    │   ├── ambientMusic.ts        #   adaptive generative soundtrack
+    │   ├── haptics.ts             #   Capacitor Haptics / Vibration API
+    │   └── index.ts               #   high-level `sfx` facade
+    ├── engine/                    # Stockfish integration
+    │   ├── StockfishEngine.ts     #   serialized UCI client with MultiPV parsing
+    │   ├── enginePool.ts          #   ref-counted worker pool (play / analysis)
+    │   ├── personalities.ts       #   style-weighted move selection
+    │   ├── analysis.ts            #   move classification & accuracy
+    │   ├── scoring.ts             #   win chance, eval formatting
+    │   └── evalCache.ts           #   shared LRU evaluation cache
+    ├── hooks/
+    │   ├── useGameController.ts   #   orchestrates game, AI, clock, eval, analysis, rewards
+    │   ├── useChessGame.ts        #   chess.js owner exposing immutable snapshots
+    │   ├── useAiOpponent.ts · useEngine.ts · useEvaluation.ts · useGameAnalysis.ts
+    │   ├── useChessClock.ts · useTimeMachine.ts · usePuzzleSession.ts
+    │   ├── useAppEnvironment.ts   #   theme vars, audio sync, visibility, idle, battery
+    │   └── useStore.ts            #   useSyncExternalStore binding
+    ├── stores/                    # persisted state (localStorage, sanitised on load)
+    │   ├── settingsStore.ts · profileStore.ts · toastStore.ts
+    ├── components/
+    │   ├── board/                 #   ChessBoard, EvalBar, BoardHologram, PromotionDialog
+    │   ├── game/                  #   PlayerBar, PlayerAvatar, ChessClock, TimeMachine, MoveHistory…
+    │   ├── analysis/              #   AnalysisPanel, EvalGraph, ClassificationBadge
+    │   ├── modals/                #   NewGame, GameOver, Settings
+    │   ├── profile/ · shop/       #   EloChart, AchievementGrid, MatchHistory, ThemeSwatch
+    │   ├── effects/               #   ConfettiCanvas
+    │   ├── layout/                #   AppHeader, BottomNav
+    │   └── ui/                    #   Modal, Button, Toggle, ToastViewport, PieceIcon…
+    ├── views/                     # PlayView · PuzzlesView · ProfileView · ShopView
+    ├── constants/                 # difficulty/personality tuning, themes, achievements, economy
+    ├── data/                      # openings.ts (189 lines) · puzzles.ts (120 verified mates)
+    ├── types/                     # chess, engine, analysis, theme, profile, settings, puzzle, ui
+    ├── utils/                     # chess helpers, progression (Elo/coins/achievements),
+    │                              # openings, puzzles, share/export, store, validation, mood
+    └── styles/                    # index.css (Tailwind v4 theme, battery saver) · animations.css
 ```
 
 ### Architecture notes
 
-- **There is a single source of truth.** `useChessGame` keeps the mutable `chess.js` instance in a ref and gives React only immutable snapshots (`fen`, `history`, `turn`, result). Components render purely from the FEN.
-- **AI moves can't land on the wrong position.**
-  - The engine wrapper queues searches one at a time. A new request first sends `stop` to the search in progress.
-  - The controller ignores any `bestmove` whose starting FEN is no longer on the board, for example after Undo or a new game.
-- **Difficulty maps to Stockfish's own settings:**
+- **Single source of truth for the board.** `useChessGame` keeps the mutable chess.js instance in a ref and gives React only immutable snapshots. Every component renders from a FEN.
+- **Game events are handled where they happen.** Game end, rewards, Elo and achievements are processed in the callbacks that end a game (a move, a flag, a resign), not in effects. That makes them fire exactly once, even under StrictMode.
+- **Global state** (settings, profile, toasts) lives in small external stores read through `useSyncExternalStore`:
+  - Changes are saved to localStorage with a short delay, and saved immediately when the app goes to the background (Capacitor can kill it after that).
+  - Everything read back from storage is checked and cleaned by type guards, so corrupted data can't crash the app.
+- **Progression logic is pure** (`utils/progression.ts`). It is plain input → output functions with no UI, so it's easy to test or move to a server later.
+- **AI and evaluation use separate workers**, so the eval bar never slows down the opponent. Engine replies for a position that's no longer on the board are dropped, for example after Undo.
 
-  | Level | Skill Level | Max depth | Move time |
-  |---|---|---|---|
-  | Beginner | 0 | 2 | 150 ms |
-  | Intermediate | 6 | 6 | 400 ms |
-  | Advanced | 13 | 12 | 900 ms |
-  | Expert | 20 | 20 | 1800 ms |
+---
 
-  A short minimum "think time" keeps very fast replies from feeling abrupt. You can tune all of this in `src/constants/game.ts`.
-- **The Stockfish build is "lite, single-threaded" (≈1.8 MB).** It doesn't need `SharedArrayBuffer` or COOP/COEP headers, so it runs on any static host and inside iOS/Android WebViews unchanged.
-
-## 2. Setup and running
+## 2. Setup & running locally
 
 **Prerequisites:** Node.js 20.19+ or 22.12+ (required by Vite 8) and npm 10+.
 
 ```bash
 cd chess
-npm install          # also runs postinstall → copies Stockfish into public/stockfish
-npm run dev          # http://localhost:5173 (also exposed on your LAN for phone testing)
+npm install            # also copies Stockfish (lite, single-threaded WASM) into public/stockfish
+npm run dev            # http://localhost:5173 — the "Network" URL works on your phone
 ```
 
-Other scripts:
+| Script | What it does |
+|---|---|
+| `npm run build` | Strict type-check + production build to `dist/` |
+| `npm run preview` | Serve the production build |
+| `npm run check` | Typecheck + lint (oxlint) + validate openings & puzzles |
+| `npm run validate:data` | Replay every opening line and puzzle solution |
+| `npm run generate:puzzles` | Regenerate 120 verified puzzles (takes a few minutes; overwrites `src/data/puzzles.ts`) |
 
-```bash
-npm run build        # type-check (tsc -b) + production build to dist/
-npm run preview      # serve the production build locally
-npm run typecheck    # strict TypeScript check only
-npm run lint         # oxlint
-```
+Tailwind v4 needs no `tailwind.config.js`. Runtime theme colours are exposed as `--accent` and `--accent-2` and used through the `accent` utilities (for example `bg-accent/20`).
 
-### Recreating this project from scratch (for reference)
+The Stockfish build is the **lite single-threaded** one (about 1.8 MB). It needs no COOP/COEP headers, so it runs on any static host and inside iOS/Android WebViews unchanged.
 
-```bash
-npm create vite@latest chess -- --template react-ts
-cd chess
-npm install chess.js react-chessboard lucide-react stockfish @capacitor/core
-npm install -D tailwindcss @tailwindcss/vite @capacitor/cli
-# then add scripts/copy-stockfish.mjs and the "postinstall" script, and copy in src/
-```
+---
 
-Tailwind v4 needs no `tailwind.config.js` or PostCSS config. The `@tailwindcss/vite` plugin and `@import 'tailwindcss'` in `src/index.css` are all it needs.
+## 3. Shipping to iOS & Android with Capacitor
 
-> **Testing on a phone during development:** `npm run dev` prints a `Network:` URL. Open it on a phone on the same Wi-Fi network.
-
-## 3. Capacitor: shipping as a native iOS and Android app
-
-The web app is already set up for Capacitor:
-
-- `vite.config.ts` uses `base: './'`, so asset URLs resolve inside the native WebView.
-- `capacitor.config.ts` points `webDir` to `dist`.
-- The Stockfish worker and WASM are plain static files in `dist/stockfish/`. No special headers or plugins are needed.
-- Everything except the Google Fonts stylesheet works offline. If the font can't load, the system font stack is used.
+The project is already set up for this:
+- `base: './'` in `vite.config.ts`
+- `capacitor.config.ts` with `webDir: 'dist'`
+- `@capacitor/core`, `@capacitor/cli` and `@capacitor/haptics` installed
+- the engine's files are plain static assets
 
 ### 3.1 Prerequisites
 
-| Platform | Requirements |
-|---|---|
-| Android | Android Studio (latest stable) with the Android SDK, and JDK 21 (bundled with Android Studio) |
-| iOS | A Mac with the current Xcode and Command Line Tools. A paid Apple Developer account is needed for device testing beyond a free provisioning profile, and for App Store release. |
+- **Android:** Android Studio (latest stable) with the SDK installed. JDK 21 comes bundled with it.
+- **iOS:** a Mac with the current Xcode. A paid Apple Developer account is needed to install on devices or ship to the App Store.
 
-Check the [Capacitor docs](https://capacitorjs.com/docs/getting-started/environment-setup) for the current minimum versions for Capacitor 8.
+Check the [Capacitor environment setup docs](https://capacitorjs.com/docs/getting-started/environment-setup) for the current minimum versions.
 
-### 3.2 Configure the app identity
+### 3.2 App identity
 
-Edit `capacitor.config.ts`:
+Set your own bundle ID in `capacitor.config.ts`, for example `appId: 'com.yourcompany.chessarena'`.
 
-```ts
-const config: CapacitorConfig = {
-  appId: 'com.yourcompany.chessarena', // reverse-DNS, unique on the stores
-  appName: 'Chess Arena',
-  webDir: 'dist',
-  backgroundColor: '#0b0d12',
-  ios: { contentInset: 'never', backgroundColor: '#0b0d12' },
-}
-```
-
-`@capacitor/core` and `@capacitor/cli` are already in `package.json`.
-
-### 3.3 Add the native platforms
+### 3.3 Add the native platforms (one time)
 
 ```bash
 npm install @capacitor/android @capacitor/ios
@@ -169,87 +288,57 @@ npx cap add android
 npx cap add ios
 ```
 
-This creates the `android/` and `ios/` native projects. Commit them, because they hold your signing settings, icons and permissions.
+Commit the generated `android/` and `ios/` folders. They hold signing settings, icons and permissions.
 
-### 3.4 The build → sync → open loop
-
-Run this every time the web code changes:
+### 3.4 Build → sync → run
 
 ```bash
-npm run cap:sync        # = npm run build && npx cap sync   (copies dist/ into both native projects)
-npm run cap:android     # sync + open Android Studio
-npm run cap:ios         # sync + open Xcode
+npm run cap:sync       # build + copy dist/ and native plugins (incl. Haptics) into both projects
+npm run cap:android    # sync + open Android Studio → Run ▶ / Build → Generate Signed Bundle (.aab)
+npm run cap:ios        # sync + open Xcode → Signing & Capabilities → Run ▶ / Product → Archive
 ```
 
-- **Android Studio:** wait for the Gradle sync to finish, choose an emulator or a USB device (with USB debugging enabled), then press **Run ▶**. For a release build, use **Build → Generate Signed App Bundle / APK…**, which produces an `.aab` for Google Play.
-- **Xcode:** select the **App** target, then **Signing & Capabilities** and set your Team. Choose a simulator or device and press **Run ▶**. For a release, use **Product → Archive**, then **Distribute App**.
-
-**Live reload on a device (optional).** Run `npm run dev`, then:
+For live reload on a device:
 
 ```bash
-npx cap run android --live-reload --host <your-LAN-IP> --port 5173
-npx cap run ios --live-reload --host <your-LAN-IP> --port 5173
+npm run dev
+npx cap run android --live-reload --host <LAN-IP> --port 5173
 ```
 
-### 3.5 Touch, viewport and safe-area handling (already done in code)
+### 3.5 What the native build gets for free
 
-| Concern | Where it's handled |
+| Concern | Handled by |
 |---|---|
-| Notch and home-indicator insets | `viewport-fit=cover` in `index.html`, plus the `safe-pt`, `safe-pb` and `safe-px` utilities in `index.css`, which use `env(safe-area-inset-*)`. Bottom sheets pad by `safe-area-inset-bottom`. |
-| Stopping pinch and double-tap zoom from breaking the layout | `maximum-scale=1, user-scalable=no` in the viewport, plus `touch-action: manipulation` on `body` |
-| Board drags scrolling the page | `.board-surface { touch-action: none }` |
-| Rubber-band and pull-to-refresh | `overscroll-behavior: none` |
-| Long-press callouts and text selection | `-webkit-touch-callout: none` and `user-select: none` |
-| Mobile browser toolbars changing the height | `100dvh` units throughout |
-| The board fitting both orientations | The board width is `min(100%, max(18rem, 100dvh − 15.5rem), 46rem)` |
-| Keyboard and screen readers | Focus rings, `aria-*` labels, `role="status"` and `role="timer"`, and Escape to close modals |
+| Notches and home indicator | `viewport-fit=cover`, the `safe-*` utilities, and the bottom nav / bottom sheets padded with `env(safe-area-inset-bottom)` |
+| Zoom and gestures | `user-scalable=no`, `touch-action: manipulation`, and `touch-action: none` on the board |
+| Rubber-banding and selection | `overscroll-behavior: none` and `user-select: none` (inputs are excluded) |
+| Haptics | `@capacitor/haptics` (impact and notification styles) when `Capacitor.isNativePlatform()` |
+| Audio policy | The AudioContext starts on the first tap and is suspended in the background |
+| Backgrounding | Clocks pause, searches stop, and storage is flushed immediately |
+| Low-end devices | Battery saver, worker idle termination, code-split screens |
+| Offline | Stockfish, sounds, openings and puzzles are all bundled |
 
-**Android edge-to-edge.** Recent Android versions draw apps edge-to-edge. If the safe-area insets read as `0` on an older Android System WebView, so content sits under the status bar:
-
-- Update the WebView, or
-- Install `@capacitor/status-bar` and call `StatusBar.setOverlaysWebView({ overlay: false })` when the app starts.
-
-### 3.6 Recommended native polish (optional plugins)
+### 3.6 Recommended extras
 
 ```bash
-npm install @capacitor/status-bar @capacitor/splash-screen @capacitor/haptics @capacitor/app @capacitor/screen-orientation
+npm install @capacitor/status-bar @capacitor/splash-screen @capacitor/app
+npm install -D @capacitor/assets
+npx capacitor-assets generate --iconBackgroundColor '#0b0d12' --splashBackgroundColor '#0b0d12'
 npx cap sync
 ```
 
-- **Status bar.** Use a light status bar on the dark background:
+- **Status bar:** `StatusBar.setStyle({ style: Style.Dark })`. If an older Android WebView reports zero safe-area insets, also call `StatusBar.setOverlaysWebView({ overlay: false })`.
+- **Android back button:** `App.addListener('backButton', …)` to close the top modal, otherwise `App.minimizeApp()`.
+- **Fonts:** self-host the Inter, JetBrains Mono and Orbitron fonts so the very first launch works fully offline.
 
-  ```ts
-  import { StatusBar, Style } from '@capacitor/status-bar'
-  StatusBar.setStyle({ style: Style.Dark })
-  ```
+### 3.7 Release checklist
 
-- **Haptics.** In `src/utils/sound.ts`, swap `navigator.vibrate` for `Haptics.impact({ style: ImpactStyle.Light })`. iOS WebViews ignore `navigator.vibrate`, but the plugin works on both platforms.
-- **Android hardware back button.** Close an open modal first, otherwise minimise the app:
+- [ ] Unique `appId`, version code and name, signing configured.
+- [ ] Icons and splash screens generated.
+- [ ] Tested on a notched iPhone, Android with gesture navigation, a tablet, and in landscape.
+- [ ] **Licensing:** Stockfish is **GPL-3.0**. Shipping it inside an app means meeting the GPL's terms, including making the corresponding source available. Review this before publishing to the App Store or Google Play.
 
-  ```ts
-  import { App } from '@capacitor/app'
-  App.addListener('backButton', ({ canGoBack }) => {
-    /* close modal or */ App.minimizeApp()
-  })
-  ```
-
-- **Orientation lock (optional, phones only).** `ScreenOrientation.lock({ orientation: 'portrait' })`. The layout also works in landscape.
-- **Icons and splash screens.** Put a 1024×1024 `assets/icon.png` and a 2732×2732 `assets/splash.png` in the project, then run:
-
-  ```bash
-  npm install -D @capacitor/assets
-  npx capacitor-assets generate --iconBackgroundColor '#0b0d12' --splashBackgroundColor '#0b0d12'
-  ```
-
-You can guard native-only calls with `Capacitor.isNativePlatform()` from `@capacitor/core`, so the same code still runs in the browser.
-
-### 3.7 Pre-release checklist
-
-- [ ] Set a unique `appId`, the app name and the version: `versionCode`/`versionName` in `android/app/build.gradle`, and Version/Build in Xcode.
-- [ ] Generate icons and splash screens.
-- [ ] Test on a notched iPhone, an Android device with gesture navigation, and a tablet.
-- [ ] Self-host the Inter font (optional) for a fully offline first launch.
-- [ ] **Licensing:** Stockfish is **GPL-3.0**. Distributing it inside an app means meeting the GPL's terms, including making the corresponding source available. Review this before publishing to the App Store or Google Play.
+---
 
 ## Credits
 
@@ -257,3 +346,4 @@ You can guard native-only calls with `Capacitor.isNativePlatform()` from `@capac
 - [react-chessboard](https://github.com/Clariity/react-chessboard) (MIT)
 - [Stockfish.js](https://github.com/nmrugg/stockfish.js) (GPL-3.0)
 - [lucide](https://lucide.dev) (ISC)
+- [Capacitor](https://capacitorjs.com) (MIT)

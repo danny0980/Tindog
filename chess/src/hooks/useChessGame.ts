@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { Color, GameResult, GameStatus, Move, PieceSymbol, Square } from '../types/chess'
+import type { Color, GameResult, GameStatus, Move, MoveInput } from '../types/chess'
 import { getBoardResult, hasMatingMaterial, pgnResultToken } from '../utils/chess'
 
 interface Snapshot {
@@ -21,15 +21,12 @@ function takeSnapshot(chess: Chess): Snapshot {
   }
 }
 
-export interface MoveInput {
-  from: Square
-  to: Square
-  promotion?: PieceSymbol
-}
-
 export interface PgnHeaders {
   white: string
   black: string
+  event?: string
+  timeControl?: string
+  opening?: string
 }
 
 /**
@@ -75,19 +72,37 @@ export function useChessGame() {
     sync()
   }, [sync])
 
+  /** Loads a finished game (e.g. from match history) for review. */
+  const loadGame = useCallback(
+    (pgn: string, result: GameResult | null): boolean => {
+      const chess = new Chess()
+      try {
+        chess.loadPgn(pgn)
+      } catch {
+        return false
+      }
+      chessRef.current = chess
+      setExternalResult(result)
+      sync()
+      return true
+    },
+    [sync],
+  )
+
   /** Live (non-render) access for event handlers: is the current position already decided? */
   const getLiveBoardResult = useCallback((): GameResult | null => getBoardResult(chessRef.current), [])
 
   const canColorMate = useCallback((color: Color): boolean => hasMatingMaterial(chessRef.current, color), [])
 
   const getFen = useCallback((): string => chessRef.current.fen(), [])
+  const getLiveHistory = useCallback((): Move[] => chessRef.current.history({ verbose: true }), [])
 
   const buildPgn = useCallback(
     (headers: PgnHeaders, result: GameResult | null): string => {
       const chess = new Chess()
       chess.loadPgn(chessRef.current.pgn())
       const date = new Date()
-      chess.setHeader('Event', 'Chess Arena')
+      chess.setHeader('Event', headers.event ?? 'Chess Arena')
       chess.setHeader('Site', 'Chess Arena')
       chess.setHeader(
         'Date',
@@ -96,6 +111,8 @@ export function useChessGame() {
       chess.setHeader('White', headers.white)
       chess.setHeader('Black', headers.black)
       chess.setHeader('Result', pgnResultToken(result))
+      if (headers.timeControl) chess.setHeader('TimeControl', headers.timeControl)
+      if (headers.opening) chess.setHeader('Opening', headers.opening)
       return chess.pgn()
     },
     [],
@@ -118,10 +135,12 @@ export function useChessGame() {
     makeMove,
     undo,
     reset,
+    loadGame,
     setExternalResult,
     getLiveBoardResult,
     canColorMate,
     getFen,
+    getLiveHistory,
     buildPgn,
   }
 }

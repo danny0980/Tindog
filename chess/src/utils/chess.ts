@@ -1,4 +1,4 @@
-import type { Chess } from 'chess.js'
+import { Chess, DEFAULT_POSITION } from 'chess.js'
 import { PIECE_VALUES } from '../constants/game'
 import type { CapturedSummary, Color, GameResult, GameStatus, Move, PieceSymbol, Square } from '../types/chess'
 
@@ -124,3 +124,23 @@ export function formatClock(ms: number): string {
   if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}:${ss}`
   return `${minutes}:${ss}`
 }
+
+/** FEN of the position after `ply` half-moves (0 = starting position). */
+export function fenAtPly(history: readonly Move[], ply: number, startFen: string = DEFAULT_POSITION): string {
+  if (ply <= 0) return history[0]?.before ?? startFen
+  return history[Math.min(ply, history.length) - 1]?.after ?? startFen
+}
+
+export const givesCheck = (move: Move): boolean => move.san.includes('+') || move.san.includes('#')
+
+export function uciToSan(fen: string, uci: string): string | null {
+  const parsed = parseUciMove(uci)
+  if (!parsed) return null
+  try {
+    return new Chess(fen).move(parsed).san
+  } catch {
+    return null
+  }
+}
+
+export const moveToUci = (move: Pick<Move, 'from' | 'to' | 'promotion'>): string => `${move.from}${move.to}${move.promotion ?? ''}`

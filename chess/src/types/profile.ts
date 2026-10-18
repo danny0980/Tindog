@@ -1,0 +1,98 @@
+import type { BoardThemeId, PieceSetId } from './theme'
+import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from './chess'
+
+export interface MatchRecord {
+  id: string
+  date: string
+  mode: GameMode
+  opponent: string
+  difficulty: Difficulty | null
+  personality: Personality | null
+  humanColor: Color | null
+  result: GameResult
+  outcome: Outcome | null
+  pgn: string
+  plies: number
+  timeControl: string
+  rated: boolean
+  eloBefore: number | null
+  eloAfter: number | null
+  coins: number
+  accuracy: number | null
+  opening: string | null
+}
+
+export interface EloPoint {
+  date: string
+  elo: number
+}
+
+export interface PlayerStats {
+  games: number
+  wins: number
+  losses: number
+  draws: number
+  winsByDifficulty: Record<Difficulty, number>
+  personalitiesBeaten: Personality[]
+  currentStreak: number
+  bestStreak: number
+}
+
+export interface PuzzleProgress {
+  /** Puzzle id → local date (YYYY-MM-DD) first solved. */
+  solved: Record<string, string>
+  /** Local dates on which at least one daily puzzle was solved. */
+  lastSolvedDate: string | null
+  streak: number
+  bestStreak: number
+}
+
+export interface PlayerProfile {
+  version: 1
+  name: string
+  elo: number
+  peakElo: number
+  eloHistory: EloPoint[]
+  stats: PlayerStats
+  coins: number
+  totalCoinsEarned: number
+  unlockedThemes: BoardThemeId[]
+  unlockedPieceSets: PieceSetId[]
+  /** Achievement id → ISO date unlocked. */
+  achievements: Record<string, string>
+  matches: MatchRecord[]
+  puzzles: PuzzleProgress
+  gamesAnalyzed: number
+}
+
+export type AchievementIcon =
+  | 'sword'
+  | 'zap'
+  | 'timer'
+  | 'skull'
+  | 'shield'
+  | 'brain'
+  | 'crown'
+  | 'gem'
+  | 'horse'
+  | 'handshake'
+  | 'hourglass'
+  | 'trending'
+  | 'puzzle'
+  | 'flame'
+  | 'trophy'
+  | 'medal'
+  | 'star'
+  | 'target'
+  | 'palette'
+  | 'repeat'
+  | 'search'
+
+export interface AchievementDef {
+  id: string
+  title: string
+  description: string
+  icon: AchievementIcon
+  reward: number
+  tier: 'bronze' | 'silver' | 'gold' | 'platinum'
+}

@@ -1,148 +1,262 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_SETTINGS, DIFFICULTIES, ENGINE_CONFIGS, STORAGE_KEYS, getTimeControl } from '../constants/game'
-import type { ClockTimes, Color, GameResult, GameSettings, Move } from '../types/chess'
-import { getCapturedPieces, opposite, parseUciMove } from '../utils/chess'
-import { playSound, soundForMove, vibrate } from '../utils/sound'
-import { loadJSON, saveJSON } from '../utils/storage'
+import { ambientMusic, sfx } from '../audio'
+import { DIFFICULTIES, PERSONALITIES, resolveTimeControl } from '../constants/game'
+import { getBoardTheme } from '../constants/themes'
+import { profileStore } from '../stores/profileStore'
+import { settingsStore, updateSettings } from '../stores/settingsStore'
+import { showToast } from '../stores/toastStore'
+import type { GameAnalysis, PositionEval } from '../types/analysis'
+import type { ClockTimes, Color, GameResult, GameSettings, Move, MoveInput, Outcome, TimeControl } from '../types/chess'
+import type { AchievementDef, MatchRecord } from '../types/profile'
+import { fenAtPly, getCapturedPieces, givesCheck, opposite } from '../utils/chess'
+import { type Mood, deriveMood, gameTension } from '../utils/mood'
+import { detectOpening } from '../utils/openings'
+import { applyAnalysis, applyMatch, outcomeFor } from '../utils/progression'
+import { usePageVisible } from './useAppEnvironment'
+import { useAiOpponent } from './useAiOpponent'
 import { useChessClock } from './useChessClock'
-import { type MoveInput, useChessGame } from './useChessGame'
-import { useStockfish } from './useStockfish'
+import { useChessGame } from './useChessGame'
+import { useEngine } from './useEngine'
+import { useEvaluation } from './useEvaluation'
+import { useGameAnalysis } from './useGameAnalysis'
+import { useStore } from './useStore'
+import { useTimeMachine } from './useTimeMachine'
 
-const isSettings = (value: unknown): value is GameSettings => {
-  if (typeof value !== 'object' || value === null) return false
-  const v = value as Record<string, unknown>
-  return (
-    (v.mode === 'ai' || v.mode === 'local') &&
-    DIFFICULTIES.some((d) => d.id === v.difficulty) &&
-    (v.playerColor === 'w' || v.playerColor === 'b' || v.playerColor === 'random') &&
-    typeof v.timeControlId === 'string'
-  )
-}
-
-const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean'
+const UNTIMED: TimeControl = { id: 'none', label: 'Unlimited', category: 'none', initialMs: 0, incrementMs: 0 }
 
 const resolveColor = (settings: GameSettings): Color =>
   settings.playerColor === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : settings.playerColor
-
-const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms))
 
 export interface PlayerInfo {
   color: Color
   name: string
   subtitle: string
   isEngine: boolean
+  mood: Mood
 }
 
-export function useGameController() {
-  const [settings, setSettings] = useState<GameSettings>(() =>
-    loadJSON(STORAGE_KEYS.settings, DEFAULT_SETTINGS, isSettings),
+export interface GameEndSummary {
+  result: GameResult
+  outcome: Outcome | null
+  eloDelta: number | null
+  eloAfter: number | null
+  coins: number
+  unlocked: AchievementDef[]
+  matchId: string
+  rated: boolean
+}
+
+function announceAchievements(unlocked: AchievementDef[], delay: number): void {
+  unlocked.forEach((a, i) =>
+    window.setTimeout(() => {
+      sfx.achievement()
+      showToast('achievement', a.title, `${a.description} · +${a.reward} coins`, 5000)
+    }, delay + i * 1100),
   )
-  const [humanColor, setHumanColor] = useState<Color>(() => resolveColor(settings))
-  const [orientation, setOrientation] = useState<Color>(() => (settings.mode === 'ai' ? humanColor : 'w'))
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => loadJSON(STORAGE_KEYS.sound, true, isBoolean))
-  const [gameOverDismissed, setGameOverDismissed] = useState(false)
+}
+
+export function useGameController({ active }: { active: boolean }) {
+  const settings = useStore(settingsStore, (s) => s)
+  const [gameSettings, setGameSettings] = useState<GameSettings>(() => settingsStore.get().game)
+  const [humanColor, setHumanColor] = useState<Color>(() => resolveColor(gameSettings))
+  const [orientation, setOrientation] = useState<Color>(() => (gameSettings.mode === 'ai' ? humanColor : 'w'))
   const [gameId, setGameId] = useState(0)
+  const [casual, setCasual] = useState(false)
+  const [gameOverDismissed, setGameOverDismissed] = useState(false)
+  const [summary, setSummary] = useState<GameEndSummary | null>(null)
+  const [review, setReview] = useState<MatchRecord | null>(null)
+  const [celebration, setCelebration] = useState(0)
+  const [analysisRequestedFor, setAnalysisRequestedFor] = useState<string | null>(null)
 
   const game = useChessGame()
-  const engine = useStockfish(settings.mode === 'ai')
-  const timeControl = useMemo(() => getTimeControl(settings.timeControlId), [settings.timeControlId])
-  const clockSnapshotsRef = useRef<ClockTimes[]>([])
-
-  const soundRef = useRef(soundEnabled)
-  useEffect(() => {
-    soundRef.current = soundEnabled
-    saveJSON(STORAGE_KEYS.sound, soundEnabled)
-  }, [soundEnabled])
-
-  const sfx = useCallback((effect: Parameters<typeof playSound>[0]) => {
-    if (soundRef.current) playSound(effect)
-  }, [])
-
-  const isPlaying = game.status.kind === 'playing'
-  const isAiMode = settings.mode === 'ai'
+  const visible = usePageVisible()
+  const theme = getBoardTheme(settings.boardTheme)
+  const isAiMode = gameSettings.mode === 'ai' && review === null
+  const isPlaying = game.status.kind === 'playing' && review === null
   const aiColor = opposite(humanColor)
+  const gameKey = review ? `review-${review.id}` : `game-${gameId}`
+  const timeControl = useMemo(() => (review ? UNTIMED : resolveTimeControl(gameSettings)), [gameSettings, review])
+  const difficultyLabel = DIFFICULTIES.find((d) => d.id === gameSettings.difficulty)?.label ?? ''
+  const personality = PERSONALITIES.find((p) => p.id === gameSettings.personality) ?? PERSONALITIES[0]
+
+  const clockSnapshotsRef = useRef<ClockTimes[]>([])
+  const recordedGameRef = useRef<number | null>(null)
+  const lastOpeningRef = useRef<string | null>(null)
+  const summaryRef = useRef<GameEndSummary | null>(null)
+  const reviewRef = useRef<MatchRecord | null>(null)
+  useEffect(() => {
+    summaryRef.current = summary
+    reviewRef.current = review
+  }, [review, summary])
+
+  // ── Engines, time machine, evaluation & analysis ───────────────────────────
+  const playEngine = useEngine('play', isAiMode)
+  const timeMachine = useTimeMachine(game.history.length, gameKey)
+  const analysisWanted = analysisRequestedFor === gameKey
+  const analysisEngine = useEngine('analysis', active && (settings.showEvalBar || analysisWanted))
+  const analysis = useGameAnalysis(analysisEngine, game.history, gameKey, settings.batterySaver ? 9 : 13)
+  const displayPly = timeMachine.displayPly
+  const displayFen = timeMachine.isLive ? game.fen : fenAtPly(game.history, displayPly)
+
+  const analysisEvals: PositionEval[] | null =
+    analysis.state.status === 'done' ? analysis.state.analysis.evals : analysis.state.status === 'running' ? analysis.state.partial : null
+  const evalFromAnalysis = analysisEvals?.[displayPly] ?? null
+  const liveEval = useEvaluation(
+    analysisEngine,
+    displayFen,
+    settings.showEvalBar && active && visible && analysis.state.status !== 'running' && evalFromAnalysis === null,
+    settings.batterySaver ? 8 : 14,
+  )
+  const evaluation = evalFromAnalysis ?? liveEval
+
+  const opening = useMemo(() => detectOpening(game.history.slice(0, displayPly)), [displayPly, game.history])
+
+  // ── Game end ───────────────────────────────────────────────────────────────
+  const playerNames = useCallback(
+    (color: Color): string => {
+      if (gameSettings.mode !== 'ai') return color === 'w' ? 'White' : 'Black'
+      if (color === humanColor) return profileStore.get().name
+      return `Stockfish (${difficultyLabel}${personality && personality.id !== 'balanced' ? `, ${personality.name}` : ''})`
+    },
+    [difficultyLabel, gameSettings.mode, humanColor, personality],
+  )
+
+  const finishGame = useCallback(
+    (result: GameResult) => {
+      if (recordedGameRef.current === gameId) return
+      recordedGameRef.current = gameId
+      const history = game.getLiveHistory()
+      const openingName = detectOpening(history)?.name ?? null
+      const pgn = game.buildPgn(
+        {
+          white: playerNames('w'),
+          black: playerNames('b'),
+          timeControl: timeControl.initialMs > 0 ? `${timeControl.initialMs / 1000}+${timeControl.incrementMs / 1000}` : '-',
+          ...(openingName ? { opening: openingName } : {}),
+        },
+        result,
+      )
+      const ai = gameSettings.mode === 'ai'
+      const out = applyMatch(profileStore.get(), {
+        mode: gameSettings.mode,
+        opponent: ai ? playerNames(aiColor) : 'Local game',
+        difficulty: ai ? gameSettings.difficulty : null,
+        personality: ai ? gameSettings.personality : null,
+        humanColor: ai ? humanColor : null,
+        result,
+        pgn,
+        history,
+        timeControl,
+        rated: ai && !casual,
+        opening: openingName,
+      })
+      profileStore.set(out.profile)
+      const outcome = ai ? outcomeFor(result, humanColor) : null
+      setSummary({
+        result,
+        outcome,
+        eloDelta: out.eloDelta,
+        eloAfter: out.record.eloAfter,
+        coins: out.coins,
+        unlocked: out.unlocked,
+        matchId: out.record.id,
+        rated: out.record.rated,
+      })
+      setGameOverDismissed(false)
+
+      if (result.kind === 'timeout') sfx.timeout()
+      else if (result.kind === 'draw') sfx.draw()
+      else if (!ai || outcome === 'win') sfx.victory()
+      else sfx.defeat()
+      if (ai ? outcome === 'win' : result.kind !== 'draw') setCelebration((c) => c + 1)
+      if (out.coins > 0) window.setTimeout(() => sfx.coins(), 900)
+      announceAchievements(out.unlocked, 1400)
+    },
+    [aiColor, casual, game, gameId, gameSettings, humanColor, playerNames, timeControl],
+  )
 
   const handleFlag = useCallback(
     (color: Color) => {
       if (game.externalResult || game.getLiveBoardResult()) return
       const winner = opposite(color)
-      const result: GameResult = game.canColorMate(winner)
-        ? { kind: 'timeout', winner }
-        : { kind: 'draw', reason: 'timeout-insufficient' }
-      engine.stop()
+      const result: GameResult = game.canColorMate(winner) ? { kind: 'timeout', winner } : { kind: 'draw', reason: 'timeout-insufficient' }
+      playEngine.stop()
       game.setExternalResult(result)
-      sfx('game-end')
-      vibrate([60, 40, 120])
+      finishGame(result)
     },
-    [engine, game, sfx],
+    [finishGame, game, playEngine],
   )
 
   const clock = useChessClock({
     timeControl,
     activeColor: game.turn,
-    running: isPlaying && game.history.length > 0,
+    running: isPlaying && active && visible && game.history.length > 0,
     onFlag: handleFlag,
+    tickMs: settings.batterySaver ? 250 : 100,
   })
 
+  // ── Moves ──────────────────────────────────────────────────────────────────
   const applyMove = useCallback(
     (input: MoveInput): Move | null => {
       const before = clock.getTimes()
       const move = game.makeMove(input)
       if (!move) {
-        sfx('illegal')
+        sfx.error()
         return null
       }
       clockSnapshotsRef.current.push(before)
       clock.addIncrement(move.color)
-      if (game.getLiveBoardResult()) {
-        sfx('game-end')
-        vibrate([40, 30, 80])
-      } else {
-        sfx(soundForMove(move.san, move.isCapture(), move.isKingsideCastle() || move.isQueensideCastle(), move.isPromotion()))
-        vibrate(12)
+      timeMachine.goTo(null)
+      sfx.move(theme.material, move, givesCheck(move))
+
+      const detected = detectOpening(game.getLiveHistory())
+      if (detected && detected.ply === game.getLiveHistory().length && detected.name !== lastOpeningRef.current) {
+        lastOpeningRef.current = detected.name
+        showToast('opening', detected.name, detected.eco, 2600)
       }
+
+      const result = game.getLiveBoardResult()
+      if (result) finishGame(result)
       return move
     },
-    [clock, game, sfx],
+    [clock, finishGame, game, theme.material, timeMachine],
   )
 
-  // ── AI turn ────────────────────────────────────────────────────────────────
   const isAiTurn = isAiMode && isPlaying && game.turn === aiColor
-  const aiThinking = isAiTurn && engine.status === 'ready'
-  const applyMoveRef = useRef(applyMove)
-  useEffect(() => {
-    applyMoveRef.current = applyMove
-  }, [applyMove])
+  useAiOpponent({
+    engine: playEngine,
+    fen: game.fen,
+    active: isAiTurn && active && visible,
+    difficulty: gameSettings.difficulty,
+    personality: gameSettings.personality,
+    gameId,
+    getFen: game.getFen,
+    onMove: applyMove,
+  })
+  const aiThinking = isAiTurn && playEngine.status === 'ready'
 
-  const { getBestMove, stop: stopEngine } = engine
-  const getFen = game.getFen
-  const fen = game.fen
+  // ── Adaptive soundtrack & low-time warning ─────────────────────────────────
+  const humanClockColor: Color | null = isAiMode ? humanColor : isPlaying && game.status.kind === 'playing' ? game.status.turn : null
+  const lowTime = clock.enabled && humanClockColor !== null && clock.times[humanClockColor] < 15_000
+  const tension = gameTension(game.status, evaluation?.cp ?? null, lowTime)
   useEffect(() => {
-    if (!isAiTurn || engine.status !== 'ready') return
-    let cancelled = false
-    const config = ENGINE_CONFIGS[settings.difficulty]
-    Promise.all([getBestMove(fen, config), delay(config.minThinkMs)])
-      .then(([uci]) => {
-        // Ignore replies for positions that are no longer on the board (undo, new game…).
-        if (cancelled || getFen() !== fen) return
-        const parsed = parseUciMove(uci)
-        if (parsed) applyMoveRef.current(parsed)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) console.error('[stockfish]', err)
-      })
-    return () => {
-      cancelled = true
-      stopEngine()
-    }
-  }, [isAiTurn, engine.status, fen, settings.difficulty, gameId, getBestMove, stopEngine, getFen])
+    ambientMusic.setTension(tension)
+  }, [tension])
+
+  const lowTimeSecond =
+    clock.enabled && isPlaying && humanClockColor === game.turn && clock.times[game.turn] < 10_000
+      ? Math.ceil(clock.times[game.turn] / 1000)
+      : null
+  useEffect(() => {
+    if (lowTimeSecond !== null && lowTimeSecond > 0) sfx.lowTime()
+  }, [lowTimeSecond])
 
   // ── Commands ───────────────────────────────────────────────────────────────
-  const humanCanMove = (color: Color) => isPlaying && (!isAiMode || color === humanColor)
-  const movableColor: Color | null = isPlaying && humanCanMove(game.turn) ? game.turn : null
+  const movableColor: Color | null =
+    isPlaying && timeMachine.isLive && (!isAiMode || game.turn === humanColor) ? game.turn : null
 
   const undoPlies = (() => {
-    if (game.externalResult) return 0 // no take-backs after resignation / flag
+    if (!isPlaying) return 0
     if (!isAiMode) return game.history.length > 0 ? 1 : 0
     const plies = game.turn === humanColor ? 2 : 1
     return game.history.length >= plies ? plies : 0
@@ -150,83 +264,162 @@ export function useGameController() {
 
   const undo = useCallback(() => {
     if (undoPlies === 0) return
-    engine.stop()
+    playEngine.stop()
     const undone = game.undo(undoPlies)
     const snapshots = clockSnapshotsRef.current
     const restoreTo = snapshots[snapshots.length - undone]
     snapshots.splice(snapshots.length - undone, undone)
     if (restoreTo) clock.restore(restoreTo)
-    setGameOverDismissed(false)
-    sfx('move')
-  }, [clock, engine, game, sfx, undoPlies])
+    timeMachine.goTo(null)
+    if (isAiMode && !casual) {
+      setCasual(true)
+      showToast('info', 'Casual game', 'Takebacks make this game unrated.', 2600)
+    }
+  }, [casual, clock, game, isAiMode, playEngine, timeMachine, undoPlies])
 
   const resign = useCallback(() => {
     if (!isPlaying) return
     const loser = isAiMode ? humanColor : game.turn
-    engine.stop()
-    game.setExternalResult({ kind: 'resign', winner: opposite(loser) })
-    setGameOverDismissed(false)
-    sfx('game-end')
-  }, [engine, game, humanColor, isAiMode, isPlaying, sfx])
+    const result: GameResult = { kind: 'resign', winner: opposite(loser) }
+    playEngine.stop()
+    game.setExternalResult(result)
+    finishGame(result)
+  }, [finishGame, game, humanColor, isAiMode, isPlaying, playEngine])
 
   const startNewGame = useCallback(
     (next: GameSettings) => {
       const color = resolveColor(next)
-      saveJSON(STORAGE_KEYS.settings, next)
-      engine.stop()
-      engine.newGame()
-      setSettings(next)
+      updateSettings({ game: next })
+      playEngine.stop()
+      playEngine.newGame()
+      analysis.cancel()
+      setGameSettings(next)
       setHumanColor(color)
       setOrientation(next.mode === 'ai' ? color : 'w')
       game.reset()
       clockSnapshotsRef.current = []
-      clock.reset(getTimeControl(next.timeControlId))
+      clock.reset(resolveTimeControl(next))
+      lastOpeningRef.current = null
+      setCasual(false)
+      setSummary(null)
+      setReview(null)
       setGameOverDismissed(false)
+      setAnalysisRequestedFor(null)
       setGameId((id) => id + 1)
-      sfx('castle')
+      sfx.notify()
     },
-    [clock, engine, game, sfx],
+    [analysis, clock, game, playEngine],
   )
 
+  const loadReview = useCallback(
+    (match: MatchRecord) => {
+      playEngine.stop()
+      analysis.cancel()
+      if (!game.loadGame(match.pgn, match.result)) {
+        showToast('warning', 'Could not open game', 'The saved PGN is invalid.')
+        return
+      }
+      setReview(match)
+      setOrientation(match.humanColor ?? 'w')
+      setSummary(null)
+      setGameOverDismissed(true)
+      setGameId((id) => id + 1)
+    },
+    [analysis, game, playEngine],
+  )
+
+  const humanColorRef = useRef(humanColor)
+  useEffect(() => {
+    humanColorRef.current = humanColor
+  }, [humanColor])
+
+  const onAnalysisDone = useCallback((result: GameAnalysis) => {
+    const s = summaryRef.current
+    const r = reviewRef.current
+    const color = r ? r.humanColor : s && s.outcome !== null ? humanColorRef.current : null
+    const accuracy = color ? result.accuracy[color] : null
+    const won = r ? r.outcome === 'win' : s?.outcome === 'win'
+    const out = applyAnalysis(profileStore.get(), r?.id ?? s?.matchId ?? null, accuracy, won)
+    profileStore.set(out.profile)
+    announceAchievements(out.unlocked, 300)
+  }, [])
+  const requestAnalysis = useCallback(() => {
+    setAnalysisRequestedFor(gameKey)
+    setGameOverDismissed(true)
+  }, [gameKey])
+
+  const { run: runAnalysis, state: analysisState, engineReady: analysisReady } = analysis
+  useEffect(() => {
+    if (analysisWanted && analysisReady && analysisState.status === 'idle') void runAnalysis(onAnalysisDone)
+  }, [analysisReady, analysisState.status, analysisWanted, onAnalysisDone, runAnalysis])
+
   const flipBoard = useCallback(() => setOrientation((o) => opposite(o)), [])
-  const toggleSound = useCallback(() => setSoundEnabled((s) => !s), [])
   const dismissGameOver = useCallback(() => setGameOverDismissed(true), [])
 
+  const getPgn = useCallback(() => {
+    if (review) return review.pgn
+    const openingName = detectOpening(game.history)?.name
+    return game.buildPgn({ white: playerNames('w'), black: playerNames('b'), ...(openingName ? { opening: openingName } : {}) }, game.result)
+  }, [game, playerNames, review])
+
   // ── Derived view data ──────────────────────────────────────────────────────
-  const captured = useMemo(() => getCapturedPieces(game.history), [game.history])
-  const lastMove = game.history[game.history.length - 1] ?? null
-  const difficultyLabel = DIFFICULTIES.find((d) => d.id === settings.difficulty)?.label ?? ''
+  const visibleHistory = useMemo(() => game.history.slice(0, displayPly), [displayPly, game.history])
+  const captured = useMemo(() => getCapturedPieces(visibleHistory), [visibleHistory])
+  const lastMove = visibleHistory[visibleHistory.length - 1] ?? null
 
   const players: Record<Color, PlayerInfo> = useMemo(() => {
     const info = (color: Color): PlayerInfo => {
-      if (isAiMode && color === aiColor) {
-        return { color, name: 'Stockfish', subtitle: difficultyLabel, isEngine: true }
+      const thinking = aiThinking && color === aiColor
+      const isTurn = game.status.kind === 'playing' && game.status.turn === color
+      const low = clock.enabled && clock.times[color] < 15_000
+      const mood = deriveMood({ color, status: game.status, evalCp: evaluation?.cp ?? null, isTurn, thinking, lowTime: low })
+      if (review) {
+        const isHuman = review.mode === 'ai' && review.humanColor === color
+        const isEngine = review.mode === 'ai' && !isHuman
+        return {
+          color,
+          name: isHuman ? profileStore.get().name : isEngine ? 'Stockfish' : color === 'w' ? 'White' : 'Black',
+          subtitle: isEngine ? review.opponent.replace(/^Stockfish \(|\)$/g, '') : review.mode === 'ai' ? 'Review' : 'Local player',
+          isEngine,
+          mood,
+        }
       }
-      if (isAiMode) return { color, name: 'You', subtitle: color === 'w' ? 'White' : 'Black', isEngine: false }
-      return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false }
+      if (isAiMode && color === aiColor) {
+        return {
+          color,
+          name: 'Stockfish',
+          subtitle: `${difficultyLabel} · ${personality?.name ?? 'Balanced'}`,
+          isEngine: true,
+          mood,
+        }
+      }
+      if (isAiMode) {
+        const profile = profileStore.get()
+        return { color, name: profile.name, subtitle: `${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood }
+      }
+      return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood }
     }
     return { w: info('w'), b: info('b') }
-  }, [aiColor, difficultyLabel, isAiMode])
+  }, [aiColor, aiThinking, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, isAiMode, personality, review])
 
-  const getPgn = useCallback(
-    () =>
-      game.buildPgn(
-        {
-          white: players.w.isEngine ? `Stockfish (${difficultyLabel})` : players.w.name,
-          black: players.b.isEngine ? `Stockfish (${difficultyLabel})` : players.b.name,
-        },
-        game.result,
-      ),
-    [difficultyLabel, game, players],
-  )
+  const bestMoveArrow =
+    !timeMachine.isLive && analysis.state.status === 'done' && evaluation?.bestMove
+      ? { from: evaluation.bestMove.slice(0, 2), to: evaluation.bestMove.slice(2, 4) }
+      : null
 
   return {
     settings,
+    gameSettings,
+    theme,
     timeControl,
     humanColor,
     orientation,
-    soundEnabled,
-    fen: game.fen,
+    gameKey,
+    isAiMode,
+    review,
+    casual,
+    fen: displayFen,
+    liveFen: game.fen,
     history: game.history,
     status: game.status,
     result: game.result,
@@ -234,21 +427,32 @@ export function useGameController() {
     captured,
     players,
     clock: { times: clock.times, enabled: clock.enabled },
-    engineStatus: engine.status,
-    engineError: engine.error,
+    engineStatus: playEngine.status,
+    engineError: playEngine.error,
     aiThinking,
     movableColor,
     canUndo: undoPlies > 0,
     canResign: isPlaying && game.history.length > 0,
-    showGameOver: game.status.kind === 'over' && !gameOverDismissed,
+    showGameOver: game.status.kind === 'over' && !gameOverDismissed && summary !== null,
+    summary,
+    celebration,
+    evaluation,
+    evalEnabled: settings.showEvalBar,
+    opening,
+    timeMachine,
+    analysis: analysis.state,
+    analysisAvailable: game.status.kind === 'over' && game.history.length > 0,
+    bestMoveArrow,
     applyMove,
     undo,
     resign,
     startNewGame,
+    loadReview,
+    requestAnalysis,
     flipBoard,
-    toggleSound,
     dismissGameOver,
     getPgn,
+    playerNames,
   }
 }
 

@@ -1,131 +1,82 @@
-import { useCallback, useState } from 'react'
-import { ChessBoard } from './components/ChessBoard'
-import { ConfirmDialog } from './components/ConfirmDialog'
-import { ControlPanel } from './components/ControlPanel'
-import { GameOverModal } from './components/GameOverModal'
-import { GameStatusBanner } from './components/GameStatusBanner'
-import { Header } from './components/Header'
-import { MoveHistory } from './components/MoveHistory'
-import { NewGameModal } from './components/NewGameModal'
-import { PlayerBar } from './components/PlayerBar'
-import { DIFFICULTIES } from './constants/game'
+import { Suspense, lazy, useCallback, useState } from 'react'
+import { AppHeader } from './components/layout/AppHeader'
+import { BottomNav } from './components/layout/BottomNav'
+import { SettingsModal } from './components/modals/SettingsModal'
+import { ToastViewport } from './components/ui/ToastViewport'
+import { useAppEnvironment } from './hooks/useAppEnvironment'
 import { useGameController } from './hooks/useGameController'
-import type { Color, GameSettings } from './types/chess'
-import { opposite } from './utils/chess'
+import { useStore } from './hooks/useStore'
+import { profileStore } from './stores/profileStore'
+import type { MatchRecord } from './types/profile'
+import type { AppView } from './types/ui'
+import { localDateKey } from './utils/date'
+import { getDailyPuzzles } from './utils/puzzles'
+import { PlayView } from './views/PlayView'
+
+// Secondary screens are code-split so the board loads first on slow mobile connections.
+const PuzzlesView = lazy(() => import('./views/PuzzlesView').then((m) => ({ default: m.PuzzlesView })))
+const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
+const ShopView = lazy(() => import('./views/ShopView').then((m) => ({ default: m.ShopView })))
+
+function ViewFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center py-20" role="status" aria-label="Loading">
+      <div className="size-10 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
+    </div>
+  )
+}
 
 export default function App() {
-  const game = useGameController()
+  const [view, setView] = useState<AppView>('play')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
-  const [confirmResign, setConfirmResign] = useState(false)
+  useAppEnvironment()
 
-  const isAiMode = game.settings.mode === 'ai'
-  const difficultyLabel = DIFFICULTIES.find((d) => d.id === game.settings.difficulty)?.label ?? ''
-  const turn = game.status.kind === 'playing' ? game.status.turn : null
+  // The game lives at the app level so it survives tab switches; its clock pauses off-screen.
+  const game = useGameController({ active: view === 'play' })
 
-  const openNewGame = useCallback(() => {
-    game.dismissGameOver()
-    setNewGameOpen(true)
-  }, [game])
+  const solved = useStore(profileStore, (p) => p.puzzles.solved)
+  const unsolvedDaily = getDailyPuzzles(localDateKey()).some((p) => !solved[p.id])
 
-  const startGame = useCallback(
-    (settings: GameSettings) => {
-      setNewGameOpen(false)
-      game.startNewGame(settings)
+  const navigate = useCallback((next: AppView) => {
+    setView(next)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const reviewMatch = useCallback(
+    (match: MatchRecord) => {
+      game.loadReview(match)
+      navigate('play')
     },
-    [game],
-  )
-
-  const renderPlayer = (color: Color) => (
-    <PlayerBar
-      player={game.players[color]}
-      isTurn={turn === color}
-      thinking={game.aiThinking && game.players[color].isEngine}
-      captured={game.captured[color]}
-      advantage={color === 'w' ? game.captured.materialDiff : -game.captured.materialDiff}
-      clock={{ enabled: game.clock.enabled, timeMs: game.clock.times[color], initialMs: game.timeControl.initialMs }}
-    />
+    [game, navigate],
   )
 
   return (
-    <div className="safe-pt safe-pb flex min-h-dvh flex-col">
-      <Header
-        mode={game.settings.mode}
-        difficultyLabel={difficultyLabel}
-        timeControl={game.timeControl}
-        soundEnabled={game.soundEnabled}
-        onToggleSound={game.toggleSound}
-      />
+    <div className="safe-pt flex min-h-dvh flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-4">
+      <AppHeader view={view} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} />
 
-      <main className="safe-px mx-auto grid w-full max-w-6xl flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-6">
-        <section
-          className="mx-auto flex w-full flex-col gap-2.5"
-          style={{ maxWidth: 'min(100%, max(18rem, calc(100dvh - 15.5rem)), 46rem)' }}
-          aria-label="Chess board"
-        >
-          {renderPlayer(opposite(game.orientation))}
-          <ChessBoard
-            fen={game.fen}
-            orientation={game.orientation}
-            lastMove={game.lastMove}
-            status={game.status}
-            movableColor={game.movableColor}
-            onMove={game.applyMove}
-          />
-          {renderPlayer(game.orientation)}
-        </section>
-
-        <aside className="flex flex-col gap-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-7rem)]" aria-label="Game controls">
-          <GameStatusBanner
-            status={game.status}
-            aiThinking={game.aiThinking}
-            engineStatus={game.engineStatus}
-            engineError={game.engineError}
-            isAiMode={isAiMode}
-          />
-          <ControlPanel
-            canUndo={game.canUndo}
-            canResign={game.canResign}
-            onNewGame={openNewGame}
-            onFlip={game.flipBoard}
-            onUndo={game.undo}
-            onResign={() => setConfirmResign(true)}
-          />
-          <MoveHistory history={game.history} getPgn={game.getPgn} />
-        </aside>
+      <main className="flex flex-1 flex-col">
+        {/* PlayView stays mounted (hidden) so board state and animations persist. */}
+        <div className={view === 'play' ? 'flex flex-1 flex-col' : 'hidden'}>
+          <PlayView game={game} active={view === 'play'} newGameOpen={newGameOpen} onNewGameOpenChange={setNewGameOpen} />
+        </div>
+        <Suspense fallback={<ViewFallback />}>
+          {view === 'puzzles' && <PuzzlesView />}
+          {view === 'profile' && <ProfileView onReview={reviewMatch} />}
+          {view === 'shop' && <ShopView />}
+        </Suspense>
       </main>
 
-      <NewGameModal
-        open={newGameOpen}
-        initialSettings={game.settings}
-        onStart={startGame}
-        onClose={() => setNewGameOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={confirmResign}
-        title="Resign game?"
-        message={
-          isAiMode
-            ? 'Stockfish will be awarded the win.'
-            : `${turn === 'b' ? 'Black' : 'White'} resigns and ${turn === 'b' ? 'White' : 'Black'} wins.`
-        }
-        confirmLabel="Resign"
-        onCancel={() => setConfirmResign(false)}
-        onConfirm={() => {
-          setConfirmResign(false)
-          game.resign()
+      <BottomNav view={view} onNavigate={navigate} badges={{ puzzles: unsolvedDaily }} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onOpenShop={() => {
+          setSettingsOpen(false)
+          navigate('shop')
         }}
       />
-
-      <GameOverModal
-        open={game.showGameOver && !newGameOpen}
-        result={game.result}
-        mode={game.settings.mode}
-        humanColor={game.humanColor}
-        moveCount={game.history.length}
-        onNewGame={openNewGame}
-        onReview={game.dismissGameOver}
-      />
+      <ToastViewport />
     </div>
   )
 }

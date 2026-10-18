@@ -12,12 +12,14 @@ interface PieceIconProps {
   type: PieceSymbol
   className?: string
   set?: PieceSet
+  /** Show this set's own art only (shop / settings previews). */
+  own?: boolean
 }
 
 /** Renders a piece at any size: art-pack image when available, else the cosmetic SVG style. */
-export function PieceIcon({ color, type, className, set }: PieceIconProps) {
+export function PieceIcon({ color, type, className, set, own = false }: PieceIconProps) {
   const code = `${color}${type.toUpperCase()}`
-  const art = usePieceArt(set?.id ?? 'standard')
+  const art = usePieceArt(set?.id ?? 'standard', own)
   const render = defaultPieces[code]
   if (!render) return null
   const style = set ? (color === 'w' ? set.white : set.black) : null

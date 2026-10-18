@@ -17,7 +17,7 @@ export function ThemeSwatch({ theme, pieceSet, size = 'sm' }: ThemeSwatchProps) 
         const sample = pieceSet ? samples[i] : undefined
         return (
           <div key={i} className="relative" style={kind === 'light' ? theme.lightSquare : theme.darkSquare}>
-            {sample && pieceSet && <PieceIcon color={sample.color} type={sample.type} set={pieceSet} className="absolute inset-[6%]" />}
+            {sample && pieceSet && <PieceIcon color={sample.color} type={sample.type} set={pieceSet} own className="absolute inset-[6%]" />}
           </div>
         )
       })}

@@ -165,17 +165,22 @@ export function borderColor(img) {
   // How much of the border is that one colour (a screen is uniform; a board's edge is not).
   const near = samples.filter((s) => Math.abs(s[0] - m[0]) + Math.abs(s[1] - m[1]) + Math.abs(s[2] - m[2]) < 60).length
   m.uniform = near / samples.length
+  // Share of the border where channel c beats both others clearly (a lit or vignetted screen still counts).
+  m.dominated = (c) => samples.filter((s) => s[c] - Math.max(...[0, 1, 2].filter((k) => k !== c).map((k) => s[k])) > 50).length / samples.length
   return m
 }
 
 /**
- * Makes the background transparent. A saturated screen colour (green, blue,
- * magenta …) is keyed by "how much of that channel sticks out" — which also
- * cleans the soft fringe — and its spill is removed from the piece edges.
- * Any other flat colour is keyed by colour distance.
+ * Makes the background transparent.
+ *  - A green / blue / red screen is keyed everywhere by "how much that channel
+ *    sticks out" (so gaps inside a crown clear too), its soft drop-shadow goes
+ *    with it, and the colour spill is removed from the piece edges.
+ *  - Any other flat colour (white, grey, beige …) is removed only where it is
+ *    connected to the border (flood fill), so a white piece on a white
+ *    background keeps its inside.
  */
 export function keyBackground(img) {
-  const { data } = img
+  const { width, height, data } = img
   const border = borderColor(img)
   const [br, bg, bb, ba] = border
   if (ba < 32) {
@@ -184,45 +189,220 @@ export function keyBackground(img) {
     for (let i = 3; i < data.length; i += 4) if (data[i] < 128) clear += 1
     return { keyed: clear / (data.length / 4), background: 'transparent' }
   }
-  // A border of many colours (a board, a scene) has no background to remove.
-  if (border.uniform < 0.7) return { keyed: 0, background: 'none' }
   const chans = [br, bg, bb]
   const max = Math.max(...chans)
   const dominant = chans.indexOf(max)
   const others = [0, 1, 2].filter((c) => c !== dominant)
-  const screen = max - Math.max(chans[others[0]], chans[others[1]]) > 80
+  // A screen: the border is mostly one strongly dominant channel (lighting gradients allowed).
+  const screen = max - Math.max(chans[others[0]], chans[others[1]]) > 70 && border.dominated(dominant) >= 0.7
   let keyed = 0
-  for (let i = 0; i < data.length; i += 4) {
-    let alpha
-    if (screen) {
+  if (screen) {
+    for (let i = 0; i < data.length; i += 4) {
       const d = data[i + dominant]
       const o = Math.max(data[i + others[0]], data[i + others[1]])
       const k = d - o
-      alpha = k <= 25 ? 1 : k >= 80 ? 0 : 1 - (k - 25) / 55
+      const alpha = k <= 20 ? 1 : k >= 60 ? 0 : 1 - (k - 20) / 40
       // Spill suppression: the screen colour may not exceed the other channels on the piece.
-      if (alpha > 0 && d > o) data[i + dominant] = o + Math.max(0, (d - o) * (1 - alpha) * 0.3)
-    } else {
-      const dist = Math.abs(data[i] - br) + Math.abs(data[i + 1] - bg) + Math.abs(data[i + 2] - bb)
-      alpha = dist <= 30 ? 0 : dist >= 90 ? 1 : (dist - 30) / 60
+      if (alpha > 0 && d > o) data[i + dominant] = o + Math.max(0, (d - o) * (1 - alpha) * 0.2)
+      const a = Math.round(data[i + 3] * alpha)
+      if (a < 255) keyed += 1
+      data[i + 3] = a
     }
-    const a = Math.round(data[i + 3] * alpha)
-    if (a < 255) keyed += 1
-    data[i + 3] = a
+    return { keyed: keyed / (width * height), background: ['red', 'green', 'blue'][dominant] }
   }
-  return { keyed: keyed / (data.length / 4), background: screen ? ['red', 'green', 'blue'][dominant] : 'flat' }
+  // A border of many colours (a board, a scene) has no background to remove.
+  if (border.uniform < 0.7) return { keyed: 0, background: 'none' }
+  const dist = (p) => Math.abs(data[p * 4] - br) + Math.abs(data[p * 4 + 1] - bg) + Math.abs(data[p * 4 + 2] - bb)
+  const seen = new Uint8Array(width * height)
+  const queue = new Int32Array(width * height)
+  let head = 0
+  let tail = 0
+  const push = (p) => {
+    if (seen[p] || dist(p) > 60) return
+    seen[p] = 1
+    queue[tail++] = p
+  }
+  for (let x = 0; x < width; x++) {
+    push(x)
+    push((height - 1) * width + x)
+  }
+  for (let y = 0; y < height; y++) {
+    push(y * width)
+    push(y * width + width - 1)
+  }
+  while (head < tail) {
+    const p = queue[head++]
+    const x = p % width
+    if (x > 0) push(p - 1)
+    if (x < width - 1) push(p + 1)
+    if (p >= width) push(p - width)
+    if (p < width * (height - 1)) push(p + width)
+  }
+  for (let p = 0; p < width * height; p++) {
+    if (!seen[p]) continue
+    const d = dist(p)
+    const alpha = d <= 25 ? 0 : (d - 25) / 35
+    data[p * 4 + 3] = Math.round(data[p * 4 + 3] * alpha)
+    keyed += 1
+  }
+  return { keyed: keyed / (width * height), background: 'flat' }
 }
 
 // ── Finding pieces ──────────────────────────────────────────────────────────
 
-/** Connected opaque blobs (8-neighbour), with nearby fragments merged. */
-export function findBlobs(img, { alphaMin = 128 } = {}) {
+const boxOf = (blobs) => ({
+  minX: Math.min(...blobs.map((b) => b.minX)),
+  minY: Math.min(...blobs.map((b) => b.minY)),
+  maxX: Math.max(...blobs.map((b) => b.maxX)),
+  maxY: Math.max(...blobs.map((b) => b.maxY)),
+  area: blobs.reduce((s, b) => s + b.area, 0),
+})
+
+/** Recomputes a blob's box and area from the pixels it owns. */
+function refit(img, owner, blob) {
+  let minX = img.width
+  let minY = img.height
+  let maxX = -1
+  let maxY = -1
+  let area = 0
+  for (let y = blob.minY; y <= blob.maxY; y++) {
+    for (let x = blob.minX; x <= blob.maxX; x++) {
+      if (owner[y * img.width + x] !== blob.id) continue
+      area += 1
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+  }
+  Object.assign(blob, { minX, minY, maxX, maxY, area })
+}
+
+/**
+ * Cuts a blob that holds two (or more) touching pieces in two, at the
+ * thinnest point of its silhouette (between two pieces' bases or bodies).
+ * `axis` 'x' cuts with a vertical line, 'y' with a horizontal one.
+ */
+function splitBlob(img, owner, blob, nextId, axis) {
+  const { width } = img
+  const lo = axis === 'x' ? blob.minX : blob.minY
+  const hi = axis === 'x' ? blob.maxX : blob.maxY
+  const profile = new Float64Array(hi - lo + 1)
+  for (let y = blob.minY; y <= blob.maxY; y++) {
+    for (let x = blob.minX; x <= blob.maxX; x++) if (owner[y * width + x] === blob.id) profile[(axis === 'x' ? x : y) - lo] += 1
+  }
+  // The thinnest (smoothed) slice in the middle half — that is where two pieces meet.
+  const n = profile.length
+  const r = Math.max(1, Math.round(n * 0.01))
+  let cut = -1
+  let best = Infinity
+  for (let i = Math.floor(n * 0.2); i <= Math.ceil(n * 0.8); i++) {
+    let s = 0
+    for (let k = -r; k <= r; k++) s += profile[Math.min(n - 1, Math.max(0, i + k))]
+    // Prefer cuts nearer the middle when equally thin.
+    s *= 1 + Math.abs(i / n - 0.5) * 0.3
+    if (s < best) {
+      best = s
+      cut = i
+    }
+  }
+  if (cut < 0) return null
+  const part = { ...blob, id: nextId }
+  for (let y = blob.minY; y <= blob.maxY; y++) {
+    for (let x = blob.minX; x <= blob.maxX; x++) {
+      const p = y * width + x
+      if (owner[p] === blob.id && (axis === 'x' ? x : y) - lo > cut) owner[p] = nextId
+    }
+  }
+  refit(img, owner, blob)
+  refit(img, owner, part)
+  return part.area > 0 && blob.area > 0 ? part : null
+}
+
+/**
+ * Cuts a row of k touching pieces into k, each cut at the thinnest column
+ * near where an evenly spaced cut would fall. Returns the new parts.
+ */
+function splitBlobInto(img, owner, blob, k, nextId) {
+  const { width } = img
+  const w = blob.maxX - blob.minX + 1
+  const profile = new Float64Array(w)
+  for (let y = blob.minY; y <= blob.maxY; y++) for (let x = blob.minX; x <= blob.maxX; x++) if (owner[y * width + x] === blob.id) profile[x - blob.minX] += 1
+  const r = Math.max(1, Math.round(w * 0.005))
+  const smooth = (i) => {
+    let s = 0
+    for (let d = -r; d <= r; d++) s += profile[Math.min(w - 1, Math.max(0, i + d))]
+    return s
+  }
+  const cuts = []
+  for (let j = 1; j < k; j++) {
+    const ideal = (j * w) / k
+    const reach = (w / k) * 0.35
+    let best = Math.round(ideal)
+    let bestScore = Infinity
+    for (let i = Math.max(1, Math.round(ideal - reach)); i <= Math.min(w - 2, Math.round(ideal + reach)); i++) {
+      const score = smooth(i) * (1 + (Math.abs(i - ideal) / reach) * 0.25)
+      if (score < bestScore) {
+        bestScore = score
+        best = i
+      }
+    }
+    cuts.push(best)
+  }
+  const parts = cuts.map((_, j) => ({ ...blob, id: nextId + j }))
+  for (let y = blob.minY; y <= blob.maxY; y++) {
+    for (let x = blob.minX; x <= blob.maxX; x++) {
+      const p = y * width + x
+      if (owner[p] !== blob.id) continue
+      const slot = cuts.filter((c) => x - blob.minX > c).length
+      if (slot > 0) owner[p] = nextId + slot - 1
+    }
+  }
+  refit(img, owner, blob)
+  for (const part of parts) refit(img, owner, part)
+  return parts.filter((part) => part.area > 0)
+}
+
+/**
+ * How many pieces each blob holds, so that they add up to `expect`: the piece
+ * width that explains every blob's width best (a clump of 3 is ~3 pieces wide).
+ */
+function piecesPerBlob(blobs, expect) {
+  const widths = blobs.map((b) => b.maxX - b.minX + 1)
+  let best = null
+  let bestErr = Infinity
+  for (const wb of widths) {
+    for (let k = 1; k <= expect; k++) {
+      const unit = wb / k
+      const counts = widths.map((x) => Math.max(1, Math.round(x / unit)))
+      if (counts.reduce((a, b) => a + b, 0) !== expect) continue
+      const err = widths.reduce((e, x, i) => e + (x / unit - counts[i]) ** 2, 0)
+      if (err < bestErr) {
+        bestErr = err
+        best = counts
+      }
+    }
+  }
+  return best
+}
+
+const median = (v) => [...v].sort((a, b) => a - b)[v.length >> 1] ?? 0
+
+/**
+ * Finds the pieces: connected opaque blobs (8-neighbour); detached bits of a
+ * piece (a king's cross, a queen's beads) are joined to it, specks and text
+ * dropped, and pieces that touch each other are cut apart until there are
+ * `expect` of them. Returns { blobs: [{ id, minX … maxY, area }], owner }
+ * where owner[pixel] is the id of the blob it belongs to (or -1).
+ */
+export function findBlobs(img, { alphaMin = 128, expect = 12 } = {}) {
   const { width, height, data } = img
   const label = new Int32Array(width * height).fill(-1)
   const queue = new Int32Array(width * height)
-  const blobs = []
+  const comps = []
   for (let start = 0; start < width * height; start++) {
     if (label[start] !== -1 || data[start * 4 + 3] < alphaMin) continue
-    const id = blobs.length
+    const id = comps.length
     let head = 0
     let tail = 0
     queue[tail++] = start
@@ -255,24 +435,25 @@ export function findBlobs(img, { alphaMin = 128 } = {}) {
         }
       }
     }
-    blobs.push({ ids: [id], minX, minY, maxX, maxY, area })
+    comps.push({ comps: [id], minX, minY, maxX, maxY, area })
   }
-  // Drop specks, then merge fragments that touch or nearly touch (a king's cross, a queen's beads).
-  const minArea = width * height * 0.0004
-  let list = blobs.filter((b) => b.area >= minArea)
-  const gap = Math.max(2, Math.round(Math.min(width, height) * 0.006))
+  // Drop specks, then attach small fragments to the piece they sit on or under.
+  let list = comps.filter((b) => b.area >= width * height * 0.0002)
+  const gap = Math.max(2, Math.round(Math.min(width, height) * 0.01))
   let merged = true
   while (merged) {
     merged = false
     outer: for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i]
-        const b = list[j]
-        const overlapX = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)
-        const overlapY = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY)
-        // Stacked parts of one piece overlap horizontally and nearly touch vertically.
-        if (overlapX > Math.min(a.maxX - a.minX, b.maxX - b.minX) * 0.3 && overlapY > -gap) {
-          list[i] = { ids: [...a.ids, ...b.ids], minX: Math.min(a.minX, b.minX), minY: Math.min(a.minY, b.minY), maxX: Math.max(a.maxX, b.maxX), maxY: Math.max(a.maxY, b.maxY), area: a.area + b.area }
+      for (let j = 0; j < list.length; j++) {
+        if (i === j) continue
+        const big = list[i]
+        const frag = list[j]
+        // Only a fragment (much smaller) is attached — two real pieces are never glued together.
+        if (frag.area > big.area * 0.35) continue
+        const overlapX = Math.min(big.maxX, frag.maxX) - Math.max(big.minX, frag.minX)
+        const overlapY = Math.min(big.maxY, frag.maxY) - Math.max(big.minY, frag.minY)
+        if (overlapX > (frag.maxX - frag.minX) * 0.5 && overlapY > -gap) {
+          list[i] = { comps: [...big.comps, ...frag.comps], ...boxOf([big, frag]) }
           list.splice(j, 1)
           merged = true
           break outer
@@ -280,20 +461,61 @@ export function findBlobs(img, { alphaMin = 128 } = {}) {
       }
     }
   }
-  // Fragments far smaller than a real piece (sparkles, text) are not pieces.
-  const biggest = Math.max(0, ...list.map((b) => b.area))
-  list = list.filter((b) => b.area >= biggest * 0.06)
-  return { blobs: list, label }
+  // Sparkles, captions and stray marks are far smaller than the real pieces.
+  const typical = median([...list].sort((a, b) => b.area - a.area).slice(0, expect).map((b) => b.area))
+  list = list.filter((b) => b.area >= typical * 0.15)
+  const owner = new Int32Array(width * height).fill(-1)
+  const blobs = list.map((b, id) => {
+    const set = new Set(b.comps)
+    for (let y = b.minY; y <= b.maxY; y++) for (let x = b.minX; x <= b.maxX; x++) if (set.has(label[y * width + x])) owner[y * width + x] = id
+    return { id, minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, area: b.area }
+  })
+  // Rows that touch: a blob about twice as tall as the others is two pieces stacked — cut it across.
+  for (const b of [...blobs]) {
+    const medH = median(blobs.map((o) => o.maxY - o.minY + 1))
+    if (blobs.length < expect && (b.maxY - b.minY + 1) > medH * 1.6) {
+      const part = splitBlob(img, owner, b, blobs.length, 'y')
+      if (part) blobs.push(part)
+    }
+  }
+  // Pieces that touch side by side: share the missing pieces out by width and cut each clump.
+  if (blobs.length < expect) {
+    const counts = piecesPerBlob(blobs, expect)
+    if (counts) for (const [i, b] of [...blobs].entries()) if ((counts[i] ?? 1) > 1) blobs.push(...splitBlobInto(img, owner, b, counts[i], blobs.length))
+  }
+  // Anything still missing: cut the widest / tallest blob at its thinnest point.
+  for (let guard = 0; blobs.length < expect && guard < expect * 2; guard++) {
+    const medW = median(blobs.map((b) => b.maxX - b.minX + 1))
+    const medH = median(blobs.map((b) => b.maxY - b.minY + 1))
+    let pick = null
+    let pickScore = 0
+    let axis = 'x'
+    for (const b of blobs) {
+      // A single chess piece is taller than it is wide; a pair side by side is not.
+      const sx = (b.maxX - b.minX + 1) / medW + (b.maxX - b.minX + 1) / (b.maxY - b.minY + 1)
+      const sy = ((b.maxY - b.minY + 1) / medH) * 1.1
+      const s = Math.max(sx, sy)
+      if (s > pickScore) {
+        pickScore = s
+        pick = b
+        axis = sx >= sy ? 'x' : 'y'
+      }
+    }
+    if (!pick) break
+    const part = splitBlob(img, owner, pick, blobs.length, axis)
+    if (!part) break
+    blobs.push(part)
+  }
+  return { blobs, owner }
 }
 
 // ── Recognising pieces ──────────────────────────────────────────────────────
 
 /** Silhouette features of one blob: size, brightness, lopsidedness, top width. */
-export function features(img, blob, label) {
+export function features(img, blob, owner) {
   const { width, data } = img
   const w = blob.maxX - blob.minX + 1
   const h = blob.maxY - blob.minY + 1
-  const ids = new Set(blob.ids)
   let lum = 0
   let n = 0
   let asym = 0
@@ -304,7 +526,7 @@ export function features(img, blob, label) {
     let right = -1
     for (let x = blob.minX; x <= blob.maxX; x++) {
       const p = y * width + x
-      if (!ids.has(label[p])) continue
+      if (owner[p] !== blob.id) continue
       const i = p * 4
       lum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
       n += 1
@@ -313,7 +535,7 @@ export function features(img, blob, label) {
       // Mirror test around the blob's centre line.
       const mx = blob.minX + blob.maxX - x
       asymN += 1
-      if (!ids.has(label[y * width + mx])) asym += 1
+      if (owner[y * width + mx] !== blob.id) asym += 1
     }
     if (left >= 0) rowWidth[y - blob.minY] = right - left + 1
   }
@@ -372,6 +594,8 @@ export function recognise(feats, order = 'KQRBNP') {
       default: return 2 * (1 - H[i]) + (1 - A[i]) + (1 - head[i]) // smallest, a small round head
     }
   }
+  // Pieces drawn all the same height lose the strongest clue (pawn short, king tall): trust the order more.
+  const prior = H.every((x) => x === 0.5) ? 1 : 0.35
   let best = null
   let bestScore = -Infinity
   for (const perm of permutations(6)) {
@@ -379,7 +603,7 @@ export function recognise(feats, order = 'KQRBNP') {
     let score = 0
     for (let k = 0; k < 6; k++) {
       score += fit(perm[k], TYPES[k])
-      if (order[perm[k]] === TYPES[k]) score += 0.35 // the sheet's own order wins near-ties
+      if (order[perm[k]] === TYPES[k]) score += prior // the sheet's own order wins near-ties
     }
     if (score > bestScore) {
       bestScore = score
@@ -413,13 +637,13 @@ function spatialOrder(blobs) {
 export function sliceSheet(img, { order = 'KQRBNP' } = {}) {
   const key = keyBackground(img)
   if (key.keyed < 0.15) return { error: 'no background to remove (this looks like a board or a picture, not a sheet of pieces)' }
-  const { blobs, label } = findBlobs(img)
+  const { blobs, owner } = findBlobs(img)
   if (blobs.length < 12) return { error: `found ${blobs.length} pieces, need 12` }
   // A full 32-piece sheet (or extra decorations): keep the 12 biggest silhouettes… only when that is exact.
   let pool = [...blobs.keys()]
   if (pool.length > 12) pool = pool.sort((a, b) => blobs[b].area - blobs[a].area).slice(0, 12)
   const seq = spatialOrder(blobs).filter((i) => pool.includes(i))
-  const feats = blobs.map((b) => features(img, b, label))
+  const feats = blobs.map((b) => features(img, b, owner))
   // Armies by brightness: the darker six are Black (each kept in reading order).
   const byLum = [...seq].sort((a, b) => feats[a].lum - feats[b].lum)
   const dark = new Set(byLum.slice(0, 6))
@@ -433,27 +657,30 @@ export function sliceSheet(img, { order = 'KQRBNP' } = {}) {
     for (const t of TYPES) chosen[`${color}${t}`] = ids[map[t]]
   }
   const method = gapLum > 25 ? 'silhouette and colour' : 'silhouette and sheet order'
-  // One canvas size for the whole set: pieces keep their relative heights.
+  // One canvas size for the whole set: pieces keep their relative heights and stand on one floor.
   const used = Object.values(chosen).map((i) => blobs[i])
-  const maxW = Math.max(...used.map((b) => b.maxX - b.minX + 1))
-  const maxH = Math.max(...used.map((b) => b.maxY - b.minY + 1))
-  const size = Math.ceil(Math.max(maxW, maxH) * 1.1)
+  const pad = Math.max(1, Math.round(Math.min(img.width, img.height) * 0.003))
+  const maxW = Math.max(...used.map((b) => b.maxX - b.minX + 1)) + pad * 2
+  const maxH = Math.max(...used.map((b) => b.maxY - b.minY + 1)) + pad * 2
+  const size = Math.ceil(Math.max(maxW, maxH) * 1.04)
   const pieces = {}
   for (const [code, i] of Object.entries(chosen)) {
     const b = blobs[i]
-    const ids = new Set(b.ids)
     const out = new Uint8ClampedArray(size * size * 4)
-    const w = b.maxX - b.minX + 1
-    const h = b.maxY - b.minY + 1
+    const x0 = b.minX - pad
+    const y0 = b.minY - pad
+    const w = b.maxX - b.minX + 1 + pad * 2
+    const h = b.maxY - b.minY + 1 + pad * 2
     const ox = Math.floor((size - w) / 2)
-    const oy = size - h - Math.floor(size * 0.04)
+    const oy = size - h - Math.floor(size * 0.02)
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const sx = b.minX + x
-        const sy = b.minY + y
+        const sx = x0 + x
+        const sy = y0 + y
+        if (sx < 0 || sy < 0 || sx >= img.width || sy >= img.height) continue
         const p = sy * img.width + sx
-        // Keep this blob's pixels plus the soft (low-alpha) edge pixels next to it.
-        if (!ids.has(label[p]) && img.data[p * 4 + 3] >= 128) continue
+        // This piece's pixels plus its soft anti-aliased rim — never a neighbour's.
+        if (owner[p] !== b.id && (owner[p] !== -1 || img.data[p * 4 + 3] >= 128)) continue
         const si = p * 4
         const di = ((oy + y) * size + (ox + x)) * 4
         out[di] = img.data[si]

@@ -7,12 +7,13 @@ import { useStore } from '../hooks/useStore'
 import { settingsStore } from '../stores/settingsStore'
 import { type ArtBoard, type ArtPieceSet, type BackgroundSlot, artStore, assetUrl, backgroundsFor, portraitFor, resolveBoardArt, resolvePieceArt } from './artManifest'
 
-export function usePieceArt(pieceSetId: string): { id: string; set: ArtPieceSet } | null {
+/** `own`: only this set's own art — previews (shop, settings) must not show the globally chosen set on every card. */
+export function usePieceArt(pieceSetId: string, own = false): { id: string; set: ArtPieceSet } | null {
   const manifest = useStore(artStore, (m) => m)
   const artPack = useStore(settingsStore, (s) => s.artPack)
   const artPieces = useStore(settingsStore, (s) => s.artPieces)
   const artBoard = useStore(settingsStore, (s) => s.artBoard)
-  return resolvePieceArt(manifest, { artPack, artPieces, artBoard }, pieceSetId)
+  return resolvePieceArt(manifest, { artPack, artPieces: own ? null : artPieces, artBoard }, pieceSetId)
 }
 
 export function useBoardArt(themeId: string): { id: string; board: ArtBoard } | null {

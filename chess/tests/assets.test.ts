@@ -200,7 +200,7 @@ const SHAPES: Record<string, [number, (t: number) => [number, number]]> = {
   P: [0.58, (t) => (t < 0.35 ? [0.37, 0.63] : t < 0.8 ? [0.3, 0.7] : [0.15, 0.85])],
 }
 /** A green-screen sheet with the pieces in `layout` (3 rows × 4), each tinted uniquely so the cut can be traced back. */
-function makeSheet(layout: string[]): { img: Img; tint: Record<string, number> } {
+function makeSheet(layout: string[], spacing = 1): { img: Img; tint: Record<string, number> } {
   const cell = 60
   const width = cell * 4
   const height = cell * 3
@@ -212,7 +212,7 @@ function makeSheet(layout: string[]): { img: Img; tint: Record<string, number> }
     const base = code.startsWith('w') ? 215 : 30
     tint[code] = base + k
     const h = Math.round(cell * 0.85 * share)
-    const x0 = (k % 4) * cell
+    const x0 = Math.round((k % 4) * cell * spacing)
     const y1 = Math.floor(k / 4) * cell + cell - 4
     for (let y = 0; y < h; y++) {
       const [l, r] = row(y / h)
@@ -227,12 +227,15 @@ const roundTrip = decodePng(encodePng(sheetImg)) as Img
 check('PNG encode → decode is lossless', roundTrip.width === 240 && roundTrip.data.every((v, i) => v === sheetImg.data[i]))
 const sliced = sliceSheet(roundTrip) as Slice
 check('a shuffled green-screen sheet is cut into 12 pieces', Object.keys(sliced.pieces ?? {}).length === 12, sliced.error ?? sliced.note ?? '')
-const traced = Object.entries(sliced.pieces ?? {}).map(([code, im]) => {
-  let r = 0
-  let n = 0
-  for (let i = 0; i < im.data.length; i += 4) if ((im.data[i + 3] ?? 0) === 255) ((r += im.data[i] ?? 0), (n += 1))
-  return [code, Object.entries(tint).find(([, t]) => Math.abs(t - r / Math.max(1, n)) < 0.5)?.[0]]
-})
+/** Which source piece each cut came from: the tint most of its solid pixels carry. */
+const trace = (cut: Slice, tints: Record<string, number>) =>
+  Object.entries(cut.pieces ?? {}).map(([code, im]) => {
+    const votes = new Map<number, number>()
+    for (let i = 0; i < im.data.length; i += 4) if ((im.data[i + 3] ?? 0) === 255) votes.set(im.data[i] ?? 0, (votes.get(im.data[i] ?? 0) ?? 0) + 1)
+    const top = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+    return [code, Object.entries(tints).find(([, t]) => t === top)?.[0]]
+  })
+const traced = trace(sliced, tint)
 const wrong = traced.filter(([code, from]) => code !== from)
 check('every piece is recognised wherever it sits on the sheet', wrong.length === 0, wrong.map(([c, f]) => `${c}←${f}`).join(' '))
 const anyGreen = Object.values(sliced.pieces ?? {}).some((im) => {
@@ -243,6 +246,10 @@ check('the green background is gone from every piece', !anyGreen)
 const pk = sliced.pieces?.wK
 const pp = sliced.pieces?.wP
 check('all pieces share one canvas (a pawn stays smaller than a king)', Boolean(pk && pp && pk.width === pp.width && pk.height === pp.height))
+const touching = makeSheet(['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP'], 0.82)
+const touchCut = sliceSheet(touching.img) as Slice
+const touchWrong = trace(touchCut, touching.tint).filter(([code, from]) => code !== from)
+check('pieces touching each other are cut apart and recognised', Object.keys(touchCut.pieces ?? {}).length === 12 && touchWrong.length === 0, touchCut.error ?? touchWrong.map(([c, f]) => `${c}←${f}`).join(' '))
 const clear = makeSheet(shuffled).img
 for (let i = 0; i < clear.data.length; i += 4) if ((clear.data[i + 1] ?? 0) === 235) clear.data[i + 3] = 0
 check('an already-transparent sheet is cut the same way', Object.keys((sliceSheet(clear) as Slice).pieces ?? {}).length === 12)

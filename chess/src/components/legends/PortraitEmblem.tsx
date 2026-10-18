@@ -1,4 +1,6 @@
 import { Lock } from 'lucide-react'
+import { useState } from 'react'
+import { usePortraitArt } from '../../assets/useArt'
 import type { PortraitSpec } from '../../types/persona'
 import { PORTRAIT_ICONS, PORTRAIT_SIZES } from './portraitIcons'
 
@@ -14,11 +16,15 @@ export interface PortraitEmblemProps {
 }
 
 /**
- * Stylised character emblem — a gradient, a symbolic icon and a monogram.
- * Deliberately iconographic (no likenesses), so it needs no image assets.
+ * Character portrait. Shows the art-pack portrait for this character when one
+ * exists (and the character isn't locked); otherwise — or if the image fails
+ * to load — the built-in emblem: a gradient, a symbolic icon and a monogram.
  */
 export function PortraitEmblem({ spec, label, size = 'md', locked = false, defeated = false, className = '', ring = 'ring-white/20' }: PortraitEmblemProps) {
   const s = PORTRAIT_SIZES[size]
+  const art = usePortraitArt(locked ? null : label)
+  const [failed, setFailed] = useState<string | null>(null)
+  const showArt = art !== null && failed !== art
   const Icon = locked ? Lock : PORTRAIT_ICONS[spec.icon]
   return (
     <div
@@ -32,6 +38,18 @@ export function PortraitEmblem({ spec, label, size = 'md', locked = false, defea
       <span className={`absolute right-1 bottom-0.5 font-display font-extrabold text-white/80 ${s.mono}`} aria-hidden="true">
         {spec.monogram}
       </span>
+      {showArt && (
+        <img
+          src={art}
+          alt=""
+          draggable={false}
+          decoding="async"
+          loading="lazy"
+          onError={() => setFailed(art)}
+          className="absolute inset-0 size-full object-cover"
+          data-portrait-art
+        />
+      )}
       {defeated && <span className="absolute inset-0 rounded-[inherit] ring-2 ring-inset ring-amber-300/90" aria-hidden="true" />}
     </div>
   )

@@ -5,6 +5,8 @@ import type { Color, Move, MoveInput, PendingPromotion, PromotionPiece, Square }
 import type { BoardTheme, PieceSet } from '../../types/theme'
 import { findKingSquare, isPromotionMove } from '../../utils/chess'
 import { buildPieces } from '../../utils/pieces'
+import { assetUrl } from '../../assets/artManifest'
+import { useBoardArt, useImagesStatus, usePieceArt } from '../../assets/useArt'
 import { PromotionDialog } from './PromotionDialog'
 
 export interface BoardArrow {
@@ -109,7 +111,27 @@ export function ChessBoard({
   const position = useMemo(() => new Chess(fen), [fen])
   const selected = selection?.fen === fen && movableColor ? selection.square : null
   const pendingPromotion = promotion?.fen === fen && movableColor ? promotion : null
-  const pieces = useMemo(() => buildPieces(pieceSet, lowPower), [lowPower, pieceSet])
+  const pieceArt = usePieceArt(pieceSet.id)
+  const pieces = useMemo(() => buildPieces(pieceSet, lowPower, pieceArt), [lowPower, pieceArt, pieceSet])
+
+  // Art-pack board: a whole-board image, or tiled light/dark squares (+ optional frame).
+  // Applied only once every file has loaded, so a broken file keeps the theme's colours.
+  const boardArt = useBoardArt(theme.id)
+  const artUrls = useMemo(() => {
+    const b = boardArt?.board
+    if (!b) return []
+    return (b.board ? [b.board] : [b.light, b.dark]).filter((x): x is string => typeof x === 'string').map(assetUrl)
+  }, [boardArt])
+  const artStatus = useImagesStatus(artUrls)
+  const art = boardArt && artStatus === 'ok' ? boardArt.board : null
+  const frameUrl = art?.frame ? assetUrl(art.frame) : null
+  const frameStatus = useImagesStatus(frameUrl ? [frameUrl] : [])
+  const boardSkin = useMemo(() => {
+    if (!art) return { light: theme.lightSquare, dark: theme.darkSquare, board: undefined }
+    if (art.board) return { light: { background: 'transparent' }, dark: { background: 'transparent' }, board: `url("${assetUrl(art.board)}") center / 100% 100% no-repeat` }
+    const tile = (path: string | undefined): CSSProperties => (path ? { backgroundImage: `url("${assetUrl(path)}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {})
+    return { light: tile(art.light), dark: tile(art.dark), board: undefined }
+  }, [art, theme.darkSquare, theme.lightSquare])
   const h = theme.highlights
 
   const legalTargets = useMemo(() => {
@@ -257,9 +279,9 @@ export function ChessBoard({
       onSquareClick: handleSquareClick,
       onMouseOverSquare: ({ square }: SquareHandlerArgs) => setHoverSquare(isSquare(square) ? square : null),
       onMouseOutSquare: () => setHoverSquare(null),
-      boardStyle: { borderRadius: '0.75rem', overflow: 'hidden' },
-      lightSquareStyle: theme.lightSquare,
-      darkSquareStyle: theme.darkSquare,
+      boardStyle: { borderRadius: '0.75rem', overflow: 'hidden', ...(boardSkin.board ? { background: boardSkin.board } : {}) },
+      lightSquareStyle: boardSkin.light,
+      darkSquareStyle: boardSkin.dark,
       dropSquareStyle: h.hover,
       lightSquareNotationStyle: { color: theme.notationLight, fontWeight: 700, opacity: 0.9 },
       darkSquareNotationStyle: { color: theme.notationDark, fontWeight: 700, opacity: 0.9 },
@@ -282,6 +304,7 @@ export function ChessBoard({
       pieces,
       showCoordinates,
       squareStyles,
+      boardSkin,
       theme,
     ],
   )
@@ -291,6 +314,10 @@ export function ChessBoard({
       <div className="size-full rounded-xl transition-shadow duration-500" style={theme.boardFrame}>
         <Chessboard options={options} />
       </div>
+      {frameUrl && frameStatus === 'ok' && (
+        // Decorative frame art: transparent centre, sized for a 2304 px frame around a 2048 px board.
+        <img src={frameUrl} alt="" aria-hidden="true" draggable={false} className="pointer-events-none absolute -inset-[6.25%] z-0 size-[112.5%] max-w-none" />
+      )}
       {children}
       {pendingPromotion && (
         <PromotionDialog color={pendingPromotion.color} pieceSet={pieceSet} onSelect={handlePromotionSelect} onCancel={cancelPromotion} />

@@ -2,6 +2,8 @@ import { Coins, Crown, Eye, Infinity as InfinityIcon, Handshake, Hourglass, Map 
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
+import { PortraitEmblem } from '../legends/PortraitEmblem'
+import type { PortraitSpec } from '../../types/persona'
 import { StarRow } from '../campaign/StarRow'
 import type { GameEndSummary } from '../../hooks/useGameController'
 import { describeResult } from '../../utils/chess'
@@ -21,9 +23,11 @@ interface GameOverModalProps {
   onReview: () => void
   onAnalyze: () => void
   onShare: () => void
+  /** The character you faced (legend or boss): their portrait crowns the card. */
+  opponent?: { spec: PortraitSpec; label: string } | null
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -80,9 +84,18 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
       }
     >
       <div className="flex flex-col items-center py-3 text-center">
-        <div className={`idle-pause mb-4 flex size-20 animate-float items-center justify-center rounded-3xl bg-gradient-to-br ${accent} text-ink-950 shadow-[0_20px_50px_-15px_var(--accent)]`}>
-          <Icon className="size-10" />
-        </div>
+        {opponent ? (
+          <div className="relative mb-4" data-gameover-portrait>
+            <PortraitEmblem spec={opponent.spec} label={opponent.label} size="xl" defeated={won} className={lost ? '' : won ? 'grayscale-[0.4]' : ''} ring={won ? 'ring-amber-300' : lost ? 'ring-red-400' : 'ring-sky-300'} />
+            <span className={`absolute -right-2 -bottom-2 flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br ${accent} text-ink-950 shadow-lg`}>
+              <Icon className="size-5" />
+            </span>
+          </div>
+        ) : (
+          <div className={`idle-pause mb-4 flex size-20 animate-float items-center justify-center rounded-3xl bg-gradient-to-br ${accent} text-ink-950 shadow-[0_20px_50px_-15px_var(--accent)]`}>
+            <Icon className="size-10" />
+          </div>
+        )}
         <div className={`font-display text-3xl font-extrabold tracking-wide ${won ? 'holo-text animate-shimmer' : 'text-white'}`}>{headline}</div>
         <div className="mt-1 text-sm text-slate-300">{headline !== title ? `${title} ${detail}` : detail}</div>
         <div className="mt-1 text-xs text-slate-500">

@@ -1,10 +1,81 @@
-# ♞ Chess Arena: AAA Edition (v6.1 · Chronos Chess — The Visual Evolution)
+# ♞ Chess Arena: AAA Edition (v6.2 · Chronos Chess — Art Pack)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.2: the Art Pack — your own portraits, pieces and boards
+
+Drop a folder of images in and the game uses them everywhere:
+- **Portraits:** boss and legend portraits, in dossiers, the map, speech bubbles, player bars and victory/defeat cards.
+- **Pieces:** custom piece sets (12 images or one sprite sheet), on the board, captured pieces, promotion and shop swatches.
+- **Boards:** custom boards (one image, or light/dark tiles, plus an optional frame).
+
+Anything missing or broken falls back to the built-in vector art.
+
+### 1. Import your art (Windows, macOS, Linux)
+
+```bash
+cd chess
+npm run assets:import -- "C:\Users\you\Downloads\my-art"      # add --dry-run to preview
+npm run dev
+```
+
+The importer recognises your files and copies them into `chess/public/assets/` with standard names. It prints every file it placed and lists the ones it couldn't place. Folder and file names are matched loosely: case, spaces, accents and words like "portrait"/"sheet" don't matter.
+
+```
+my-art/
+  Portraits/                 Ragnar Lothbrok.png, Blackbeard.jpg, Ninja Leader.webp …   (also: bosses/, legends/, characters/)
+  Pieces/
+    Dark Fantasy/            wK.png … bP.png   or  "White King.png", "black_knight.png", "bn.png" …
+    Steampunk.png            ← a sprite sheet (one image = one set)
+    Aztec/sheet.png          ← a sprite sheet in a folder
+  Boards/
+    Ancient Greece/board.png ← whole 8×8 board, a1 dark at bottom-left
+    Wild West/light.png + dark.png   (+ optional frame.png with a transparent centre)
+```
+
+**Sprite sheets** are read in **K Q R B N P** order, **White first**. The layout is detected from the shape:
+- 6 × 2 (default)
+- 2 × 6
+- 12 × 1
+- 1 × 12
+
+For any other order, add `pieces/<set>/sheet.json`, for example `{ "cols": 6, "rows": 2, "order": "KQBNRP" }`.
+
+**Manifest.** `public/assets/manifest.json` is regenerated automatically before every `npm run dev` / `npm run build`. Run `npm run assets:scan` if you copy files in by hand.
+
+### 2. How the art is used
+- **Portraits** match the character's name loosely:
+  - *Napoleon* finds Napoleon Bonaparte, *einstein* finds Albert Einstein, and *Cleopatra* finds Cleopatra VII.
+  - Titles are ignored (*Queen Elizabeth I*, *Richard the Lionheart*).
+  - A few aliases are built in, e.g. *Ninja Leader* → Hattori Hanzō (`PORTRAIT_ALIASES` in `src/assets/artManifest.ts`).
+  - Locked characters keep their mystery emblem.
+  - Portraits for people who aren't characters in the game (e.g. Queen Victoria, Abraham Lincoln, Julius Caesar) are imported but unused until such a character exists.
+- **Piece sets and boards:**
+  - **Automatic match:** a set or board named after a built-in one (`standard`, `classic-wood`, `nebula` …) automatically skins it, including inside themed character battles.
+  - **New names:** any other name (`dark-fantasy`, `wild-west` …) is picked in **Settings → Display → Art pack** or **Shop → Art pack**. That choice applies to every board immediately; *Theme default* hands control back to each theme.
+  - **Switch:** *Use the art pack* turns everything off.
+- **Fallbacks:**
+  - **Pieces:** a broken piece image shows that piece in vector instead.
+  - **Boards:** board textures are applied only after every file has loaded, so a broken one keeps the theme's colours.
+  - **Manifest:** a missing or invalid manifest simply means no art pack.
+  - **Paths:** manifest entries are validated (relative paths inside `assets/`, image extensions only, no `..`).
+
+**Code.**
+- `scripts/assets-lib.mjs`, `import-assets.mjs`, `scan-assets.mjs`: dependency-free Node scripts that read PNG, JPEG, WebP and GIF headers.
+- `src/assets/artManifest.ts`: typed manifest, sanitiser, matching and sprite geometry.
+- `src/assets/useArt.ts`: hooks and the image preloader.
+- `src/components/board/ArtPiece.tsx`: renders one piece.
+- `src/components/settings/ArtPackPicker.tsx`: the picker UI.
+
+**Tests:** `npm run test:assets` runs 34 checks: file recognition, a manifest built from real files, sanitising, portrait matching for the requested names, sheet slicing, and resolution rules.
+
+**Tip:** generated images are often 2–8 MB each. Exporting them as WebP (or resizing pieces to 256–512 px) keeps the game fast on phones.
 
 ---
 

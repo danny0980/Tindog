@@ -523,6 +523,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
       <GameOverModal
         open={game.showGameOver && !newGameOpen && active}
         summary={game.summary}
+        opponent={game.persona ? { spec: game.persona.portrait, label: game.persona.name } : null}
         isAiMode={game.isAiMode}
         moveCount={total}
         onNewGame={openNewGame}

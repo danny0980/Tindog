@@ -1,6 +1,7 @@
 import { Check, Coins, Hourglass, Lock, Sparkles } from 'lucide-react'
 import { sfx } from '../audio'
 import { ThemeSwatch } from '../components/shop/ThemeSwatch'
+import { ArtPackPicker } from '../components/settings/ArtPackPicker'
 import { Button } from '../components/ui/Button'
 import { BOARD_THEMES, PIECE_SETS, getBoardTheme } from '../constants/themes'
 import { useStore } from '../hooks/useStore'
@@ -107,6 +108,12 @@ export function ShopView({ onOpenLegends }: { onOpenLegends: () => void }) {
             <div className="text-[10px] uppercase tracking-wider text-yellow-200/70">balance</div>
           </div>
         </div>
+      </section>
+
+      <section aria-label="Art pack">
+        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-slate-400">Art pack</h3>
+        <p className="mb-3 text-xs text-slate-500">Your custom piece sets and boards — free, and they apply to every board instantly.</p>
+        <ArtPackPicker />
       </section>
 
       <section aria-label="Apothecary">

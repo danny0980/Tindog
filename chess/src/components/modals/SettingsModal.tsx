@@ -24,6 +24,7 @@ import { openIntro } from '../../stores/introStore'
 import { AudioPanel } from '../settings/AudioPanel'
 import { HapticsPanel } from '../settings/HapticsPanel'
 import { Section } from '../settings/Section'
+import { ArtPackPicker } from '../settings/ArtPackPicker'
 import { ThemeSwatch } from '../shop/ThemeSwatch'
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
@@ -147,6 +148,9 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
 
         {tab === 'display' && (
           <div className="space-y-6">
+            <Section title="Art pack">
+              <ArtPackPicker compact />
+            </Section>
             <Section title="Board theme">
               <div className="grid grid-cols-3 gap-2">
                 {BOARD_THEMES.map((theme) => {

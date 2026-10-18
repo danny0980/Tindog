@@ -7,6 +7,7 @@ import type { LegendId } from '../types/legend'
 import type { AppSettings, HapticCategory, HapticIntensity, HapticSettings, SoundMaterialSetting } from '../types/settings'
 import { createPersistentStore } from '../utils/store'
 import { asRecord, bool, num, oneOf, str } from '../utils/validate'
+import { isArtId } from '../assets/artManifest'
 
 export const HAPTIC_INTENSITIES: readonly HapticIntensity[] = ['off', 'light', 'medium', 'heavy']
 export const HAPTIC_CATEGORIES: readonly HapticCategory[] = ['pickup', 'move', 'capture', 'check', 'ui']
@@ -24,6 +25,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
   boardTheme: 'classic-wood',
   pieceSet: 'standard',
+  artPack: true,
+  artPieces: null,
+  artBoard: null,
   masterVolume: 0.8,
   sfxEnabled: true,
   sfxVolume: 1,
@@ -86,6 +90,9 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     version: 1,
     boardTheme: oneOf(s.boardTheme, BOARD_THEMES.map((t) => t.id), d.boardTheme),
     pieceSet: oneOf(s.pieceSet, PIECE_SETS.map((p) => p.id), d.pieceSet),
+    artPack: bool(s.artPack, d.artPack),
+    artPieces: isArtId(s.artPieces) ? s.artPieces : null,
+    artBoard: isArtId(s.artBoard) ? s.artBoard : null,
     masterVolume: num(s.masterVolume, d.masterVolume, 0, 1),
     sfxEnabled: bool(s.sfxEnabled, d.sfxEnabled),
     sfxVolume: num(s.sfxVolume, d.sfxVolume, 0, 1),

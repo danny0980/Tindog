@@ -26,6 +26,7 @@ import { getDailyPuzzles } from './utils/puzzles'
 import { claimableCount } from './utils/quests'
 import { PlayView } from './views/PlayView'
 import { FxDefs } from './components/fx/FxDefs'
+import { loadArtManifest } from './assets/artManifest'
 import type { IntroExit } from './components/cinematic/CinematicIntro'
 import { navDirection, runViewTransition, supportsViewTransitions } from './utils/viewTransition'
 import { closeIntroOverlay, introStore, openIntro } from './stores/introStore'
@@ -69,6 +70,11 @@ export default function App() {
   const today = localDateKey()
   const unsolvedDaily = getDailyPuzzles(today).filter((p) => !solved[p.id]).length
   const questRewards = claimableCount(questProgress, today)
+
+  // Art pack (public/assets/manifest.json): portraits, piece sets and boards, if present.
+  useEffect(() => {
+    void loadArtManifest()
+  }, [])
 
   // One-time notice when saved progress had to be recovered or upgraded.
   useEffect(() => {

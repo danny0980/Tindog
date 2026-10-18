@@ -17,6 +17,11 @@ export interface AppSettings {
   version: 1
   boardTheme: BoardThemeId
   pieceSet: PieceSetId
+  /** Art pack: use custom portraits / pieces / boards from public/assets when available. */
+  artPack: boolean
+  /** Art piece set and board chosen explicitly (null = follow the theme / battle). */
+  artPieces: string | null
+  artBoard: string | null
   // ── Audio mixer ──
   masterVolume: number
   sfxEnabled: boolean

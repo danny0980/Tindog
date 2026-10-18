@@ -1,6 +1,11 @@
 import { defaultPieces } from 'react-chessboard'
 import type { Color, PieceSymbol } from '../../types/chess'
 import type { PieceSet } from '../../types/theme'
+import { PIECE_CODES, type PieceCode } from '../../assets/artManifest'
+import { usePieceArt } from '../../assets/useArt'
+import { ArtPiece } from '../board/ArtPiece'
+
+const isPieceCode = (code: string): code is PieceCode => (PIECE_CODES as readonly string[]).includes(code)
 
 interface PieceIconProps {
   color: Color
@@ -9,17 +14,20 @@ interface PieceIconProps {
   set?: PieceSet
 }
 
-/** Renders the board's SVG piece set at any size, optionally in a cosmetic style. */
+/** Renders a piece at any size: art-pack image when available, else the cosmetic SVG style. */
 export function PieceIcon({ color, type, className, set }: PieceIconProps) {
-  const render = defaultPieces[`${color}${type.toUpperCase()}`]
+  const code = `${color}${type.toUpperCase()}`
+  const art = usePieceArt(set?.id ?? 'standard')
+  const render = defaultPieces[code]
   if (!render) return null
   const style = set ? (color === 'w' ? set.white : set.black) : null
+  const vector = render({
+    ...(style ? { fill: style.fill } : {}),
+    svgStyle: { width: '100%', height: '100%', display: 'block', ...(style ? { filter: style.filter } : {}) },
+  })
   return (
     <span className={className} aria-hidden="true">
-      {render({
-        ...(style ? { fill: style.fill } : {}),
-        svgStyle: { width: '100%', height: '100%', display: 'block', ...(style ? { filter: style.filter } : {}) },
-      })}
+      {art && isPieceCode(code) ? <ArtPiece code={code} art={art.set} fallback={vector} /> : vector}
     </span>
   )
 }

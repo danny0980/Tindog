@@ -1,6 +1,7 @@
 import { Angry, Annoyed, Laugh, MessageCircle, X, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useStore } from '../../hooks/useStore'
+import { usePortraitArt } from '../../assets/useArt'
 import { clearDialogue, dialogueStore } from '../../stores/dialogueStore'
 import type { TauntMood } from '../../types/taunts'
 
@@ -25,6 +26,9 @@ export function LegendDialogue({ speakerKey, placement = 'below' }: { speakerKey
   const line = useStore(dialogueStore, (d) => d)
   const mine = line && line.speakerKey === speakerKey ? line : null
   const [typed, setTyped] = useState({ id: 0, count: 0 })
+  // Art-pack portrait of the speaker (if any) beside the line.
+  const portrait = usePortraitArt(mine?.speaker ?? null)
+  const [brokenPortrait, setBrokenPortrait] = useState<string | null>(null)
 
   // Typewriter reveal, then auto-dismiss.
   useEffect(() => {
@@ -63,6 +67,16 @@ export function LegendDialogue({ speakerKey, placement = 'below' }: { speakerKey
           className={`absolute left-6 size-3 rotate-45 bg-[rgb(14_16_22/0.95)] ${mood.border} ${placement === 'below' ? '-top-1.5 border-t border-l' : '-bottom-1.5 border-r border-b'}`}
           aria-hidden="true"
         />
+        {portrait && brokenPortrait !== portrait && (
+          <img
+            src={portrait}
+            alt=""
+            draggable={false}
+            onError={() => setBrokenPortrait(portrait)}
+            className={`float-left mr-2.5 size-11 rounded-xl object-cover ring-2 ${mood.border.replace('border-', 'ring-')}`}
+            data-bubble-portrait
+          />
+        )}
         <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] ${mood.label}`}>
           <MoodIcon className="size-3.5" aria-hidden="true" />
           {mine.speaker}

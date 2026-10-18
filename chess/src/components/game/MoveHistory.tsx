@@ -9,10 +9,11 @@ interface MoveHistoryProps {
   currentPly: number
   analysis: readonly MoveAnalysis[] | null
   onSelect: (ply: number) => void
+  defaultOpen?: boolean
 }
 
-export function MoveHistory({ history, currentPly, analysis, onSelect }: MoveHistoryProps) {
-  const [open, setOpen] = useState(false)
+export function MoveHistory({ history, currentPly, analysis, onSelect, defaultOpen = false }: MoveHistoryProps) {
+  const [open, setOpen] = useState(defaultOpen)
   const listRef = useRef<HTMLDivElement>(null)
 
   const rows: Array<{ number: number; white: Move | undefined; black: Move | undefined }> = []

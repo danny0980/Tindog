@@ -5,9 +5,10 @@ interface ChessClockProps {
   timeMs: number
   active: boolean
   initialMs: number
+  size?: 'md' | 'lg'
 }
 
-export function ChessClock({ timeMs, active, initialMs }: ChessClockProps) {
+export function ChessClock({ timeMs, active, initialMs, size = 'md' }: ChessClockProps) {
   const low = timeMs < Math.min(20_000, initialMs * 0.1)
   const flagged = timeMs <= 0
   const tone = flagged
@@ -20,7 +21,9 @@ export function ChessClock({ timeMs, active, initialMs }: ChessClockProps) {
 
   return (
     <div
-      className={`flex min-w-[5.75rem] items-center justify-end gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-lg font-bold tabular-nums ring-1 transition-all duration-300 sm:text-xl ${tone}`}
+      className={`flex items-center justify-end gap-1.5 rounded-lg font-mono font-bold tabular-nums ring-1 transition-all duration-300 ${
+        size === 'lg' ? 'min-w-[7rem] px-3 py-2 text-2xl' : 'min-w-[5.75rem] px-2.5 py-1.5 text-lg sm:text-xl'
+      } ${tone}`}
       role="timer"
       aria-live={active && low ? 'polite' : 'off'}
     >

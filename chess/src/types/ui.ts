@@ -1,6 +1,6 @@
-export type AppView = 'play' | 'puzzles' | 'profile' | 'shop'
+export type AppView = 'play' | 'rush' | 'puzzles' | 'quests' | 'profile' | 'shop'
 
-export type ToastKind = 'achievement' | 'opening' | 'coins' | 'info' | 'success' | 'warning'
+export type ToastKind = 'achievement' | 'opening' | 'coins' | 'quest' | 'info' | 'success' | 'warning'
 
 export interface Toast {
   id: number

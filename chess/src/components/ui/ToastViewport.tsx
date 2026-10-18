@@ -1,4 +1,4 @@
-import { BookOpen, CheckCircle2, Coins, Info, Trophy, TriangleAlert, X } from 'lucide-react'
+import { BookOpen, CheckCircle2, Coins, Info, ScrollText, Trophy, TriangleAlert, X } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { dismissToast, toastStore } from '../../stores/toastStore'
 import type { ToastKind } from '../../types/ui'
@@ -6,6 +6,7 @@ import type { ToastKind } from '../../types/ui'
 const STYLES: Record<ToastKind, { icon: typeof Info; ring: string; iconClass: string }> = {
   achievement: { icon: Trophy, ring: 'ring-amber-300/40', iconClass: 'bg-gradient-to-br from-amber-300 to-orange-500 text-ink-950' },
   opening: { icon: BookOpen, ring: 'ring-accent/40', iconClass: 'bg-accent/20 text-accent' },
+  quest: { icon: ScrollText, ring: 'ring-accent-2/40', iconClass: 'bg-accent-2/20 text-accent-2' },
   coins: { icon: Coins, ring: 'ring-yellow-300/40', iconClass: 'bg-yellow-400/20 text-yellow-300' },
   info: { icon: Info, ring: 'ring-white/10', iconClass: 'bg-white/10 text-slate-200' },
   success: { icon: CheckCircle2, ring: 'ring-emerald-400/40', iconClass: 'bg-emerald-400/20 text-emerald-300' },
@@ -34,6 +35,9 @@ export function ToastViewport() {
             <div className="min-w-0 flex-1">
               {toast.kind === 'achievement' && (
                 <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300">Achievement unlocked</div>
+              )}
+              {toast.kind === 'quest' && (
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent-2">Daily quest complete</div>
               )}
               {toast.kind === 'opening' && (
                 <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Opening · {toast.message}</div>

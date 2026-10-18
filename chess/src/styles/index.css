@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import './animations.css';
 
+/* Phones held sideways: little height, plenty of width. */
+@custom-variant short (@media (orientation: landscape) and (max-height: 520px));
+
 /* Theme-driven accent colours (set at runtime by useAppEnvironment). */
 @theme inline {
   --color-accent: var(--accent);
@@ -156,4 +159,35 @@ html.is-idle .idle-pause * {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── OLED Deep Black ───────────────────────────────────────────────────────── */
+/* True black lets OLED panels switch pixels off; surfaces are separated by
+   hairline borders instead of translucent blur (which also saves GPU). */
+html[data-theme='oled-black'] body {
+  background: #000;
+}
+
+html[data-theme='oled-black'] .glass {
+  background-color: #000;
+  border-color: rgb(255 255 255 / 0.09);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+html[data-theme='oled-black'] .glass-strong {
+  background-color: #000;
+  border-color: rgb(255 255 255 / 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme='oled-black'] .bg-ink-800\/95 {
+  background-color: #000;
+}
+
+/* Rim-light black pieces so they stay legible on near-black OLED squares. */
+html[data-theme='oled-black'] [data-piece^='b'] svg {
+  filter: drop-shadow(0 0 1.2px rgb(255 255 255 / 0.7)) drop-shadow(0 0 3px rgb(56 189 248 / 0.25)) !important;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ambientMusic, audioEngine } from '../audio'
-import { setHapticsEnabled } from '../audio/haptics'
+import { configureHaptics } from '../audio/haptics'
 import { getBoardTheme } from '../constants/themes'
 import { enginePool } from '../engine/enginePool'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
@@ -65,7 +65,8 @@ export function useAppEnvironment(): { idle: boolean; visible: boolean } {
     root.style.setProperty('--accent-2', theme.accent2)
     root.style.setProperty('--app-bg', theme.background)
     root.dataset.theme = theme.id
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b0d12')
+    // Status bar / notch / Dynamic Island area blends into the theme (pure black for OLED).
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme.chromeColor)
   }, [theme])
 
   useEffect(() => {
@@ -77,10 +78,27 @@ export function useAppEnvironment(): { idle: boolean; visible: boolean } {
 
   useEffect(() => {
     audioEngine.setVolume(settings.masterVolume)
-    audioEngine.setSfxEnabled(settings.sfxEnabled)
-    audioEngine.setMusicEnabled(settings.musicEnabled)
-    setHapticsEnabled(settings.hapticsEnabled)
-  }, [settings.hapticsEnabled, settings.masterVolume, settings.musicEnabled, settings.sfxEnabled])
+    audioEngine.setMix({
+      sfx: settings.sfxEnabled,
+      sfxVolume: settings.sfxVolume,
+      music: settings.musicEnabled,
+      musicVolume: settings.musicVolume,
+      ui: settings.uiSoundsEnabled,
+      uiVolume: settings.uiVolume,
+    })
+  }, [
+    settings.masterVolume,
+    settings.musicEnabled,
+    settings.musicVolume,
+    settings.sfxEnabled,
+    settings.sfxVolume,
+    settings.uiSoundsEnabled,
+    settings.uiVolume,
+  ])
+
+  useEffect(() => {
+    configureHaptics(settings.hapticsEnabled, settings.haptics)
+  }, [settings.haptics, settings.hapticsEnabled])
 
   // Browsers only allow audio after a user gesture.
   useEffect(() => {

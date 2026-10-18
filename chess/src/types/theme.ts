@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-export type BoardThemeId = 'classic-wood' | 'minimal' | 'obsidian-marble' | 'cyberpunk-neon' | 'royal-gold'
+export type BoardThemeId = 'classic-wood' | 'minimal' | 'oled-black' | 'obsidian-marble' | 'cyberpunk-neon' | 'royal-gold'
 
 export type PieceSetId = 'standard' | 'obsidian' | 'neon' | 'gilded'
 
@@ -33,6 +33,8 @@ export interface BoardTheme {
   accent2: string
   /** Full-page background. */
   background: string
+  /** Browser/OS chrome colour (status bar, Android task switcher). */
+  chromeColor: string
   /** Particle colours for celebrations. */
   particles: string[]
   /** Piece set equipped automatically if owned and the user hasn't chosen one. */

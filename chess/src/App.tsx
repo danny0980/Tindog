@@ -1,22 +1,26 @@
 import { Suspense, lazy, useCallback, useState } from 'react'
 import { AppHeader } from './components/layout/AppHeader'
 import { BottomNav } from './components/layout/BottomNav'
-import { SettingsModal } from './components/modals/SettingsModal'
 import { ToastViewport } from './components/ui/ToastViewport'
 import { useAppEnvironment } from './hooks/useAppEnvironment'
 import { useGameController } from './hooks/useGameController'
+import { useLayoutMode } from './hooks/useLayoutMode'
 import { useStore } from './hooks/useStore'
 import { profileStore } from './stores/profileStore'
 import type { MatchRecord } from './types/profile'
 import type { AppView } from './types/ui'
 import { localDateKey } from './utils/date'
 import { getDailyPuzzles } from './utils/puzzles'
+import { claimableCount } from './utils/quests'
 import { PlayView } from './views/PlayView'
 
 // Secondary screens are code-split so the board loads first on slow mobile connections.
 const PuzzlesView = lazy(() => import('./views/PuzzlesView').then((m) => ({ default: m.PuzzlesView })))
 const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
 const ShopView = lazy(() => import('./views/ShopView').then((m) => ({ default: m.ShopView })))
+const SettingsModal = lazy(() => import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })))
+const RushView = lazy(() => import('./views/RushView').then((m) => ({ default: m.RushView })))
+const QuestsView = lazy(() => import('./views/QuestsView').then((m) => ({ default: m.QuestsView })))
 
 function ViewFallback() {
   return (
@@ -31,12 +35,18 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   useAppEnvironment()
+  const layout = useLayoutMode()
+  // The one-handed layout is a fixed-height screen (board flexes, dock pinned to the thumb zone).
+  const lockViewport = view === 'play' && layout.oneHanded
 
   // The game lives at the app level so it survives tab switches; its clock pauses off-screen.
   const game = useGameController({ active: view === 'play' })
 
   const solved = useStore(profileStore, (p) => p.puzzles.solved)
-  const unsolvedDaily = getDailyPuzzles(localDateKey()).some((p) => !solved[p.id])
+  const questProgress = useStore(profileStore, (p) => p.quests)
+  const today = localDateKey()
+  const unsolvedDaily = getDailyPuzzles(today).filter((p) => !solved[p.id]).length
+  const questRewards = claimableCount(questProgress, today)
 
   const navigate = useCallback((next: AppView) => {
     setView(next)
@@ -52,30 +62,46 @@ export default function App() {
   )
 
   return (
-    <div className="safe-pt flex min-h-dvh flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-4">
+    <div
+      className={`safe-pt flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] short:pb-[env(safe-area-inset-bottom)] short:pl-[calc(5rem+env(safe-area-inset-left))] lg:pb-4 ${
+        lockViewport ? 'h-dvh overflow-hidden' : 'min-h-dvh'
+      }`}
+    >
       <AppHeader view={view} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} />
 
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col">
         {/* PlayView stays mounted (hidden) so board state and animations persist. */}
-        <div className={view === 'play' ? 'flex flex-1 flex-col' : 'hidden'}>
-          <PlayView game={game} active={view === 'play'} newGameOpen={newGameOpen} onNewGameOpenChange={setNewGameOpen} />
+        <div className={view === 'play' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+          <PlayView
+            game={game}
+            active={view === 'play'}
+            newGameOpen={newGameOpen}
+            onNewGameOpenChange={setNewGameOpen}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
         </div>
         <Suspense fallback={<ViewFallback />}>
+          {view === 'rush' && <RushView active={view === 'rush'} />}
+          {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}
           {view === 'profile' && <ProfileView onReview={reviewMatch} />}
           {view === 'shop' && <ShopView />}
         </Suspense>
       </main>
 
-      <BottomNav view={view} onNavigate={navigate} badges={{ puzzles: unsolvedDaily }} />
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onOpenShop={() => {
-          setSettingsOpen(false)
-          navigate('shop')
-        }}
-      />
+      <BottomNav view={view} onNavigate={navigate} badges={{ puzzles: unsolvedDaily, quests: questRewards }} />
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            onOpenShop={() => {
+              setSettingsOpen(false)
+              navigate('shop')
+            }}
+          />
+        </Suspense>
+      )}
       <ToastViewport />
     </div>
   )

@@ -15,9 +15,11 @@ interface PlayerBarProps {
   advantage: number
   pieceSet: PieceSet
   clock: { enabled: boolean; timeMs: number; initialMs: number }
+  /** Hide the clock (it is shown elsewhere, e.g. in the thumb dock). */
+  hideClock?: boolean
 }
 
-export function PlayerBar({ player, isTurn, thinking, captured, advantage, pieceSet, clock }: PlayerBarProps) {
+export function PlayerBar({ player, isTurn, thinking, captured, advantage, pieceSet, clock, hideClock = false }: PlayerBarProps) {
   return (
     <div
       className={`glass flex items-center gap-3 rounded-xl px-3 py-2 transition-colors duration-300 ${
@@ -38,7 +40,7 @@ export function PlayerBar({ player, isTurn, thinking, captured, advantage, piece
         </div>
         <CapturedPieces pieces={captured} pieceColor={opposite(player.color)} advantage={advantage} pieceSet={pieceSet} />
       </div>
-      {clock.enabled && <ChessClock timeMs={clock.timeMs} active={isTurn} initialMs={clock.initialMs} />}
+      {clock.enabled && !hideClock && <ChessClock timeMs={clock.timeMs} active={isTurn} initialMs={clock.initialMs} />}
     </div>
   )
 }

@@ -60,6 +60,7 @@ export function tone(options: ToneOptions): void {
 
 export interface NoiseOptions {
   at?: number
+  destination?: AudioNode | null
   duration: number
   gain: number
   filter: { type: BiquadFilterType; frequency: number; q?: number }
@@ -69,7 +70,7 @@ export interface NoiseOptions {
 /** Filtered noise burst — the "body" of percussive impacts. */
 export function noise(options: NoiseOptions): void {
   const ctx = audioEngine.ready()
-  const out = audioEngine.sfxBus
+  const out = options.destination ?? audioEngine.sfxBus
   const buffer = audioEngine.noiseBuffer
   if (!ctx || !out || !buffer) return
   const start = ctx.currentTime + (options.at ?? 0)

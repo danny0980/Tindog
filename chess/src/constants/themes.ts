@@ -37,6 +37,7 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     accent2: '#fb7185',
     background:
       'radial-gradient(1100px 600px at 10% -10%, rgba(245,158,11,0.16), transparent 60%), radial-gradient(900px 500px at 110% 10%, rgba(251,113,133,0.10), transparent 60%), #120d09',
+    chromeColor: '#120d09',
     particles: ['#fbbf24', '#f59e0b', '#fde68a', '#fb7185', '#ffffff'],
     suggestedPieceSet: 'standard',
   },
@@ -66,7 +67,37 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     accent2: '#38bdf8',
     background:
       'radial-gradient(1200px 600px at 10% -10%, rgba(16,185,129,0.12), transparent 60%), radial-gradient(900px 500px at 110% 10%, rgba(14,165,233,0.10), transparent 60%), #0b0d12',
+    chromeColor: '#0b0d12',
     particles: ['#34d399', '#38bdf8', '#a7f3d0', '#ffffff'],
+    suggestedPieceSet: 'standard',
+  },
+  {
+    id: 'oled-black',
+    name: 'OLED Deep Black',
+    description: 'True-black surfaces that switch OLED pixels off — easy on eyes and battery.',
+    price: 0,
+    material: 'soft',
+    lightSquare: { backgroundColor: '#454b55' },
+    darkSquare: { backgroundColor: '#1c2027' },
+    notationLight: '#9aa1ad',
+    notationDark: '#6b7280',
+    boardFrame: { boxShadow: '0 0 0 1px rgba(255,255,255,0.10)' },
+    highlights: {
+      lastMove: { backgroundColor: 'rgba(56, 189, 248, 0.28)' },
+      selected: { backgroundColor: 'rgba(56, 189, 248, 0.45)' },
+      target: { background: 'radial-gradient(circle, rgba(226, 232, 240, 0.55) 18%, transparent 21%)' },
+      captureTarget: {
+        background: 'radial-gradient(circle, transparent 58%, rgba(226,232,240,0.5) 60%, rgba(226,232,240,0.5) 70%, transparent 73%)',
+      },
+      check: { background: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.55) 38%, transparent 75%)' },
+      hover: { boxShadow: 'inset 0 0 0 3px rgba(56, 189, 248, 0.85)' },
+      hint: { boxShadow: glowRing('rgba(56, 189, 248, 0.9)') },
+    },
+    accent: '#38bdf8',
+    accent2: '#a3e635',
+    background: '#000000',
+    chromeColor: '#000000',
+    particles: ['#38bdf8', '#a3e635', '#ffffff'],
     suggestedPieceSet: 'standard',
   },
   {
@@ -103,6 +134,7 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     accent2: '#818cf8',
     background:
       'radial-gradient(1100px 600px at 10% -10%, rgba(139,92,246,0.16), transparent 60%), radial-gradient(900px 500px at 110% 20%, rgba(99,102,241,0.12), transparent 60%), #0b0a12',
+    chromeColor: '#0b0a12',
     particles: ['#c4b5fd', '#a78bfa', '#818cf8', '#e0e7ff', '#ffffff'],
     suggestedPieceSet: 'obsidian',
   },
@@ -140,6 +172,7 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     accent2: '#e879f9',
     background:
       'radial-gradient(1000px 600px at 0% 0%, rgba(232,121,249,0.20), transparent 60%), radial-gradient(900px 600px at 100% 20%, rgba(34,211,238,0.16), transparent 60%), linear-gradient(rgba(34,211,238,0.035) 1px, transparent 1px) 0 0 / 100% 32px, #07040f',
+    chromeColor: '#07040f',
     particles: ['#22d3ee', '#e879f9', '#a78bfa', '#facc15', '#ffffff'],
     suggestedPieceSet: 'neon',
   },
@@ -177,6 +210,7 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     accent2: '#f43f5e',
     background:
       'radial-gradient(1100px 600px at 10% -10%, rgba(250,204,21,0.16), transparent 60%), radial-gradient(900px 600px at 110% 10%, rgba(244,63,94,0.14), transparent 60%), #120a0c',
+    chromeColor: '#120a0c',
     particles: ['#facc15', '#fde68a', '#f59e0b', '#f43f5e', '#ffffff'],
     suggestedPieceSet: 'gilded',
   },

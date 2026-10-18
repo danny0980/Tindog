@@ -31,6 +31,8 @@ interface ChessBoardProps {
   arrows?: BoardArrow[]
   /** Changing this value plays a "wrong move" shake. */
   shakeKey?: number
+  /** Fired when the user picks up / selects one of their pieces (haptics). */
+  onPickup?: () => void
   children?: ReactNode
 }
 
@@ -53,6 +55,7 @@ export function ChessBoard({
   extraSquareStyles,
   arrows,
   shakeKey = 0,
+  onPickup,
   children,
 }: ChessBoardProps) {
   // Selection is tied to the position it was made in, so it clears itself whenever the FEN changes.
@@ -98,6 +101,7 @@ export function ChessBoard({
         return
       }
       if (canMoveFrom(square)) {
+        if (selected !== square) onPickup?.()
         setSelection(selected === square ? null : { square, fen })
         return
       }
@@ -105,14 +109,16 @@ export function ChessBoard({
       if (selected && square !== selected) attemptMove(selected, square)
       setSelection(null)
     },
-    [attemptMove, canMoveFrom, fen, legalTargets, movableColor, selected],
+    [attemptMove, canMoveFrom, fen, legalTargets, movableColor, onPickup, selected],
   )
 
   const handlePieceDrag = useCallback(
     ({ square }: PieceHandlerArgs) => {
-      if (isSquare(square) && canMoveFrom(square)) setSelection({ square, fen })
+      if (!isSquare(square) || !canMoveFrom(square)) return
+      if (selected !== square) onPickup?.()
+      setSelection({ square, fen })
     },
-    [canMoveFrom, fen],
+    [canMoveFrom, fen, onPickup, selected],
   )
 
   const handlePieceDrop = useCallback(

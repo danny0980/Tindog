@@ -1,5 +1,7 @@
 import type { BoardThemeId, PieceSetId } from './theme'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from './chess'
+import type { QuestProgress } from './quest'
+import type { RushRecord } from './rush'
 
 export interface MatchRecord {
   id: string
@@ -63,6 +65,8 @@ export interface PlayerProfile {
   matches: MatchRecord[]
   puzzles: PuzzleProgress
   gamesAnalyzed: number
+  quests: QuestProgress
+  rush: RushRecord
 }
 
 export type AchievementIcon =
@@ -87,6 +91,8 @@ export type AchievementIcon =
   | 'palette'
   | 'repeat'
   | 'search'
+  | 'rocket'
+  | 'scroll'
 
 export interface AchievementDef {
   id: string

@@ -10,6 +10,7 @@ import { PUZZLES } from '../data/puzzles'
 import { usePuzzleSession } from '../hooks/usePuzzleSession'
 import { useStore } from '../hooks/useStore'
 import { profileStore } from '../stores/profileStore'
+import { trackQuestEvents } from '../stores/questActions'
 import { settingsStore } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import type { Puzzle } from '../types/puzzle'
@@ -37,6 +38,7 @@ export function PuzzlesView() {
       if (!puzzle) return
       const out = applyPuzzleSolve(profileStore.get(), puzzle, { daily: isDaily, assisted })
       profileStore.set(out.profile)
+      if (out.firstSolve) trackQuestEvents({ puzzles_solved: 1 }, 1200)
       if (!settingsStore.get().batterySaver) setCelebration((c) => c + 1)
       if (out.coins > 0) {
         window.setTimeout(() => sfx.coins(), 600)

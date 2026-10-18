@@ -1,6 +1,9 @@
 import { audioEngine } from './AudioEngine'
 import { midiToHz, noise, tone } from './synth'
 
+/** Interface & reward sounds go to the UI track so they can be mixed separately. */
+const ui = () => audioEngine.uiBus
+
 /** Check alert: urgent two-tone ping. */
 export function playCheck(): void {
   tone({ frequency: 880, type: 'triangle', decay: 0.12, gain: 0.16, reverb: 0.2 })
@@ -58,17 +61,17 @@ export function playTimeout(): void {
 
 /** Sparkling bell triad for achievements. */
 export function playAchievement(): void {
-  ;[88, 92, 95, 100].forEach((n, i) => tone({ at: i * 0.07, frequency: midiToHz(n), decay: 0.9, gain: 0.08, reverb: 0.6 }))
-  noise({ duration: 0.6, gain: 0.04, filter: { type: 'highpass', frequency: 8000 }, reverb: 0.5 })
+  ;[88, 92, 95, 100].forEach((n, i) => tone({ destination: ui(), at: i * 0.07, frequency: midiToHz(n), decay: 0.9, gain: 0.08, reverb: 0.6 }))
+  noise({ destination: ui(), duration: 0.6, gain: 0.04, filter: { type: 'highpass', frequency: 8000 }, reverb: 0.5 })
 }
 
 export function playCoins(): void {
-  tone({ frequency: 1319, type: 'square', decay: 0.08, gain: 0.05, filter: { type: 'lowpass', frequency: 5000 } })
-  tone({ at: 0.07, frequency: 1760, type: 'square', decay: 0.22, gain: 0.05, filter: { type: 'lowpass', frequency: 5000 }, reverb: 0.3 })
+  tone({ destination: ui(), frequency: 1319, type: 'square', decay: 0.08, gain: 0.05, filter: { type: 'lowpass', frequency: 5000 } })
+  tone({ destination: ui(), at: 0.07, frequency: 1760, type: 'square', decay: 0.22, gain: 0.05, filter: { type: 'lowpass', frequency: 5000 }, reverb: 0.3 })
 }
 
 export function playPuzzleSolved(): void {
-  ;[72, 76, 79, 84].forEach((n, i) => tone({ at: i * 0.06, frequency: midiToHz(n), type: 'triangle', decay: 0.4, gain: 0.13, reverb: 0.4 }))
+  ;[72, 76, 79, 84].forEach((n, i) => tone({ destination: ui(), at: i * 0.06, frequency: midiToHz(n), type: 'triangle', decay: 0.4, gain: 0.13, reverb: 0.4 }))
 }
 
 export function playError(): void {
@@ -77,14 +80,25 @@ export function playError(): void {
 }
 
 export function playNotify(): void {
-  tone({ frequency: 988, decay: 0.3, gain: 0.07, reverb: 0.4 })
+  tone({ destination: ui(), frequency: 988, decay: 0.3, gain: 0.07, reverb: 0.4 })
 }
 
 export function playTap(): void {
-  if (!audioEngine.sfxEnabled) return
-  tone({ frequency: 1400, decay: 0.025, gain: 0.04 })
+  tone({ destination: ui(), frequency: 1400, decay: 0.025, gain: 0.04 })
 }
 
 export function playLowTime(): void {
-  tone({ frequency: 1000, decay: 0.05, gain: 0.08 })
+  tone({ destination: ui(), frequency: 1000, decay: 0.05, gain: 0.08 })
+}
+
+/** Short swipe "whoosh" for gesture feedback. */
+export function playSwipe(): void {
+  noise({ destination: ui(), duration: 0.12, gain: 0.12, filter: { type: 'bandpass', frequency: 1800, q: 0.8 } })
+}
+
+/** Rising ping for arcade score popups; pitch climbs with the combo. */
+export function playScore(combo: number): void {
+  const base = 660 * 2 ** (Math.min(combo, 12) / 12)
+  tone({ destination: ui(), frequency: base, type: 'triangle', decay: 0.12, gain: 0.08 })
+  tone({ destination: ui(), at: 0.05, frequency: base * 1.5, type: 'triangle', decay: 0.18, gain: 0.07, reverb: 0.2 })
 }

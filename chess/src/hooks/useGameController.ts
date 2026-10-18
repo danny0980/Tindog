@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ambientMusic, sfx } from '../audio'
+import { ambientMusic, resolveMaterial, sfx } from '../audio'
 import { DIFFICULTIES, PERSONALITIES, resolveTimeControl } from '../constants/game'
 import { getBoardTheme } from '../constants/themes'
 import { profileStore } from '../stores/profileStore'
@@ -11,7 +11,8 @@ import type { AchievementDef, MatchRecord } from '../types/profile'
 import { fenAtPly, getCapturedPieces, givesCheck, opposite } from '../utils/chess'
 import { type Mood, deriveMood, gameTension } from '../utils/mood'
 import { detectOpening } from '../utils/openings'
-import { applyAnalysis, applyMatch, outcomeFor } from '../utils/progression'
+import { type MatchInput, applyAnalysis, applyMatch, matchQuestEvents, outcomeFor } from '../utils/progression'
+import { trackQuestEvents } from '../stores/questActions'
 import { usePageVisible } from './useAppEnvironment'
 import { useAiOpponent } from './useAiOpponent'
 import { useChessClock } from './useChessClock'
@@ -71,6 +72,7 @@ export function useGameController({ active }: { active: boolean }) {
   const game = useChessGame()
   const visible = usePageVisible()
   const theme = getBoardTheme(settings.boardTheme)
+  const material = resolveMaterial(settings.soundMaterial, theme)
   const isAiMode = gameSettings.mode === 'ai' && review === null
   const isPlaying = game.status.kind === 'playing' && review === null
   const aiColor = opposite(humanColor)
@@ -137,7 +139,7 @@ export function useGameController({ active }: { active: boolean }) {
         result,
       )
       const ai = gameSettings.mode === 'ai'
-      const out = applyMatch(profileStore.get(), {
+      const matchInput: MatchInput = {
         mode: gameSettings.mode,
         opponent: ai ? playerNames(aiColor) : 'Local game',
         difficulty: ai ? gameSettings.difficulty : null,
@@ -149,8 +151,10 @@ export function useGameController({ active }: { active: boolean }) {
         timeControl,
         rated: ai && !casual,
         opening: openingName,
-      })
+      }
+      const out = applyMatch(profileStore.get(), matchInput)
       profileStore.set(out.profile)
+      trackQuestEvents(matchQuestEvents(matchInput), 1400 + out.unlocked.length * 1100)
       const outcome = ai ? outcomeFor(result, humanColor) : null
       setSummary({
         result,
@@ -207,7 +211,7 @@ export function useGameController({ active }: { active: boolean }) {
       clockSnapshotsRef.current.push(before)
       clock.addIncrement(move.color)
       timeMachine.goTo(null)
-      sfx.move(theme.material, move, givesCheck(move))
+      sfx.move(material, move, givesCheck(move))
 
       const detected = detectOpening(game.getLiveHistory())
       if (detected && detected.ply === game.getLiveHistory().length && detected.name !== lastOpeningRef.current) {
@@ -219,7 +223,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (result) finishGame(result)
       return move
     },
-    [clock, finishGame, game, theme.material, timeMachine],
+    [clock, finishGame, game, material, timeMachine],
   )
 
   const isAiTurn = isAiMode && isPlaying && game.turn === aiColor
@@ -342,6 +346,7 @@ export function useGameController({ active }: { active: boolean }) {
     const out = applyAnalysis(profileStore.get(), r?.id ?? s?.matchId ?? null, accuracy, won)
     profileStore.set(out.profile)
     announceAchievements(out.unlocked, 300)
+    trackQuestEvents({ analyses: 1 }, 600)
   }, [])
   const requestAnalysis = useCallback(() => {
     setAnalysisRequestedFor(gameKey)

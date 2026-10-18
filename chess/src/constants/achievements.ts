@@ -24,6 +24,9 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'analyst', title: 'Analyst', description: 'Run a full post-game analysis.', icon: 'search', reward: 25, tier: 'bronze' },
   { id: 'surgical-precision', title: 'Surgical Precision', description: 'Win with 90%+ accuracy in an analysed game.', icon: 'target', reward: 150, tier: 'gold' },
   { id: 'collector', title: 'Collector', description: 'Own 3 premium cosmetics.', icon: 'palette', reward: 100, tier: 'silver' },
+  { id: 'rush-hour', title: 'Rush Hour', description: 'Score 5,000 points in a Time Rush run.', icon: 'rocket', reward: 75, tier: 'silver' },
+  { id: 'arcade-legend', title: 'Arcade Legend', description: 'Score 20,000 points in a Time Rush run.', icon: 'rocket', reward: 250, tier: 'platinum' },
+  { id: 'questor', title: 'Questor', description: 'Complete every daily quest in a single day.', icon: 'scroll', reward: 60, tier: 'silver' },
 ]
 
 export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

@@ -1,9 +1,10 @@
 /**
  * Owns the single AudioContext and the mixing graph:
  *
- *   sfx bus ──┐
- *   music bus ┼─► master ─► compressor ─► destination
- *   reverb ───┘    ▲
+ *   sfx bus ───┐
+ *   music bus ─┤
+ *   ui bus ────┼─► master ─► compressor ─► destination
+ *   reverb ────┘    ▲
  *   (convolver) ◄──┴── reverb send (from sfx & music voices)
  *
  * The context is created lazily on the first user gesture (browsers and iOS
@@ -14,11 +15,16 @@ class AudioEngine {
   private master: GainNode | null = null
   private sfx: GainNode | null = null
   private music: GainNode | null = null
+  private ui: GainNode | null = null
   private reverbIn: GainNode | null = null
   private noise: AudioBuffer | null = null
   private volume = 0.8
   private sfxOn = true
   private musicOn = false
+  private uiOn = true
+  private sfxLevel = 1
+  private musicLevel = 0.6
+  private uiLevel = 0.8
 
   get context(): AudioContext | null {
     return this.ctx
@@ -48,18 +54,29 @@ class AudioEngine {
     this.ramp(this.master, volume)
   }
 
-  setSfxEnabled(enabled: boolean): void {
-    this.sfxOn = enabled
-    this.ramp(this.sfx, enabled ? 1 : 0)
+  /** Mixer state for the three tracks (enabled flag × volume). */
+  setMix(mix: { sfx: boolean; sfxVolume: number; music: boolean; musicVolume: number; ui: boolean; uiVolume: number }): void {
+    this.sfxOn = mix.sfx
+    this.sfxLevel = mix.sfxVolume
+    this.musicOn = mix.music
+    this.musicLevel = mix.musicVolume
+    this.uiOn = mix.ui
+    this.uiLevel = mix.uiVolume
+    this.ramp(this.sfx, this.sfxGain())
+    this.ramp(this.music, this.musicGain())
+    this.ramp(this.ui, this.uiGain())
   }
 
-  setMusicEnabled(enabled: boolean): void {
-    this.musicOn = enabled
-    this.ramp(this.music, enabled ? 0.55 : 0)
-  }
+  private sfxGain = (): number => (this.sfxOn ? this.sfxLevel : 0)
+  private musicGain = (): number => (this.musicOn ? this.musicLevel * 0.9 : 0)
+  private uiGain = (): number => (this.uiOn ? this.uiLevel : 0)
 
   get sfxEnabled(): boolean {
     return this.sfxOn && this.volume > 0
+  }
+
+  get uiBus(): GainNode | null {
+    return this.ui
   }
 
   get sfxBus(): GainNode | null {
@@ -98,12 +115,16 @@ class AudioEngine {
     this.master.connect(compressor)
 
     this.sfx = ctx.createGain()
-    this.sfx.gain.value = this.sfxOn ? 1 : 0
+    this.sfx.gain.value = this.sfxGain()
     this.sfx.connect(this.master)
 
     this.music = ctx.createGain()
-    this.music.gain.value = this.musicOn ? 0.55 : 0
+    this.music.gain.value = this.musicGain()
     this.music.connect(this.master)
+
+    this.ui = ctx.createGain()
+    this.ui.gain.value = this.uiGain()
+    this.ui.connect(this.master)
 
     const convolver = ctx.createConvolver()
     convolver.buffer = this.impulse(ctx, 2.4, 2.8)

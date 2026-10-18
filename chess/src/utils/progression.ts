@@ -1,16 +1,18 @@
 import { ACHIEVEMENTS } from '../constants/achievements'
 import { DRAW_REWARD_FACTOR, LOSS_REWARD, MAX_ELO_HISTORY, MAX_MATCH_HISTORY, PUZZLE_ASSISTED_FACTOR, PUZZLE_REWARD, WIN_REWARD } from '../constants/economy'
 import { DIFFICULTY_CONFIGS, PIECE_VALUES } from '../constants/game'
+import { RUSH_MAX_COINS, RUSH_POINTS_PER_COIN } from '../constants/rush'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
 import type { Color, Difficulty, GameMode, GameResult, Move, Outcome, Personality, TimeControl } from '../types/chess'
 import type { AchievementDef, MatchRecord, PlayerProfile } from '../types/profile'
 import type { Puzzle } from '../types/puzzle'
+import type { QuestEvents } from '../types/quest'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { localDateKey, previousDateKey } from './date'
 
 // ── Achievements ─────────────────────────────────────────────────────────────
 
-function grant(profile: PlayerProfile, ids: string[], nowIso: string): { profile: PlayerProfile; unlocked: AchievementDef[] } {
+export function grant(profile: PlayerProfile, ids: string[], nowIso: string): { profile: PlayerProfile; unlocked: AchievementDef[] } {
   const unlocked = ACHIEVEMENTS.filter((a) => ids.includes(a.id) && !profile.achievements[a.id])
   if (unlocked.length === 0) return { profile, unlocked }
   const achievements = { ...profile.achievements }
@@ -282,4 +284,53 @@ export function rankTitle(elo: number): string {
   if (elo >= 1200) return 'Class C'
   if (elo >= 1000) return 'Class D'
   return 'Novice'
+}
+
+// ── Quest events from a finished match ───────────────────────────────────────
+
+export function matchQuestEvents(input: MatchInput): QuestEvents {
+  const ai = input.mode === 'ai' && input.humanColor !== null
+  // In local games both sides are "you", so every move counts.
+  const mine = input.history.filter((m) => !ai || m.color === input.humanColor)
+  const won = ai && input.humanColor !== null && outcomeFor(input.result, input.humanColor) === 'win'
+  const humanMoves = mine.length
+  return {
+    games_played: 1,
+    ai_wins: won ? 1 : 0,
+    black_wins: won && input.humanColor === 'b' ? 1 : 0,
+    fast_wins: won && humanMoves <= 25 ? 1 : 0,
+    timed_games: input.timeControl.initialMs > 0 ? 1 : 0,
+    captures: mine.filter((m) => m.captured).length,
+    checks: mine.filter((m) => m.san.includes('+') || m.san.includes('#')).length,
+    castles: mine.some((m) => m.isKingsideCastle() || m.isQueensideCastle()) ? 1 : 0,
+    promotions: mine.filter((m) => m.promotion).length,
+  }
+}
+
+// ── Time Rush ────────────────────────────────────────────────────────────────
+
+export function applyRushResult(
+  profile: PlayerProfile,
+  score: number,
+  round: number,
+  now: Date = new Date(),
+): { profile: PlayerProfile; coins: number; newBest: boolean; unlocked: AchievementDef[] } {
+  const coins = Math.min(RUSH_MAX_COINS, Math.floor(score / RUSH_POINTS_PER_COIN))
+  const newBest = score > profile.rush.bestScore
+  const next: PlayerProfile = {
+    ...profile,
+    coins: profile.coins + coins,
+    totalCoinsEarned: profile.totalCoinsEarned + coins,
+    rush: {
+      bestScore: Math.max(profile.rush.bestScore, score),
+      bestRound: Math.max(profile.rush.bestRound, round),
+      runs: profile.rush.runs + 1,
+      totalScore: profile.rush.totalScore + score,
+    },
+  }
+  const ids: string[] = []
+  if (score >= 5000) ids.push('rush-hour')
+  if (score >= 20000) ids.push('arcade-legend')
+  const granted = grant(next, ids, now.toISOString())
+  return { profile: granted.profile, coins, newBest, unlocked: granted.unlocked }
 }

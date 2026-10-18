@@ -2,6 +2,7 @@ import { STARTING_ELO, STORAGE_KEYS } from '../constants/game'
 import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../constants/themes'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from '../types/chess'
 import type { EloPoint, MatchRecord, PlayerProfile } from '../types/profile'
+import type { QuestMetric } from '../types/quest'
 import type { BoardThemeId, PieceSetId } from '../types/theme'
 import { createPersistentStore } from '../utils/store'
 import { arrayOf, asRecord, isRecord, num, oneOf, str, stringRecord } from '../utils/validate'
@@ -31,9 +32,23 @@ export function createDefaultProfile(): PlayerProfile {
     matches: [],
     puzzles: { solved: {}, lastSolvedDate: null, streak: 0, bestStreak: 0 },
     gamesAnalyzed: 0,
+    quests: { date: '', progress: {}, claimed: [], bonusClaimed: false, perfectDays: 0 },
+    rush: { bestScore: 0, bestRound: 0, runs: 0, totalScore: 0 },
   }
 }
 
+function sanitizeQuestProgress(raw: unknown): Partial<Record<QuestMetric, number>> {
+  const out: Partial<Record<QuestMetric, number>> = {}
+  for (const [key, value] of Object.entries(asRecord(raw))) {
+    if ((QUEST_METRICS as string[]).includes(key) && typeof value === 'number' && Number.isFinite(value)) out[key as QuestMetric] = Math.max(0, value)
+  }
+  return out
+}
+
+const QUEST_METRICS: QuestMetric[] = [
+  'games_played', 'ai_wins', 'black_wins', 'fast_wins', 'timed_games', 'captures', 'checks',
+  'castles', 'promotions', 'puzzles_solved', 'analyses', 'rush_runs', 'rush_points',
+]
 const THEME_IDS = BOARD_THEMES.map((t) => t.id)
 const PIECE_IDS = PIECE_SETS.map((p) => p.id)
 const PERSONALITY_IDS: Personality[] = ['balanced', 'aggressive', 'defensive', 'tactical', 'positional']
@@ -82,6 +97,8 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
   const stats = asRecord(raw.stats)
   const wbd = asRecord(stats.winsByDifficulty)
   const puzzles = asRecord(raw.puzzles)
+  const quests = asRecord(raw.quests)
+  const rush = asRecord(raw.rush)
   const themes = arrayOf(raw.unlockedThemes, isThemeId)
   const pieces = arrayOf(raw.unlockedPieceSets, isPieceId)
   const elo = num(raw.elo, d.elo, 100, 4000)
@@ -119,6 +136,19 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
       bestStreak: num(puzzles.bestStreak, 0, 0),
     },
     gamesAnalyzed: num(raw.gamesAnalyzed, 0, 0),
+    quests: {
+      date: str(quests.date, ''),
+      progress: sanitizeQuestProgress(quests.progress),
+      claimed: Array.isArray(quests.claimed) ? quests.claimed.filter((x): x is string => typeof x === 'string') : [],
+      bonusClaimed: quests.bonusClaimed === true,
+      perfectDays: num(quests.perfectDays, 0, 0),
+    },
+    rush: {
+      bestScore: num(rush.bestScore, 0, 0),
+      bestRound: num(rush.bestRound, 0, 0),
+      runs: num(rush.runs, 0, 0),
+      totalScore: num(rush.totalScore, 0, 0),
+    },
   }
 }
 

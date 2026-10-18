@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { sfx } from '../audio'
+import { resolveMaterial, sfx } from '../audio'
 import { getBoardTheme } from '../constants/themes'
 import { settingsStore } from '../stores/settingsStore'
 import type { Move, MoveInput } from '../types/chess'
@@ -36,7 +36,9 @@ function replay(fen: string, moves: readonly string[]): { fen: string; lastMove:
 }
 
 const playMoveSound = (move: Move | null) => {
-  if (move) sfx.move(getBoardTheme(settingsStore.get().boardTheme).material, move, givesCheck(move))
+  if (!move) return
+  const settings = settingsStore.get()
+  sfx.move(resolveMaterial(settings.soundMaterial, getBoardTheme(settings.boardTheme)), move, givesCheck(move))
 }
 
 /**

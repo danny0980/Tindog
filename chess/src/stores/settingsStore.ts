@@ -1,9 +1,21 @@
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
 import type { GameSettings } from '../types/chess'
-import type { AppSettings } from '../types/settings'
+import type { AppSettings, HapticCategory, HapticIntensity, HapticSettings, SoundMaterialSetting } from '../types/settings'
 import { createPersistentStore } from '../utils/store'
 import { asRecord, bool, num, oneOf, str } from '../utils/validate'
+
+export const HAPTIC_INTENSITIES: readonly HapticIntensity[] = ['off', 'light', 'medium', 'heavy']
+export const HAPTIC_CATEGORIES: readonly HapticCategory[] = ['pickup', 'move', 'capture', 'check', 'ui']
+const SOUND_MATERIALS: readonly SoundMaterialSetting[] = ['theme', 'wood', 'marble', 'metal', 'synth', 'soft']
+
+export const DEFAULT_HAPTICS: HapticSettings = {
+  pickup: 'light',
+  move: 'light',
+  capture: 'medium',
+  check: 'heavy',
+  ui: 'light',
+}
 
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
@@ -11,8 +23,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pieceSet: 'standard',
   masterVolume: 0.8,
   sfxEnabled: true,
+  sfxVolume: 1,
   musicEnabled: false,
+  musicVolume: 0.6,
+  uiSoundsEnabled: true,
+  uiVolume: 0.8,
+  soundMaterial: 'theme',
   hapticsEnabled: true,
+  haptics: DEFAULT_HAPTICS,
+  oneHanded: false,
+  gesturesEnabled: true,
+  gestureHintSeen: false,
   batterySaver: false,
   autoBatterySaver: true,
   showEvalBar: true,
@@ -37,6 +58,13 @@ function sanitizeGame(raw: unknown): GameSettings {
   }
 }
 
+function sanitizeHaptics(raw: unknown): HapticSettings {
+  const h = asRecord(raw)
+  const out = { ...DEFAULT_HAPTICS }
+  for (const category of HAPTIC_CATEGORIES) out[category] = oneOf(h[category], HAPTIC_INTENSITIES, DEFAULT_HAPTICS[category])
+  return out
+}
+
 export function sanitizeSettings(raw: unknown): AppSettings {
   const s = asRecord(raw)
   const d = DEFAULT_SETTINGS
@@ -46,8 +74,17 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     pieceSet: oneOf(s.pieceSet, PIECE_SETS.map((p) => p.id), d.pieceSet),
     masterVolume: num(s.masterVolume, d.masterVolume, 0, 1),
     sfxEnabled: bool(s.sfxEnabled, d.sfxEnabled),
+    sfxVolume: num(s.sfxVolume, d.sfxVolume, 0, 1),
     musicEnabled: bool(s.musicEnabled, d.musicEnabled),
+    musicVolume: num(s.musicVolume, d.musicVolume, 0, 1),
+    uiSoundsEnabled: bool(s.uiSoundsEnabled, d.uiSoundsEnabled),
+    uiVolume: num(s.uiVolume, d.uiVolume, 0, 1),
+    soundMaterial: oneOf(s.soundMaterial, SOUND_MATERIALS, d.soundMaterial),
     hapticsEnabled: bool(s.hapticsEnabled, d.hapticsEnabled),
+    haptics: sanitizeHaptics(s.haptics),
+    oneHanded: bool(s.oneHanded, d.oneHanded),
+    gesturesEnabled: bool(s.gesturesEnabled, d.gesturesEnabled),
+    gestureHintSeen: bool(s.gestureHintSeen, d.gestureHintSeen),
     batterySaver: bool(s.batterySaver, d.batterySaver),
     autoBatterySaver: bool(s.autoBatterySaver, d.autoBatterySaver),
     showEvalBar: bool(s.showEvalBar, d.showEvalBar),

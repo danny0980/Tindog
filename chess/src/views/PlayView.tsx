@@ -1,31 +1,43 @@
 import { Download, History, Share2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
 import { BoardHologram } from '../components/board/BoardHologram'
 import { ChessBoard } from '../components/board/ChessBoard'
 import { EvalBar } from '../components/board/EvalBar'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
+import { ChessClock } from '../components/game/ChessClock'
 import { ControlPanel } from '../components/game/ControlPanel'
+import { GameMenuSheet } from '../components/game/GameMenuSheet'
 import { GameStatusBanner } from '../components/game/GameStatusBanner'
 import { MoveHistory } from '../components/game/MoveHistory'
 import { PlayerBar } from '../components/game/PlayerBar'
+import { ThumbDock } from '../components/game/ThumbDock'
 import { TimeMachine } from '../components/game/TimeMachine'
 import { GameOverModal } from '../components/modals/GameOverModal'
 import { NewGameModal } from '../components/modals/NewGameModal'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { GestureGuide } from '../components/ui/GestureGuide'
+import { Modal } from '../components/ui/Modal'
+import { SwipeFeedback } from '../components/ui/SwipeFeedback'
 import { getPieceSet } from '../constants/themes'
 import type { GameController } from '../hooks/useGameController'
+import { useLayoutMode } from '../hooks/useLayoutMode'
+import { type SwipeDirection, useSwipeGesture } from '../hooks/useSwipeGesture'
+import { updateSettings } from '../stores/settingsStore'
 import { showToast } from '../stores/toastStore'
 import type { Color, GameSettings, MoveInput } from '../types/chess'
 import { describeResult, givesCheck, opposite } from '../utils/chess'
 import { pgnFilename, sharePgn, shareText } from '../utils/share'
+import { statusSummary } from '../utils/status'
 
 interface PlayViewProps {
   game: GameController
   active: boolean
   newGameOpen: boolean
   onNewGameOpenChange: (open: boolean) => void
+  onOpenSettings: () => void
 }
 
 function buildShareSummary(game: GameController): string {
@@ -44,13 +56,27 @@ function buildShareSummary(game: GameController): string {
   return lines.join('\n')
 }
 
-export function PlayView({ game, active, newGameOpen, onNewGameOpenChange }: PlayViewProps) {
+const SWIPE_LABELS: Record<SwipeDirection, string> = { left: 'Undo', right: 'Board flipped', up: 'Moves', down: 'Menu' }
+
+export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [movesOpen, setMovesOpen] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [feedback, setFeedback] = useState<{ id: number; direction: SwipeDirection; label: string } | null>(null)
+  const { oneHanded, gestures } = useLayoutMode()
   const settings = game.settings
   const pieceSet = getPieceSet(settings.pieceSet)
   const turn = game.status.kind === 'playing' ? game.status.turn : null
   const { timeMachine } = game
   const total = game.history.length
+
+  // First-run gesture tutorial on touch layouts.
+  const showGuide = guideOpen || (active && gestures && !settings.gestureHintSeen && !newGameOpen)
+  const closeGuide = useCallback(() => {
+    setGuideOpen(false)
+    updateSettings({ gestureHintSeen: true })
+  }, [])
 
   const openNewGame = useCallback(() => {
     game.dismissGameOver()
@@ -66,6 +92,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange }: Pla
   )
 
   const onMove = useCallback((move: MoveInput) => game.applyMove(move) !== null, [game])
+  const onPickup = useCallback(() => sfx.pickup(), [])
 
   const share = useCallback(async () => {
     const result = await shareText('Chess Arena game', buildShareSummary(game))
@@ -77,7 +104,33 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange }: Pla
     if (result === 'downloaded') showToast('success', 'PGN exported')
   }, [game])
 
-  // Keyboard time machine: ← → Home End, space to replay.
+  // ── Swipe gestures (on bars / dock, never on the board) ─────────────────────
+  const handleSwipe = useCallback(
+    (direction: SwipeDirection) => {
+      if (direction === 'left') {
+        if (!game.canUndo) {
+          sfx.error()
+          setFeedback({ id: Date.now(), direction, label: 'Nothing to undo' })
+          return
+        }
+        game.undo()
+      } else if (direction === 'right') game.flipBoard()
+      else if (direction === 'up') setMovesOpen(true)
+      else setMenuOpen((open) => !open)
+      sfx.swipe()
+      setFeedback({ id: Date.now(), direction, label: SWIPE_LABELS[direction] })
+    },
+    [game],
+  )
+  const swipe = useSwipeGesture({ enabled: gestures && active, onSwipe: handleSwipe })
+
+  useEffect(() => {
+    if (!feedback) return
+    const id = window.setTimeout(() => setFeedback(null), 950)
+    return () => window.clearTimeout(id)
+  }, [feedback])
+
+  // Keyboard time machine: ← → Home End.
   useEffect(() => {
     if (!active) return
     const onKey = (e: KeyboardEvent) => {
@@ -107,7 +160,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange }: Pla
   const currentMoveAnalysis = analysisMoves?.[timeMachine.displayPly - 1] ?? null
   const arrows = game.bestMoveArrow ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
 
-  const renderPlayer = (color: Color) => (
+  const renderPlayer = (color: Color, hideClock = false) => (
     <PlayerBar
       player={game.players[color]}
       isTurn={turn === color}
@@ -115,94 +168,197 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange }: Pla
       captured={game.captured[color]}
       advantage={color === 'w' ? game.captured.materialDiff : -game.captured.materialDiff}
       pieceSet={pieceSet}
+      hideClock={hideClock}
       clock={{ enabled: game.clock.enabled, timeMs: game.clock.times[color], initialMs: game.timeControl.initialMs }}
     />
   )
 
+  const board = (
+    <div className="flex items-stretch gap-2">
+      {game.evalEnabled && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
+      <div className="min-w-0 flex-1">
+        <ChessBoard
+          id="play-board"
+          fen={game.fen}
+          orientation={game.orientation}
+          lastMove={game.lastMove}
+          movableColor={game.movableColor}
+          onMove={onMove}
+          onPickup={onPickup}
+          theme={game.theme}
+          pieceSet={pieceSet}
+          lowPower={settings.batterySaver}
+          showLegalMoves={settings.showLegalMoves}
+          showCoordinates={settings.showCoordinates}
+          arrows={arrows}
+        >
+          {hologram && !settings.batterySaver && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
+        </ChessBoard>
+      </div>
+    </div>
+  )
+
+  const reviewBanner = game.review && (
+    <div className="glass flex items-center gap-2 rounded-xl px-3 py-2 text-sm">
+      <History className="size-4 text-accent" />
+      <span className="flex-1 truncate text-slate-200">Reviewing saved game · {game.review.opponent}</span>
+      <Button size="sm" variant="ghost" onClick={openNewGame} icon={<X className="size-4" />}>
+        Exit
+      </Button>
+    </div>
+  )
+
+  const analysisHint = currentMoveAnalysis && !timeMachine.isLive && currentMoveAnalysis.bestMoveSan && (
+    <div className="glass animate-fade-in rounded-xl px-3 py-2 text-center text-xs text-slate-300">
+      {currentMoveAnalysis.san} was a <span className="font-bold capitalize text-white">{currentMoveAnalysis.classification}</span> — best was{' '}
+      <span className="font-mono font-bold text-lime-300">{currentMoveAnalysis.bestMoveSan}</span>
+    </div>
+  )
+
+  const reviewTools = (defaultOpen: boolean): ReactNode => (
+    <>
+      <TimeMachine machine={timeMachine} total={total} />
+      <AnalysisPanel
+        state={game.analysis}
+        available={game.analysisAvailable}
+        totalPlies={total}
+        currentPly={timeMachine.displayPly}
+        names={{ w: game.players.w.name, b: game.players.b.name }}
+        onAnalyze={game.requestAnalysis}
+        onSelect={timeMachine.goTo}
+      />
+      <MoveHistory history={game.history} currentPly={timeMachine.displayPly} analysis={analysisMoves} onSelect={timeMachine.goTo} defaultOpen={defaultOpen} />
+    </>
+  )
+
+  // The human's own colour sits at the bottom (the side being "held").
+  const bottomColor = game.orientation
+  const topColor = opposite(game.orientation)
+
   return (
     <>
-      <div className="safe-px mx-auto grid w-full max-w-7xl flex-1 gap-4 pb-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-6">
-        <section className="mx-auto flex w-full flex-col gap-2.5" style={{ maxWidth: 'min(100%, max(18rem, calc(100dvh - 16rem)), 48rem)' }} aria-label="Chess board">
-          {game.review && (
-            <div className="glass flex items-center gap-2 rounded-xl px-3 py-2 text-sm">
-              <History className="size-4 text-accent" />
-              <span className="flex-1 truncate text-slate-200">Reviewing saved game · {game.review.opponent}</span>
-              <Button size="sm" variant="ghost" onClick={openNewGame} icon={<X className="size-4" />}>
-                Exit
+      {oneHanded ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="safe-px shrink-0 space-y-2" {...swipe}>
+            {reviewBanner}
+            {renderPlayer(topColor)}
+          </div>
+          {/* Size container: the board takes the largest square the leftover space allows. */}
+          <div className="safe-px flex min-h-0 flex-1 items-center justify-center py-2 [container-type:size]">
+            <div className={game.evalEnabled ? 'w-[min(100cqw,calc(100cqh+1.4rem))]' : 'w-[min(100cqw,100cqh)]'}>{board}</div>
+          </div>
+          <ThumbDock
+            swipe={swipe}
+            gestures={gestures}
+            status={statusSummary(game.status, {
+              aiThinking: game.aiThinking,
+              isLive: timeMachine.isLive,
+              engineLoading: game.isAiMode && game.engineStatus === 'loading',
+            })}
+            thinking={game.aiThinking}
+            clock={
+              game.clock.enabled ? (
+                <ChessClock timeMs={game.clock.times[bottomColor]} active={turn === bottomColor} initialMs={game.timeControl.initialMs} size="lg" />
+              ) : null
+            }
+            player={renderPlayer(bottomColor, true)}
+            canUndo={game.canUndo}
+            onUndo={game.undo}
+            onNewGame={openNewGame}
+            onMoves={() => setMovesOpen(true)}
+            onMenu={() => setMenuOpen(true)}
+          />
+        </div>
+      ) : (
+        <div className="safe-px mx-auto grid w-full max-w-7xl flex-1 gap-4 pb-4 short:grid-cols-[auto_minmax(16rem,1fr)] short:items-start lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-6">
+          <section
+            className="mx-auto flex w-full max-w-[min(100%,max(18rem,calc(100dvh-16rem)),48rem)] flex-col gap-2.5 short:mx-0 short:w-[calc(100dvh-5.5rem)] short:max-w-none"
+            aria-label="Chess board"
+          >
+            {reviewBanner}
+            <div className="short:hidden" {...swipe}>
+              {renderPlayer(topColor)}
+            </div>
+            {board}
+            <div className="short:hidden" {...swipe}>
+              {renderPlayer(bottomColor)}
+            </div>
+            {analysisHint}
+          </section>
+
+          <aside
+            className="scrollbar-thin flex flex-col gap-3 short:sticky short:top-2 short:max-h-[calc(100dvh-5rem)] short:overflow-y-auto lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1 [&>*]:shrink-0"
+            aria-label="Game controls"
+          >
+            {/* Landscape phones: player bars move beside the board. */}
+            <div className="hidden space-y-2 short:block" {...swipe}>
+              {renderPlayer(topColor)}
+              {renderPlayer(bottomColor)}
+            </div>
+            <div {...swipe}>
+              <GameStatusBanner
+                status={game.status}
+                aiThinking={game.aiThinking}
+                engineStatus={game.engineStatus}
+                engineError={game.engineError}
+                isAiMode={game.isAiMode}
+                isLive={timeMachine.isLive}
+                isReview={game.review !== null}
+                opening={game.opening}
+              />
+            </div>
+            <ControlPanel
+              canUndo={game.canUndo}
+              canResign={game.canResign}
+              onNewGame={openNewGame}
+              onFlip={game.flipBoard}
+              onUndo={game.undo}
+              onResign={() => setConfirmResign(true)}
+            />
+            {reviewTools(false)}
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" onClick={() => void exportPgn()} disabled={total === 0} icon={<Download className="size-4" />}>
+                Export PGN
+              </Button>
+              <Button size="sm" onClick={() => void share()} disabled={total === 0} icon={<Share2 className="size-4" />}>
+                Share
               </Button>
             </div>
-          )}
-          {renderPlayer(opposite(game.orientation))}
-          <div className="flex items-stretch gap-2">
-            {game.evalEnabled && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
-            <div className="min-w-0 flex-1">
-              <ChessBoard
-                id="play-board"
-                fen={game.fen}
-                orientation={game.orientation}
-                lastMove={game.lastMove}
-                movableColor={game.movableColor}
-                onMove={onMove}
-                theme={game.theme}
-                pieceSet={pieceSet}
-                lowPower={settings.batterySaver}
-                showLegalMoves={settings.showLegalMoves}
-                showCoordinates={settings.showCoordinates}
-                arrows={arrows}
-              >
-                {hologram && !settings.batterySaver && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
-              </ChessBoard>
-            </div>
-          </div>
-          {renderPlayer(game.orientation)}
-          {currentMoveAnalysis && !timeMachine.isLive && currentMoveAnalysis.bestMoveSan && (
-            <div className="glass animate-fade-in rounded-xl px-3 py-2 text-center text-xs text-slate-300">
-              {currentMoveAnalysis.san} was a <span className="font-bold capitalize text-white">{currentMoveAnalysis.classification}</span> — best was{' '}
-              <span className="font-mono font-bold text-lime-300">{currentMoveAnalysis.bestMoveSan}</span>
-            </div>
-          )}
-        </section>
+          </aside>
+        </div>
+      )}
 
-        <aside className="scrollbar-thin flex flex-col gap-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1 [&>*]:shrink-0" aria-label="Game controls">
-          <GameStatusBanner
-            status={game.status}
-            aiThinking={game.aiThinking}
-            engineStatus={game.engineStatus}
-            engineError={game.engineError}
-            isAiMode={game.isAiMode}
-            isLive={timeMachine.isLive}
-            isReview={game.review !== null}
-            opening={game.opening}
-          />
-          <ControlPanel
-            canUndo={game.canUndo}
-            canResign={game.canResign}
-            onNewGame={openNewGame}
-            onFlip={game.flipBoard}
-            onUndo={game.undo}
-            onResign={() => setConfirmResign(true)}
-          />
-          <TimeMachine machine={timeMachine} total={total} />
-          <AnalysisPanel
-            state={game.analysis}
-            available={game.analysisAvailable}
-            totalPlies={total}
-            currentPly={timeMachine.displayPly}
-            names={{ w: game.players.w.name, b: game.players.b.name }}
-            onAnalyze={game.requestAnalysis}
-            onSelect={timeMachine.goTo}
-          />
-          <MoveHistory history={game.history} currentPly={timeMachine.displayPly} analysis={analysisMoves} onSelect={timeMachine.goTo} />
-          <div className="grid grid-cols-2 gap-2">
-            <Button size="sm" onClick={() => void exportPgn()} disabled={total === 0} icon={<Download className="size-4" />}>
-              Export PGN
-            </Button>
-            <Button size="sm" onClick={() => void share()} disabled={total === 0} icon={<Share2 className="size-4" />}>
-              Share
-            </Button>
-          </div>
-        </aside>
-      </div>
+      {feedback && <SwipeFeedback key={feedback.id} direction={feedback.direction} label={feedback.label} />}
+
+      <Modal open={movesOpen && active} title="Moves & analysis" onClose={() => setMovesOpen(false)} size="md">
+        <div className="space-y-3 pb-2">
+          {game.opening && (
+            <div className="text-xs text-slate-400">
+              <span className="font-mono font-bold text-accent">{game.opening.eco}</span> {game.opening.name}
+            </div>
+          )}
+          {oneHanded && analysisHint}
+          {reviewTools(true)}
+        </div>
+      </Modal>
+
+      <GameMenuSheet
+        open={menuOpen && active}
+        onClose={() => setMenuOpen(false)}
+        canResign={game.canResign}
+        canExport={total > 0}
+        oneHanded={settings.oneHanded}
+        onNewGame={openNewGame}
+        onFlip={game.flipBoard}
+        onResign={() => setConfirmResign(true)}
+        onExport={() => void exportPgn()}
+        onShare={() => void share()}
+        onOpenSettings={onOpenSettings}
+        onToggleOneHanded={(value) => updateSettings({ oneHanded: value })}
+        onShowGestures={() => setGuideOpen(true)}
+      />
+
+      <GestureGuide open={showGuide} onClose={closeGuide} />
 
       <ConfettiCanvas burst={game.celebration} colors={game.theme.particles} disabled={settings.batterySaver} />
 
@@ -237,4 +393,3 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange }: Pla
     </>
   )
 }
-

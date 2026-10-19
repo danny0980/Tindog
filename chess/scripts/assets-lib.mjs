@@ -1,10 +1,10 @@
 // Shared helpers for the art-pack scripts (plain Node, no dependencies, works on
 // Windows, macOS and Linux): name normalisation, image-size sniffing, and the
 // rules that recognise portraits, piece sets / sprite sheets and board themes.
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { extname, join, relative, sep } from 'node:path'
 
-export const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg', '.jpeg', '.avif', '.svg']
+export const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg', '.jpeg', '.jfif', '.gif', '.avif', '.svg']
 export const PIECE_CODES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']
 
 /** "Hattori Hanzō (portrait).PNG" → "hattori-hanzo-portrait" */
@@ -166,6 +166,112 @@ function matchPerson(slug, people) {
     for (const v of p.variants) if (hasWords(slug, v) && (!best || v.length > best.len)) best = { key: p.key, len: v.length }
   }
   return best
+}
+
+// ── Portrait names ──────────────────────────────────────────────────────────
+
+/** Words that decorate a portrait's file name without naming anyone. */
+const PORTRAIT_NOISE = new Set([
+  'portrait', 'portraits', 'boss', 'legend', 'character', 'face', 'hero', 'art', 'artwork', 'image', 'img', 'pic', 'picture', 'photo',
+  'final', 'copy', 'edit', 'edited', 'new', 'hd', 'uhd', 'hq', 'hi', 'res', 'hires', '4k', '8k', '2k', 'small', 'large', 'big', 'square', 'crop', 'cropped',
+  'by', 'generated', 'ai', 'gemini', 'midjourney', 'dalle', 'upscaled', 'upscale',
+])
+
+/** "SunTzu" → "Sun Tzu" (camelCase file names). */
+const splitCamel = (text) => String(text).replace(/([a-z])([A-Z])/g, '$1 $2')
+
+/** A file name with the decoration removed: numbering, "(1)", "copy", "portrait of", "v2", "1024x1024", "final" … */
+export function cleanPortraitName(stem) {
+  const words = slugify(splitCamel(stem))
+    .split('-')
+    .filter((w) => w && !PORTRAIT_NOISE.has(w) && !/^v\d+$/.test(w) && !/^\d+x\d+$/.test(w) && !/^\d+$/.test(w))
+  // "Portrait of Napoleon" → "napoleon" (the decoration took "portrait"; drop the dangling "of").
+  while (words[0] === 'of') words.shift()
+  return words.join('-')
+}
+
+/**
+ * The canonical portrait key for an image file name: the character it names
+ * (from the game's catalog, so "portrait_napoleon_final (1).PNG" →
+ * "napoleon-bonaparte"), or its cleaned-up name when it names nobody known.
+ */
+export function portraitKey(fileName, catalog = null) {
+  const stem = fileName.replace(/\.[a-z0-9]+$/i, '')
+  const cleaned = cleanPortraitName(stem)
+  const people = catalog?.people ?? []
+  const person = matchPerson(cleaned, people) ?? matchPerson(slugify(splitCamel(stem)), people) ?? matchPerson(slugify(stem), people)
+  return person ? person.key : cleaned
+}
+
+/** The character key a portrait file names, or null when it names no known character. */
+export function portraitPerson(fileName, catalog) {
+  const stem = fileName.replace(/\.[a-z0-9]+$/i, '')
+  const people = catalog?.people ?? []
+  return (matchPerson(cleanPortraitName(stem), people) ?? matchPerson(slugify(splitCamel(stem)), people) ?? matchPerson(slugify(stem), people))?.key ?? null
+}
+
+const CANONICAL_EXT = { '.jpeg': '.jpg', '.jfif': '.jpg' }
+
+/**
+ * Renames every image in public/assets/portraits to its canonical, URL-safe
+ * name (lower-case slug + lower-case extension): files copied in by hand with
+ * any spelling are found by the game exactly like imported ones. Two files
+ * for one character: the larger stays, the other moves to portraits/duplicates.
+ * Returns what changed. `dryRun` only reports.
+ */
+export function normalizePortraitFolder(assetsDir, catalog = null, { dryRun = false } = {}) {
+  const dir = join(assetsDir, 'portraits')
+  const report = { renamed: [], duplicates: [], unnamed: [] }
+  if (!existsSync(dir)) return report
+  let files = []
+  try {
+    files = readdirSync(dir).filter((f) => isImage(f) && statSync(join(dir, f)).isFile())
+  } catch {
+    return report
+  }
+  const size = (f) => {
+    try {
+      return statSync(join(dir, f)).size
+    } catch {
+      return 0
+    }
+  }
+  // Pick one file per key (the larger), canonical names first so a re-run changes nothing.
+  const chosen = new Map()
+  for (const f of files) {
+    const ext = extname(f).toLowerCase()
+    // Only files that name a known character are renamed; anything else keeps its name and is reported.
+    const key = catalog ? portraitPerson(f, catalog) : portraitKey(f, null) || null
+    if (!key) {
+      report.unnamed.push(f)
+      continue
+    }
+    const target = `${key}${CANONICAL_EXT[ext] ?? ext}`
+    const prev = chosen.get(key)
+    if (!prev || size(f) > size(prev.file) || (size(f) === size(prev.file) && f === target)) {
+      if (prev) report.duplicates.push(prev.file)
+      chosen.set(key, { file: f, target })
+    } else report.duplicates.push(f)
+  }
+  if (!dryRun && report.duplicates.length > 0) mkdirSync(join(dir, 'duplicates'), { recursive: true })
+  for (const f of report.duplicates) if (!dryRun) renameSync(join(dir, f), join(dir, 'duplicates', f))
+  for (const { file, target } of chosen.values()) {
+    if (file === target) continue
+    report.renamed.push({ from: file, to: target })
+    if (dryRun) continue
+    // Two steps, so a change of case alone ("Thor.PNG" → "thor.png") also works on Windows / macOS.
+    const temp = join(dir, `.renaming-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    renameSync(join(dir, file), temp)
+    renameSync(temp, join(dir, target))
+  }
+  return report
+}
+
+/** Prints what normalizePortraitFolder changed. */
+export function logPortraitReport(report, log = console.log) {
+  for (const r of report.renamed) log(`  portrait renamed  ${r.from}  →  ${r.to}`)
+  for (const f of report.duplicates) log(`  portrait duplicate ${f}  →  portraits/duplicates/ (a larger image of the same character is kept)`)
+  for (const f of report.unnamed) log(`  portrait unknown  ${f}  (names no character — rename it after one; see npm run assets:missing)`)
 }
 
 const COLOR_TYPE_WORDS = new Set(['w', 'b', 'white', 'black', 'light', 'dark', 'king', 'queen', 'rook', 'castle', 'tower', 'bishop', 'knight', 'horse', 'pawn', 'soldier'])

@@ -21,7 +21,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync,
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadCatalog } from './asset-catalog.mjs'
-import { buildManifest, classify, imageSize, listImages, slugify } from './assets-lib.mjs'
+import { buildManifest, classify, imageSize, listImages, logPortraitReport, normalizePortraitFolder, slugify } from './assets-lib.mjs'
 import { decodePng, encodePng, sliceSheet } from './sprite-slicer.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -221,6 +221,8 @@ if (skipped.length > 0) {
 }
 if (!dryRun) {
   mkdirSync(assetsDir, { recursive: true })
+  // Portraits copied straight into public/assets/portraits get canonical names too.
+  logPortraitReport(normalizePortraitFolder(assetsDir, catalog))
   const manifest = buildManifest(assetsDir)
   writeFileSync(join(assetsDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   console.log(`[assets] manifest: ${Object.keys(manifest.portraits).length} portraits, ${Object.keys(manifest.pieceSets).length} piece sets, ${Object.keys(manifest.boards).length} boards, ${Object.keys(manifest.avatars).length} avatars, ${Object.keys(manifest.backgrounds).length} backgrounds`)

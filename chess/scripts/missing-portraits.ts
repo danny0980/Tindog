@@ -4,11 +4,15 @@
 //
 //   npm run assets:missing
 //
-// Reads public/assets/portraits (run `npm run assets:import` first).
+// Reads public/assets/portraits. Files copied there by hand are first renamed
+// to the name the game looks for (any case, spaces, "(1)", "portrait of" …),
+// and portraits that match no character are listed so they can be renamed.
 // @ts-expect-error — plain .mjs helper shared with the Node scripts (no type declarations).
-import { buildManifest } from './assets-lib.mjs'
+import { buildManifest, logPortraitReport, normalizePortraitFolder } from './assets-lib.mjs'
+// @ts-expect-error — plain .mjs helper (no type declarations).
+import { loadCatalog } from './asset-catalog.mjs'
 import { join } from 'node:path'
-import { type ArtManifest, EMPTY_MANIFEST, portraitFor, slugify } from '../src/assets/artManifest'
+import { type ArtManifest, EMPTY_MANIFEST, portraitFor, sanitizeManifest, slugify } from '../src/assets/artManifest'
 import { GRAND_REALMS } from '../src/data/campaign/realms'
 import chronicle from '../src/data/campaign/rosters/chronicle'
 import cosmic from '../src/data/campaign/rosters/cosmic'
@@ -21,7 +25,14 @@ import type { Boss, GrandRealmId } from '../src/types/campaign'
 const ROSTERS: Record<GrandRealmId, readonly Boss[]> = { chronicle, mythic, discovery, cyber, cosmic }
 
 const assetsDir = join(process.cwd(), 'public', 'assets')
-const manifest: ArtManifest = { ...EMPTY_MANIFEST, ...(buildManifest(assetsDir) as Partial<ArtManifest>) }
+const tidy = normalizePortraitFolder(assetsDir, loadCatalog(process.cwd())) as { renamed: unknown[]; duplicates: unknown[]; unnamed: string[] }
+if (tidy.renamed.length + tidy.duplicates.length > 0) {
+  console.log('Tidied public/assets/portraits:')
+  logPortraitReport({ ...tidy, unnamed: [] })
+  console.log('')
+}
+// Exactly what the game will see: the manifest after the runtime's own safety checks.
+const manifest: ArtManifest = sanitizeManifest({ ...EMPTY_MANIFEST, ...(buildManifest(assetsDir) as Partial<ArtManifest>) })
 const portraitCount = Object.keys(manifest.portraits).length
 
 let missingTotal = 0
@@ -42,6 +53,22 @@ for (const realm of GRAND_REALMS) {
 const legends = LEGENDS.filter((l) => !portraitFor(manifest, l.name))
 console.log(`CHRONOS LEGENDS WITHOUT A PORTRAIT — ${legends.length} of ${LEGENDS.length} missing`)
 for (const l of legends) console.log(`  ${l.id.padEnd(36)} ${l.name.padEnd(32)} → ${slugify(l.name)}.png`)
+
+// Portrait files no character resolves to: usually a spelling the matcher can't place.
+const used = new Set<string>()
+for (const realm of GRAND_REALMS) for (const b of ROSTERS[realm.id]) {
+  const hit = portraitFor(manifest, b.name)
+  if (hit) used.add(hit)
+}
+for (const l of LEGENDS) {
+  const hit = portraitFor(manifest, l.name)
+  if (hit) used.add(hit)
+}
+const orphans = [...new Set([...Object.values(manifest.portraits).filter((path) => !used.has(path)), ...tidy.unnamed.map((f) => `portraits/${f}`)])]
+if (orphans.length > 0) {
+  console.log(`\nPORTRAIT FILES THAT MATCH NO CHARACTER — ${orphans.length} (rename them to a name from the lists above)`)
+  for (const path of orphans) console.log(`  ${path}`)
+}
 
 console.log(`\nSummary: ${missingTotal} of ${bossTotal} campaign bosses and ${legends.length} of ${LEGENDS.length} legends have no portrait.`)
 console.log('Name each image after the character (case, spaces and accents don’t matter), put it in your art folder and run npm run assets:import.')

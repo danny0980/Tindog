@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // @ts-expect-error — plain .mjs helper shared with the Node scripts (no type declarations).
-import { buildManifest, classify, imageSize, listImages, pieceCode, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
+import { buildManifest, classify, cleanPortraitName, imageSize, listImages, normalizePortraitFolder, pieceCode, portraitPerson, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
 // @ts-expect-error — plain .mjs helper (no type declarations).
 import { decodePng, encodePng, sliceSheet } from '../scripts/sprite-slicer.mjs'
 // @ts-expect-error — plain .mjs helper (no type declarations).
@@ -259,6 +259,42 @@ for (let i = 0; i < 64 * 64; i++) {
   checker.data.set(dark ? [60, 30, 20, 255] : [200, 90, 40, 255], i * 4)
 }
 check('a board picture is not mistaken for a sprite sheet', /no background/.test((sliceSheet(checker) as Slice).error ?? ''))
+
+// ── Portrait file names copied in by hand ──────────────────────────────────
+const people = catalog
+const named: Array<[string, string | null]> = [
+  ['Napoleon Bonaparte (1).png', 'napoleon-bonaparte'],
+  ['portrait_napoleon_final_v2.PNG', 'napoleon-bonaparte'],
+  ['Portrait of Cleopatra.png', 'cleopatra-vii'],
+  ['01 - Sun Tzu.jpg', 'sun-tzu'],
+  ['SunTzu.png', 'sun-tzu'],
+  ['Niccolò Machiavelli.webp', 'niccolo-machiavelli'],
+  ['einstein copy.png', 'albert-einstein'],
+  ['Joan_of_Arc_HD.png', 'joan-of-arc'],
+  ['Lich King Vorthax 4k.png', 'lich-king-vorthax'],
+  ['boss-hermes.png', 'hermes'],
+  ['Oberon (High King).png', 'high-king-oberon'],
+  ['Gemini_Generated_Image_abc123.png', null],
+]
+const wrongNames = named.filter(([f, key]) => portraitPerson(f, people) !== key)
+check('portrait file names in any spelling name the right character', wrongNames.length === 0, wrongNames.map(([f]) => `${f} → ${String(portraitPerson(f, people))}`).join(', '))
+check('decoration is stripped from portrait names', cleanPortraitName('01 - Portrait of Thor (2) final v3 1024x1024') === 'thor')
+const pdir = mkdtempSync(join(tmpdir(), 'portraits-'))
+mkdirSync(join(pdir, 'portraits'))
+const fakePng = (w: number) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, w, 0, 0, 0, w]), Buffer.alloc(w)])
+writeFileSync(join(pdir, 'portraits', 'Napoleon Bonaparte (1).PNG'), fakePng(40))
+writeFileSync(join(pdir, 'portraits', 'napoleon_portrait.png'), fakePng(10))
+writeFileSync(join(pdir, 'portraits', 'Charlemagne.jfif'), fakePng(10))
+writeFileSync(join(pdir, 'portraits', 'Random Image.png'), fakePng(10))
+const tidy = normalizePortraitFolder(pdir, people) as { renamed: Array<{ to: string }>; duplicates: string[]; unnamed: string[] }
+const after = listImages(join(pdir, 'portraits')) as string[]
+check('hand-copied portraits get canonical, URL-safe names', after.includes('napoleon-bonaparte.png') && after.includes('charlemagne.jpg'), after.join(', '))
+check('the larger of two images of one character is kept', tidy.duplicates.join() === 'napoleon_portrait.png' && after.includes('duplicates/napoleon_portrait.png'))
+check('a file naming nobody keeps its name and is reported', after.includes('Random Image.png') && tidy.unnamed.join() === 'Random Image.png')
+check('tidying twice changes nothing', (normalizePortraitFolder(pdir, people) as { renamed: unknown[] }).renamed.length === 0)
+const tidied = sanitizeManifest(buildManifest(pdir))
+check('the game finds the tidied portraits', portraitFor(tidied, 'Napoleon Bonaparte') === 'portraits/napoleon-bonaparte.png' && portraitFor(tidied, 'Charlemagne') === 'portraits/charlemagne.jpg')
+rmSync(pdir, { recursive: true, force: true })
 
 console.log(failures === 0 ? '\nAll art-pack checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

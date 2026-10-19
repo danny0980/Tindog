@@ -1,4 +1,4 @@
-// Art audit: lists every campaign boss and Chronos legend with no portrait,
+// Art audit: lists every campaign boss, Classic Chess opponent and Chronos legend with no portrait,
 // and every relic, UI icon and screen background still without art — using
 // exactly the matching the game uses at runtime — plus files the game can't
 // place anywhere (characters / relics that aren't in the game).
@@ -16,6 +16,7 @@ import { loadCatalog } from './asset-catalog.mjs'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { type ArtManifest, type BackgroundSlot, EMPTY_MANIFEST, ICON_SLOTS, ICON_SLOT_IDS, backgroundsFor, iconFor, portraitFor, relicArtFor, sanitizeManifest, slugify } from '../src/assets/artManifest'
+import { CLASSIC_ERAS, CLASSIC_ROSTER } from '../src/data/classic/roster'
 import { RELICS } from '../src/data/campaign/relics'
 import { GRAND_REALMS } from '../src/data/campaign/realms'
 import chronicle from '../src/data/campaign/rosters/chronicle'
@@ -90,6 +91,16 @@ for (const realm of GRAND_REALMS) {
   console.log('')
 }
 
+const classicMissing = CLASSIC_ROSTER.filter((c) => !portraitFor(manifest, c.name))
+console.log(`CLASSIC CHESS OPPONENTS WITHOUT A PORTRAIT — ${classicMissing.length} of ${CLASSIC_ROSTER.length} missing`)
+for (const era of CLASSIC_ERAS) {
+  const missing = classicMissing.filter((c) => c.era === era.id)
+  if (missing.length === 0) continue
+  console.log(`${era.name} — ${missing.length} of ${CLASSIC_ROSTER.filter((c) => c.era === era.id).length} missing`)
+  for (const c of missing) console.log(`  #${String(c.rank + 1).padStart(3)}  ${c.id.padEnd(22)} ${c.name.padEnd(32)} → ${slugify(c.name)}.png`)
+}
+console.log('')
+
 const legends = LEGENDS.filter((l) => !portraitFor(manifest, l.name))
 console.log(`CHRONOS LEGENDS WITHOUT A PORTRAIT — ${legends.length} of ${LEGENDS.length} missing`)
 for (const l of legends) console.log(`  ${l.id.padEnd(36)} ${l.name.padEnd(32)} → ${slugify(l.name)}.png`)
@@ -102,6 +113,10 @@ for (const realm of GRAND_REALMS) for (const b of ROSTERS[realm.id]) {
 }
 for (const l of LEGENDS) {
   const hit = portraitFor(manifest, l.name)
+  if (hit) used.add(hit)
+}
+for (const c of CLASSIC_ROSTER) {
+  const hit = portraitFor(manifest, c.name)
   if (hit) used.add(hit)
 }
 const orphans = [...new Set([...Object.values(manifest.portraits).filter((path) => !used.has(path)), ...tidy.unnamed.map((f) => `portraits/${f}`)])]
@@ -148,5 +163,5 @@ if (uncut.length > 0) {
   for (const [id] of uncut) console.log(`    ${id}`)
 }
 
-console.log(`\nSummary: ${missingTotal} of ${bossTotal} campaign bosses and ${legends.length} of ${LEGENDS.length} legends have no portrait; ${relicsMissing.length} relics, ${iconsMissing.length} icons and ${screensMissing.length} screens have no art.`)
+console.log(`\nSummary: ${missingTotal} of ${bossTotal} campaign bosses, ${classicMissing.length} of ${CLASSIC_ROSTER.length} Classic opponents and ${legends.length} of ${LEGENDS.length} legends have no portrait; ${relicsMissing.length} relics, ${iconsMissing.length} icons and ${screensMissing.length} screens have no art.`)
 console.log('Name each image as shown (case, spaces and accents don’t matter), put it in your art folder and run npm run assets:import.')

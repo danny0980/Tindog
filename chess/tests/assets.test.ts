@@ -355,5 +355,8 @@ const moved = normalizePortraitFolder(mdir, catalog) as { moved: Array<{ to: str
 check('an icon left among the portraits moves to icons/', moved.moved[0]?.to === 'icons/boss-rush.png' && (listImages(mdir) as string[]).includes('icons/boss-rush.png') && !(listImages(join(mdir, 'portraits')) as string[]).includes('icon-boss-rush.png'))
 rmSync(mdir, { recursive: true, force: true })
 
+// Classic Chess opponents are characters too.
+check('Classic-only opponents are recognised by name', at('Hatshepsut.png')?.target === 'portraits/hatshepsut.png' && at('portraits of the past/Sargon of Akkad (1).png')?.target === 'portraits/sargon-of-akkad.png' && at('Bobby Fischer portrait.jpg')?.target === 'portraits/bobby-fischer.jpg')
+check('a surname shared by two characters files neither', at('franklin.png')?.target !== 'portraits/benjamin-franklin.png' && at('rosalind-franklin.png')?.target === 'portraits/rosalind-franklin.png')
 console.log(failures === 0 ? '\nAll art-pack checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

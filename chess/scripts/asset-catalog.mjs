@@ -1,5 +1,6 @@
-// The names the art importer recognises: every character (Chronos legends and
-// the 100 Grand Campaign bosses, read straight from the game's source files),
+// The names the art importer recognises: every character (Chronos legends, the
+// 100 Grand Campaign bosses and the 100 Classic Chess opponents, read straight
+// from the game's source files),
 // every built-in piece set and board theme, plus extra art-pack names.
 // Plain Node — no TypeScript needed — so it runs anywhere `npm` does.
 import { readFileSync, readdirSync } from 'node:fs'
@@ -80,7 +81,14 @@ export function loadCatalog(root) {
     rosters = []
   }
   for (const f of rosters) namesIn(readSafe(join(rosterDir, f))).forEach(addPerson)
+  // Classic Chess rows are tuples: ['id', 'Name', 'Title', …].
+  const classicSrc = readSafe(join(root, 'src', 'data', 'classic', 'roster.ts'))
+  for (const m of classicSrc.matchAll(/\[\s*'[a-z0-9-]+',\s*'((?:[^'\\]|\\.)+)',/g)) addPerson((m[1] ?? '').replace(/\\'/g, "'"))
   EXTRA_PEOPLE.forEach(addPerson)
+  // A one-word shortcut shared by two people ("franklin", "alexander") names neither: keep only full names for them.
+  const owners = new Map()
+  for (const p of people.values()) for (const v of p.variants) owners.set(v, (owners.get(v) ?? 0) + 1)
+  for (const p of people.values()) p.variants = p.variants.filter((v, i) => i === 0 || v.includes('-') || owners.get(v) === 1)
 
   // Relics: id and display name, so "relic-smoke-veil" and "Smoke Veil of Iga" both land on smoke-veil.
   const relicsSrc = readSafe(join(root, 'src', 'data', 'campaign', 'relics.ts'))

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // @ts-expect-error — plain .mjs helper shared with the Node scripts (no type declarations).
-import { buildManifest, classify, cleanPortraitName, imageSize, listImages, normalizePortraitFolder, pieceCode, portraitPerson, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
+import { buildManifest, classify, cleanPathArg, cleanPortraitName, planImport, imageSize, listImages, normalizePortraitFolder, pieceCode, portraitPerson, sheetGrid, slugify } from '../scripts/assets-lib.mjs'
 // @ts-expect-error — plain .mjs helper (no type declarations).
 import { decodePng, encodePng, sliceSheet } from '../scripts/sprite-slicer.mjs'
 // @ts-expect-error — plain .mjs helper (no type declarations).
@@ -317,6 +317,31 @@ writeFileSync(join(skipDir, 'chess', 'debug.png'), 'x')
 writeFileSync(join(skipDir, 'thor.png'), 'x')
 check('the game folder inside the art folder is not scanned', (listImages(skipDir, { skip: true, exclude: [join(skipDir, 'chess')] }) as string[]).join() === 'thor.png')
 rmSync(skipDir, { recursive: true, force: true })
+
+// ── Organised source folders (realm folders, icons/, relics/, arenas/) ─────
+const src = mkdtempSync(join(tmpdir(), 'chess app '))
+for (const d of ['Cosmic Pantheon', 'Ninjas & Shinobi', 'icons', 'relics', 'arenas', 'chess/src', 'Deep/Nested/Folder']) mkdirSync(join(src, d), { recursive: true })
+const tiny = (n: number) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 9, 0, 0, 0, 9]), Buffer.alloc(n)])
+const put = (rel: string, n = 10) => writeFileSync(join(src, rel), tiny(n))
+put('Cosmic Pantheon/The Infinite.png')
+put('Cosmic Pantheon/mystery-figure.png')
+put('Ninjas & Shinobi/Hattori Hanzo.PNG')
+put('icons/icon-boss-rush.png')
+put('relics/Smoke Veil of Iga.png')
+put('arenas/Volcano.png')
+put('Deep/Nested/Folder/Napoleon Bonaparte.jpg')
+put('chess/src/debug.png')
+put('chess/stray.png')
+type Plan = { plan: Map<string, { rel: string; hit: { kind: string; target: string; guessed?: boolean } }>; skipped: string[]; folders: Map<string, Record<string, number>> }
+const scanned = planImport(src, catalog, { exclude: [join(src, 'chess')] }) as Plan
+const targets = [...scanned.plan.keys()].sort()
+check('every subfolder is scanned, however deep', targets.includes('portraits/napoleon-bonaparte.jpg') && targets.includes('portraits/hattori-hanzo.png') && targets.includes('portraits/the-infinite.png'), targets.join(', '))
+check('asset-type folders route to their destinations', targets.includes('icons/boss-rush.png') && targets.includes('relics/smoke-veil.png') && targets.includes('backgrounds/arena-volcano.png'))
+check('an unknown name in a character folder is still imported as a portrait', scanned.plan.get('portraits/mystery-figure.png')?.hit.guessed === true)
+check('the game folder inside the art folder is skipped', !targets.some((t) => t.includes('debug') || t.includes('stray')))
+check('per-folder counts are reported', scanned.folders.get('Cosmic Pantheon')?.portrait === 2 && scanned.folders.get('relics')?.relic === 1)
+check('a Windows path with a trailing backslash-quote still works', cleanPathArg('C:\\Users\\Gladi\\chess app"') === 'C:\\Users\\Gladi\\chess app' && cleanPathArg('"/tmp/art/"') === '/tmp/art')
+rmSync(src, { recursive: true, force: true })
 
 console.log(failures === 0 ? '\nAll art-pack checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

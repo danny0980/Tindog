@@ -17,18 +17,18 @@
 // sheet, recognised by its silhouette and saved as pieces/<set>/wK.png … bP.png.
 // A "sheet" with no background to remove is really a board picture and is
 // imported as one.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadCatalog } from './asset-catalog.mjs'
-import { buildManifest, classify, imageSize, listImages, logPortraitReport, normalizePortraitFolder, slugify } from './assets-lib.mjs'
+import { buildManifest, cleanPathArg, logPortraitReport, normalizePortraitFolder, planImport, slugify } from './assets-lib.mjs'
 import { decodePng, encodePng, sliceSheet } from './sprite-slicer.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
 const source = args.find((a) => !a.startsWith('--'))
-const from = resolve(source ?? root)
+const from = resolve(source ? cleanPathArg(source) : root)
 if (!existsSync(from)) {
   console.error(`[assets] Folder not found: ${from}`)
   process.exit(1)
@@ -38,34 +38,21 @@ const catalog = loadCatalog(root)
 console.log(`[assets] Scanning ${from}`)
 console.log(`[assets] Recognises ${catalog.people.length} characters, ${catalog.pieceSets.length} piece sets, ${catalog.boardThemes.length} board themes\n`)
 
-/** Chosen source per destination: when two files map to the same place, the bigger (higher-quality) one wins. */
-const plan = new Map()
-const skipped = []
-// The app's own folders (src, public, node_modules …) are never scanned.
+// Every subfolder is scanned (realm folders, icons/, relics/, arenas/ …); the game's own
+// folder (when it sits inside the art folder, like chess app/chess) and its src, public,
+// node_modules … are never art.
+const scan = planImport(from, catalog, { exclude: from === resolve(root) ? [] : [root] })
+const { plan, skipped } = scan
 /** Files that could not be read or written; the import carries on without them. */
-const failedFiles = []
-// The game's own folder (when it sits inside the art folder, like chess app/chess) is never art.
-for (const rel of listImages(from, { skip: true, exclude: from === resolve(root) ? [] : [root] })) {
-  const full = join(from, ...rel.split('/'))
-  let hit
-  let bytes
-  try {
-    hit = classify(rel, catalog, imageSize(full))
-    bytes = hit ? statSync(full).size : 0
-  } catch (err) {
-    failedFiles.push({ rel, reason: err instanceof Error ? err.message : String(err) })
-    continue
+const failedFiles = [...scan.failed]
+for (const [target, kept] of scan.clashes) console.warn(`[assets] two files for ${target}: keeping "${kept}" (the larger)`)
+if (scan.folders.size > 0) {
+  console.log('[assets] Found, by folder:')
+  for (const [folder, counts] of [...scan.folders.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const parts = Object.entries(counts).map(([kind, n]) => `${n} ${kind === 'unknown' ? 'not recognised' : kind}${n > 1 && kind !== 'unknown' ? 's' : ''}`)
+    console.log(`  ${(folder === '.' ? '(top folder)' : folder).padEnd(34)} ${parts.join(', ')}`)
   }
-  if (!hit) {
-    skipped.push(rel)
-    continue
-  }
-  const prev = plan.get(hit.target)
-  if (prev) {
-    const keep = bytes > prev.bytes ? { rel, full, hit, bytes } : prev
-    console.warn(`[assets] two files for ${hit.target}: keeping "${keep.rel}" (the larger)`)
-    plan.set(hit.target, keep)
-  } else plan.set(hit.target, { rel, full, hit, bytes })
+  console.log('')
 }
 
 /** The board theme a misnamed "sheet" belongs to: "Obsidian Lava.png" → obsidian-lava. */
@@ -175,7 +162,7 @@ async function importOne(rel, full, hit, bytes) {
     write(target, encodePng(keyed))
     report.push({ set: hit.set, rel, ok: false, note: result.error, files: { sheet: target } })
     return
-  } else console.log(`  ${hit.kind.padEnd(8)} ${rel}  →  public/assets/${hit.target}${big}`)
+  } else console.log(`  ${hit.kind.padEnd(8)} ${rel}  →  public/assets/${hit.target}${big}${hit.guessed ? '  (no character by this name — see npm run assets:audit)' : ''}`)
   counts[hit.kind] += 1
   if (!dryRun) {
     const dest = join(assetsDir, ...hit.target.split('/'))

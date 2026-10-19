@@ -3,16 +3,18 @@
 // exactly the matching the game uses at runtime — plus files the game can't
 // place anywhere (characters / relics that aren't in the game).
 //
-//   npm run assets:missing
+//   npm run assets:missing                       (what the game has now: public/assets)
+//   npm run assets:missing -- "C:\\path\\to\\chess app"  (preview a source folder, all subfolders, before importing)
 //
 // Reads public/assets/portraits. Files copied there by hand are first renamed
 // to the name the game looks for (any case, spaces, "(1)", "portrait of" …),
 // and portraits that match no character are listed so they can be renamed.
 // @ts-expect-error — plain .mjs helper shared with the Node scripts (no type declarations).
-import { buildManifest, logPortraitReport, normalizePortraitFolder } from './assets-lib.mjs'
+import { buildManifest, cleanPathArg, logPortraitReport, normalizePortraitFolder, planImport } from './assets-lib.mjs'
 // @ts-expect-error — plain .mjs helper (no type declarations).
 import { loadCatalog } from './asset-catalog.mjs'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { type ArtManifest, type BackgroundSlot, EMPTY_MANIFEST, ICON_SLOTS, ICON_SLOT_IDS, backgroundsFor, iconFor, portraitFor, relicArtFor, sanitizeManifest, slugify } from '../src/assets/artManifest'
 import { RELICS } from '../src/data/campaign/relics'
 import { GRAND_REALMS } from '../src/data/campaign/realms'
@@ -26,20 +28,56 @@ import type { Boss, GrandRealmId } from '../src/types/campaign'
 
 const ROSTERS: Record<GrandRealmId, readonly Boss[]> = { chronicle, mythic, discovery, cyber, cosmic }
 
-const assetsDir = join(process.cwd(), 'public', 'assets')
-const tidy = normalizePortraitFolder(assetsDir, loadCatalog(process.cwd())) as { renamed: unknown[]; duplicates: unknown[]; unnamed: string[] }
-if (tidy.renamed.length + tidy.duplicates.length > 0) {
-  console.log('Tidied public/assets/portraits:')
-  logPortraitReport({ ...tidy, unnamed: [] })
+const root = process.cwd()
+const assetsDir = join(root, 'public', 'assets')
+const catalog = loadCatalog(root)
+const sourceArg = process.argv.slice(2).find((a) => !a.startsWith('--'))
+type Tidy = { renamed: unknown[]; duplicates: unknown[]; unnamed: string[] }
+let tidy: Tidy = { renamed: [], duplicates: [], unnamed: [] }
+let raw: Partial<ArtManifest>
+if (sourceArg) {
+  // Preview a source folder: every subfolder is classified exactly as assets:import would, nothing is copied.
+  const from = resolve(cleanPathArg(sourceArg))
+  if (!existsSync(from)) {
+    console.error(`Folder not found: ${from}`)
+    process.exit(1)
+  }
+  const scan = planImport(from, catalog, { exclude: from === resolve(root) ? [] : [root] }) as {
+    plan: Map<string, { rel: string; hit: { kind: string; key?: string; target: string } }>
+    skipped: string[]
+    folders: Map<string, Record<string, number>>
+  }
+  console.log(`Previewing ${from} (all subfolders; nothing is copied — run npm run assets:import to import)\n`)
+  for (const [folder, counts] of [...scan.folders.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`  ${(folder === '.' ? '(top folder)' : folder).padEnd(34)} ${Object.entries(counts).map(([k, n]) => `${n} ${k === 'unknown' ? 'not recognised' : k}`).join(', ')}`)
+  }
+  if (scan.skipped.length > 0) {
+    console.log(`\nNot recognised (${scan.skipped.length}) — rename after a character, relic or icon:`)
+    for (const rel of scan.skipped) console.log(`  ? ${rel}`)
+  }
   console.log('')
+  const fields: Record<string, Record<string, string>> = { portrait: {}, relic: {}, icon: {}, background: {} }
+  for (const { hit } of scan.plan.values()) {
+    const field = fields[hit.kind]
+    if (field) field[hit.target.split('/').pop()?.replace(/\.[a-z0-9]+$/i, '') ?? ''] = hit.target
+  }
+  raw = { portraits: fields.portrait, relics: fields.relic, icons: fields.icon, backgrounds: fields.background }
+} else {
+  tidy = normalizePortraitFolder(assetsDir, catalog) as Tidy
+  if (tidy.renamed.length + tidy.duplicates.length > 0) {
+    console.log('Tidied public/assets/portraits:')
+    logPortraitReport({ ...tidy, unnamed: [] })
+    console.log('')
+  }
+  raw = buildManifest(assetsDir) as Partial<ArtManifest>
 }
 // Exactly what the game will see: the manifest after the runtime's own safety checks.
-const manifest: ArtManifest = sanitizeManifest({ ...EMPTY_MANIFEST, ...(buildManifest(assetsDir) as Partial<ArtManifest>) })
+const manifest: ArtManifest = sanitizeManifest({ ...EMPTY_MANIFEST, ...raw })
 const portraitCount = Object.keys(manifest.portraits).length
 
 let missingTotal = 0
 let bossTotal = 0
-console.log(`Portraits found in public/assets/portraits: ${portraitCount}\n`)
+console.log(`Portraits found${sourceArg ? ' in the folder' : ' in public/assets/portraits'}: ${portraitCount}\n`)
 console.log('GRAND CAMPAIGN BOSSES WITHOUT A PORTRAIT')
 console.log('(id · name · file name that would match)\n')
 for (const realm of GRAND_REALMS) {

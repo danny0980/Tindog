@@ -460,3 +460,72 @@ export function buildManifest(assetsDir) {
   }
   return manifest
 }
+
+// ── Planning an import ──────────────────────────────────────────────────────
+
+/** A folder path argument as typed on Windows: `"C:\art\"` arrives as `C:\art"` — strip stray quotes and trailing slashes. */
+export function cleanPathArg(arg) {
+  return String(arg).trim().replace(/^["']+|["']+$/g, '').replace(/[\\/]+$/, '') || String(arg)
+}
+
+/**
+ * Scans `from` recursively (every subfolder: realm folders, icons/, relics/,
+ * arenas/ …) and decides where each image goes. `exclude` lists absolute
+ * folders never to scan (the game's own folder). Returns:
+ *   plan     Map target → { rel, full, hit, bytes } (the larger file wins a clash)
+ *   skipped  images it could not place
+ *   failed   images it could not read
+ *   clashes  [target, kept rel, dropped rel]
+ *   folders  per-folder counts by kind (and 'unknown')
+ */
+export function planImport(from, catalog, { exclude = [] } = {}) {
+  const plan = new Map()
+  const skipped = []
+  const failed = []
+  const clashes = []
+  const entries = []
+  for (const rel of listImages(from, { skip: true, exclude })) {
+    const full = join(from, ...rel.split('/'))
+    try {
+      const hit = classify(rel, catalog, imageSize(full))
+      entries.push({ rel, full, hit, bytes: hit ? statSync(full).size : 0 })
+    } catch (err) {
+      failed.push({ rel, reason: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  // A folder that holds recognised portraits is a character folder: its other images are portraits too
+  // (imported under their cleaned-up name, and flagged by the audit if no character matches).
+  const folderOf = (rel) => rel.split('/').slice(0, -1).join('/')
+  const characterFolders = new Set(entries.filter((e) => e.hit?.kind === 'portrait' && folderOf(e.rel)).map((e) => folderOf(e.rel)))
+  for (const e of entries) {
+    if (e.hit || !characterFolders.has(folderOf(e.rel))) continue
+    const file = e.rel.split('/').pop() ?? ''
+    const key = cleanPortraitName(file.replace(/\.[a-z0-9]+$/i, ''))
+    if (!key) continue
+    e.hit = { kind: 'portrait', key, target: `portraits/${key}${extname(file).toLowerCase()}`, guessed: true }
+    try {
+      e.bytes = statSync(e.full).size
+    } catch {
+      e.bytes = 0
+    }
+  }
+  const folders = new Map()
+  for (const e of entries) {
+    const folder = folderOf(e.rel) || '.'
+    const counts = folders.get(folder) ?? {}
+    const kind = e.hit ? e.hit.kind : 'unknown'
+    counts[kind] = (counts[kind] ?? 0) + 1
+    folders.set(folder, counts)
+    if (!e.hit) {
+      skipped.push(e.rel)
+      continue
+    }
+    const prev = plan.get(e.hit.target)
+    if (prev) {
+      const keep = e.bytes > prev.bytes ? e : prev
+      clashes.push([e.hit.target, keep.rel, keep === e ? prev.rel : e.rel])
+      plan.set(e.hit.target, keep)
+    } else plan.set(e.hit.target, e)
+  }
+  return { plan, skipped, failed, clashes, folders }
+}

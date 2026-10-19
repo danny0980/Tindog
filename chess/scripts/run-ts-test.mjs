@@ -20,7 +20,8 @@ try {
     output: { file, format: 'esm', codeSplitting: false },
     logLevel: 'warn',
   })
-  const run = spawnSync(process.execPath, [file], { stdio: 'inherit' })
+  // Extra arguments go through to the script (e.g. a folder for assets:missing).
+  const run = spawnSync(process.execPath, [file, ...process.argv.slice(3)], { stdio: 'inherit' })
   process.exitCode = run.status ?? 1
 } finally {
   rmSync(dir, { recursive: true, force: true })

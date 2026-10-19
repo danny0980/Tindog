@@ -11,7 +11,7 @@ interface BottomNavProps {
 export function BottomNav({ view, onNavigate, badges }: BottomNavProps) {
   return (
     <nav
-      className="vt-static-nav glass-strong fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-white/10 pb-[max(0.25rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] short:top-0 short:right-auto short:w-[calc(5rem+env(safe-area-inset-left))] short:grid-cols-1 short:content-center short:gap-1 short:border-t-0 short:border-r short:pr-0 short:pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="vt-static-nav glass-strong fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-white/10 pb-[max(0.25rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] short:top-0 short:right-auto short:w-[calc(5rem+env(safe-area-inset-left))] short:grid-cols-1 short:content-center short:gap-1 short:border-t-0 short:border-r short:pr-0 short:pb-[env(safe-area-inset-bottom)] lg:hidden"
       aria-label="Main"
     >
       {NAV_ITEMS.filter((item) => item.mobile).map(({ id, label, icon: Icon }) => {

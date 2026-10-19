@@ -35,6 +35,10 @@ export interface AppSettings {
   battleMutators: boolean
   /** A Classic Chess character used as your avatar (null = none). */
   classicAvatar: string | null
+  /** The name other players see online ('' = ask). */
+  onlineName: string
+  /** Preferred clock for online rooms you create (a TIME_CONTROLS id from online/protocol). */
+  onlineTimeControl: string
   /** Art-pack player avatar (null = the default icon). */
   playerAvatar: string | null
   // ── Audio mixer ──

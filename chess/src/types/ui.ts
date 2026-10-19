@@ -1,4 +1,4 @@
-export type AppView = 'play' | 'legends' | 'rush' | 'puzzles' | 'quests' | 'profile' | 'shop'
+export type AppView = 'play' | 'legends' | 'online' | 'rush' | 'puzzles' | 'quests' | 'profile' | 'shop'
 
 export type ToastKind = 'achievement' | 'opening' | 'coins' | 'quest' | 'info' | 'success' | 'warning'
 

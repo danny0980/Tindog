@@ -10,6 +10,7 @@ import type { AppSettings, HapticCategory, HapticIntensity, HapticSettings, Soun
 import { createPersistentStore } from '../utils/store'
 import { asRecord, bool, num, oneOf, str } from '../utils/validate'
 import { isArtId } from '../assets/artManifest'
+import { TIME_CONTROLS as ONLINE_TIME_CONTROLS, trimName } from '../online/protocol'
 
 export const HAPTIC_INTENSITIES: readonly HapticIntensity[] = ['off', 'light', 'medium', 'heavy']
 export const HAPTIC_CATEGORIES: readonly HapticCategory[] = ['pickup', 'move', 'capture', 'check', 'ui']
@@ -33,6 +34,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   artPieceScale: 1.15,
   battleLook: 'realm',
   classicAvatar: null,
+  onlineName: '',
+  onlineTimeControl: '10+0',
   arenaBackdrop: null,
   campaignTier: 'normal',
   battleMutators: false,
@@ -106,6 +109,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     artPieceScale: num(s.artPieceScale, d.artPieceScale, 0.8, 1.5),
     battleLook: oneOf(s.battleLook, ['realm', 'mine'], d.battleLook),
     classicAvatar: isClassicId(s.classicAvatar) ? s.classicAvatar : null,
+    onlineName: trimName(s.onlineName),
+    onlineTimeControl: oneOf(s.onlineTimeControl, ONLINE_TIME_CONTROLS.map((t) => t.id), d.onlineTimeControl),
     arenaBackdrop: isArtId(s.arenaBackdrop) ? s.arenaBackdrop : null,
     campaignTier: isTierId(s.campaignTier) ? s.campaignTier : d.campaignTier,
     battleMutators: bool(s.battleMutators, d.battleMutators),

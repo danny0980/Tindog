@@ -1,4 +1,4 @@
-# ♞ Chess Arena: AAA Edition (v6.6 · Chronos Chess — The Last Grain)
+# ♞ Chess Arena: AAA Edition (v6.7 · Chronos Chess — Online)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
@@ -7,6 +7,31 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 - Works offline once loaded, apart from the Google Fonts stylesheet.
 
 ---
+
+## What's new in 6.7: Online play, and Classic portraits that import
+
+### Play a friend online (the **Online** tab)
+- **Create a room.** Pick a clock (none, 3+2, 5+0, 10+0 or 15+10) and your colour, then tap *Create a room*. You get a six-letter code and an invite link (*Copy invite link*, or *Share* on phones).
+- **Join a room.** Type your friend's code, or just open their invite link. The link skips the startup film and goes straight into the game.
+- **Peer-to-peer, no server or account.** The two browsers connect directly over WebRTC. PeerJS's free public broker only introduces them; it also provides STUN/TURN for awkward networks. Moves never pass through a game server (`src/online/`).
+- **Fair by construction.**
+  - Both browsers run the full rules (chess.js) on every move.
+  - Everything received from the other side is validated: an illegal, out-of-turn or malformed message never reaches the board.
+  - The two boards resync from the host if they ever disagree.
+- **Clocks.** The clock starts with White's first move, and the increment is added after each move. Your own flag falls at zero. If your opponent's browser goes quiet past zero, you can claim after a short grace period. Timing out against a lone king is a draw.
+- **In the game.** You can offer a draw (accept or decline), resign with a confirmation, and ask for a rematch, which swaps colours.
+- **Drops and reloads.**
+  - A dropped connection reconnects by itself, and a heartbeat spots a silent link within about 12 s.
+  - A guest who reloads the page rejoins the same seat; a secret seat token stops anyone else with the code from taking it.
+  - A player gone for 90 s loses by abandonment.
+  - If the **host** closes their page, the room closes.
+- **What's shared.** Your opponent sees your online name (set in the lobby) and your rating. Online games don't change your rating or coins.
+- **Tests.** `npm run test:online` (36 checks) plays whole games between two sessions over an in-memory network with a fake clock: protocol validation, legality, clocks and increment, flags, draws, resignation, rematch, a third player turned away, drops, reconnects, heartbeat and abandonment. I also played real games between two browsers through the public broker.
+
+### Classic Chess portraits now import
+- **The importer knows Classic opponents.** Its catalog now includes the 100 Classic Chess opponents, so portraits of Classic-only characters (Sargon of Akkad, Hatshepsut, Socrates…) are recognised instead of skipped.
+- **The audit lists what's missing.** `npm run assets:missing` has a new section, *Classic Chess opponents without a portrait*, grouped by era, with the file name for each.
+- **No more misfiled portraits.** One-word shortcuts shared by two characters ("franklin", "alexander") no longer match either. Name such files in full (`benjamin-franklin.png`).
 
 ## What's new in 6.6: "The Last Grain", a 15-second WebGL opening film
 

@@ -5,7 +5,9 @@ import { settingsStore } from './settingsStore'
 export type IntroFilm = 'last-grain' | 'visual-evolution'
 
 /** Which intro is on screen, if any. "The Last Grain" opens by itself until it has been seen once. */
-export const introStore = createStore<IntroFilm | null>(settingsStore.get().introSeen ? null : 'last-grain')
+// Someone opening an invite link goes straight to their friend's game (the film can wait).
+const invited = typeof window !== 'undefined' && /[?&]room=/.test(window.location.search)
+export const introStore = createStore<IntroFilm | null>(settingsStore.get().introSeen || invited ? null : 'last-grain')
 
 export const openIntro = (film: IntroFilm = 'last-grain'): void => introStore.set(film)
 export const closeIntroOverlay = (): void => introStore.set(null)

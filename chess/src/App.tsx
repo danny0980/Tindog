@@ -31,6 +31,7 @@ import { loadArtManifest } from './assets/artManifest'
 import type { IntroExit } from './components/cinematic/CinematicIntro'
 import { navDirection, runViewTransition, supportsViewTransitions } from './utils/viewTransition'
 import { closeIntroOverlay, introStore, openIntro } from './stores/introStore'
+import { startupRoom } from './online/startup'
 
 // Secondary screens are code-split so the board loads first on slow mobile connections;
 // failed chunk downloads are retried and, failing that, caught by a view ErrorBoundary.
@@ -39,6 +40,7 @@ const ProfileView = lazyWithRetry(() => import('./views/ProfileView'), (m) => m.
 const ShopView = lazyWithRetry(() => import('./views/ShopView'), (m) => m.ShopView)
 const SettingsModal = lazyWithRetry(() => import('./components/modals/SettingsModal'), (m) => m.SettingsModal)
 const LegendsView = lazyWithRetry(() => import('./views/LegendsView'), (m) => m.LegendsView)
+const OnlineView = lazyWithRetry(() => import('./views/OnlineView'), (m) => m.OnlineView)
 const RushView = lazyWithRetry(() => import('./views/RushView'), (m) => m.RushView)
 const QuestsView = lazyWithRetry(() => import('./views/QuestsView'), (m) => m.QuestsView)
 // The cinematic intro (renderer, textures, score) is its own chunk, fetched only when it plays.
@@ -55,7 +57,9 @@ function ViewFallback() {
 }
 
 export default function App() {
-  const [view, setView] = useState<AppView>('play')
+  // An invite link (or a reload mid-game) opens the online room straight away.
+  const [inviteCode, setInviteCode] = useState(startupRoom)
+  const [view, setView] = useState<AppView>(() => (inviteCode ? 'online' : 'play'))
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   // First launch (or after this update) opens on the cinematic intro.
@@ -281,6 +285,16 @@ export default function App() {
           {view === 'puzzles' && <PuzzlesView />}
           {view === 'profile' && <ProfileView onReview={reviewMatch} />}
           {view === 'shop' && <ShopView onOpenLegends={() => navigate('legends')} />}
+          {view === 'online' && (
+            <OnlineView
+              inviteCode={inviteCode}
+              onInviteUsed={() => {
+                setInviteCode(null)
+                // Drop ?room= from the address bar; a reload rejoins from the remembered room instead.
+                if (window.location.search) window.history.replaceState(null, '', window.location.pathname + window.location.hash)
+              }}
+            />
+          )}
           </div>
         </Suspense>
         </ErrorBoundary>

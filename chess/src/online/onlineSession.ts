@@ -6,7 +6,9 @@ import { resolveMaterial, sfx } from '../audio'
 import { getBoardTheme } from '../constants/themes'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore } from '../stores/settingsStore'
+import { applyFeat } from '../stores/featActions'
 import { showToast } from '../stores/toastStore'
+import { recordOnlineResult } from '../utils/feats'
 import { replay, resultText } from './match'
 import { peerNetwork } from './peerNetwork'
 import { OnlineSession, type SessionView } from './session'
@@ -55,6 +57,7 @@ export function getOnlineSession(): OnlineSession {
       if (r.winner === null) sfx.draw()
       else if (r.winner === e.match.myColor) sfx.victory()
       else sfx.defeat()
+      applyFeat((p) => recordOnlineResult(p, r.winner === e.match.myColor))
       if (document.hidden || !onlineScreen.visible) showToast('info', 'Online game over', resultText(r, e.match.myColor))
     } else if (e.kind === 'opponent-joined' && !onlineScreen.visible) {
       showToast('success', 'Your friend joined', 'The game is on!')

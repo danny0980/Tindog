@@ -1,4 +1,4 @@
-# ♞ Chess Arena: AAA Edition (v6.7 · Chronos Chess — Online)
+# ♞ Chess Arena: AAA Edition (v6.8 · Chronos Chess — Learn & Play)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
@@ -7,6 +7,57 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 - Works offline once loaded, apart from the Google Fonts stylesheet.
 
 ---
+
+## What's new in 6.8: history lessons, character voices, variants and the Opening School
+
+### History behind every Classic opponent (`src/data/classic/lore/`)
+- **Lore for all 100 Classic Chess opponents.** Each has their dates, a short biography, three checkable facts, and their own lines for when they beat you or you beat them.
+- **Accuracy rules.**
+  - Legends are labelled as legends ("according to tradition", "Plutarch reports").
+  - Disputed claims are left out.
+  - Several facts bust myths, for example Napoleon's height, Einstein's maths and Washington's teeth.
+  - The end-of-game lines are written as game dialogue and are never presented as quotations.
+- **In the game.** The Classic dossier shows the story and a *Did you know?* list. Every Classic game ends with a *History lesson*: one of the opponent's facts, a different one each game.
+
+### Character voices (Settings → Audio → Character voices)
+- **What's read aloud.** Characters read their lines aloud with your device's built-in speech, with no downloads. Choose *Off*, *Key moments* (greetings, results and big reactions; the default) or *Every line*.
+- **A voice for each character.** Each character keeps a voice of their own. The register matches who they are (female, male, or a flat synthetic voice for machines and AIs), with a personal pitch and pace, and the mood colours the delivery.
+- **Hearing a sample.** Use *Hear a sample* in Settings, or *Hear Bobby* (or whoever) in the Classic dossier.
+
+### Coaching in the game review
+The Stockfish review was already there: badges from brilliant to blunder, accuracy, the evaluation graph and key moments. Stepping through a reviewed game now shows a **move-insight card** for the move on the board:
+- the evaluation before → after, from the mover's side;
+- how much winning chance the move cost;
+- the better move, also shown as the green arrow;
+- a coaching tip for that kind of moment.
+
+### Chess variants (Legends → *Chess Variants*)
+- **Chess960 (Fischer Random).**
+  - All 960 start positions, with the standard numbering (#518 is the normal setup). Pick a number or play a random one.
+  - Full Chess960 castling: move your king onto the rook.
+  - The engine plays in Stockfish's own Chess960 mode.
+- **King of the Hill.** Reach d4, e4, d5 or e5 with your king to win; the hill squares glow.
+- **Three-Check.** Give three checks to win; a counter shows each side's checks.
+- **The computer, at three levels.** For King of the Hill and Three-Check, the computer weighs Stockfish's candidate moves against the variant's goals. It takes a variant win when there is one, never hands you one if anything else is possible, and reaches for cheap checks in Three-Check.
+- **Built on its own rules engine.** The rules are a pure, tested `VariantGame` (`src/variants/`) layered over chess.js, with its own repetition tracking.
+
+### The Opening School (Legends → *Opening School*)
+- **Eleven interactive lessons.** Italian, Ruy Lopez, King's Gambit, Queen's Gambit Declined, London, English, Sicilian Najdorf, French, Caro-Kann, King's Indian and Scandinavian. Each is guided by a Classic chess master.
+- **How a lesson runs.**
+  - You play your side and every move is explained.
+  - A wrong move gets a hint; a second wrong move shows the answer with an arrow.
+  - Each lesson ends with three key ideas.
+  - With voices on, the master reads the explanations aloud.
+
+### Portrait reactions and new achievements
+- **Reaction pops.** Portraits already changed ring and badge with the mood. Now a short reaction pops above them when the game turns: *Check!*, *Ha!*, *Oh no…*, *Hurry!*, *Victory!*. It is hidden with reduced motion or Battery Saver.
+- **Eight new achievements.** Fischer Random, King of the Hill, Triple Threat, Variant Virtuoso, Globetrotter, On the World Stage, Opening Student and Opening Scholar.
+
+### Tests
+- `npm run test:lore` (21 checks)
+- `npm run test:variants` (24 checks)
+- `npm run test:openings` (23 checks, replaying every lesson line through chess.js)
+- A browser run covered the hub, King of the Hill and Chess960 against the engine, a full lesson and the dossier.
 
 ## What's new in 6.7: Online play, and Classic portraits that import
 

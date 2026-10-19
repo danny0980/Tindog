@@ -12,6 +12,30 @@
   --animate-hologram: hologram 1.4s ease-out both;
   --animate-spin-slow: spin 8s linear infinite;
   --animate-tension: tension 0.9s ease-in-out infinite;
+  --animate-reaction: reaction 1.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+
+  /* A portrait's reaction bubble: pops up, holds, drifts away. */
+  @keyframes reaction {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 6px) scale(0.6);
+    }
+    14% {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1.08);
+    }
+    24% {
+      transform: translate(-50%, 0) scale(1);
+    }
+    78% {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -10px) scale(0.96);
+    }
+  }
 
   @keyframes fade-in {
     from {
@@ -521,4 +545,14 @@ html[data-vt='zoom']::view-transition-new(root) {
   ::view-transition-new(root) {
     animation: none;
   }
+}
+
+/* Reaction pops are pure decoration: no motion, no pop (the mood badge still shows the mood). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-reaction {
+    display: none;
+  }
+}
+.battery-saver .animate-reaction {
+  display: none;
 }

@@ -145,6 +145,15 @@ export interface FeatCounters {
   sacrifices: number
   trapsSprung: number
   killCams: number
+  /** Chess variants won (any level), by variant. */
+  wins960: number
+  kothWins: number
+  threeCheckWins: number
+  /** Online games finished, and won. */
+  onlineGames: number
+  onlineWins: number
+  /** Opening School lessons completed (ids, so a lesson counts once). */
+  lessonsDone: string[]
 }
 
 // ── Titles & trophies ────────────────────────────────────────────────────────

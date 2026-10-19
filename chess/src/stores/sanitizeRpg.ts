@@ -137,6 +137,12 @@ export function sanitizeFeats(raw: unknown): FeatCounters {
     sacrifices: count(r.sacrifices),
     trapsSprung: count(r.trapsSprung),
     killCams: count(r.killCams),
+    wins960: count(r.wins960),
+    kothWins: count(r.kothWins),
+    threeCheckWins: count(r.threeCheckWins),
+    onlineGames: count(r.onlineGames),
+    onlineWins: count(r.onlineWins),
+    lessonsDone: Array.isArray(r.lessonsDone) ? [...new Set(r.lessonsDone.filter((x): x is string => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, 200) : [],
   }
 }
 

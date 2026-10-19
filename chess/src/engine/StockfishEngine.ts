@@ -136,7 +136,8 @@ export class StockfishEngine {
 
     const changedPv = this.setOption('MultiPV', String(options.multiPv ?? 1))
     const changedSkill = this.setOption('Skill Level', String(options.skillLevel ?? 20))
-    if (changedPv || changedSkill) await this.isReady()
+    const changed960 = this.setOption('UCI_Chess960', options.chess960 ? 'true' : 'false')
+    if (changedPv || changedSkill || changed960) await this.isReady()
 
     const lines = new Map<number, EngineLine>()
     const collector: LineListener = (line) => {

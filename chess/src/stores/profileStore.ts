@@ -52,7 +52,7 @@ export function createDefaultProfile(): PlayerProfile {
     notebook: { notes: '' },
     tournament: null,
     tournamentsWon: 0,
-    feats: { potionsDrunk: 0, eventsResolved: 0, bountiesCompleted: 0, sacrifices: 0, trapsSprung: 0, killCams: 0 },
+    feats: { potionsDrunk: 0, eventsResolved: 0, bountiesCompleted: 0, sacrifices: 0, trapsSprung: 0, killCams: 0, wins960: 0, kothWins: 0, threeCheckWins: 0, onlineGames: 0, onlineWins: 0, lessonsDone: [] },
   }
 }
 

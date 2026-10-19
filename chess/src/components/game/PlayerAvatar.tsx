@@ -29,7 +29,17 @@ interface PlayerAvatarProps {
   portrait?: { spec: PortraitSpec; label: string } | null
 }
 
-/** Avatar that reacts to the game: tension pulses, advantage grins, defeat greys out. */
+/** The moments worth a visible reaction (a short pop above the portrait), and what it says. */
+const REACTIONS: Partial<Record<Mood, string>> = {
+  check: 'Check!',
+  dominating: 'Ha!',
+  desperate: 'Oh no…',
+  tense: 'Hurry!',
+  victory: 'Victory!',
+  defeat: 'Defeated',
+}
+
+/** Avatar that reacts to the game: tension pulses, advantage grins, defeat greys out — and a pop when the mood turns. */
 export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }: PlayerAvatarProps) {
   const m = MOODS[mood]
   // Your art-pack avatar (Settings → Art pack), for human players.
@@ -65,6 +75,17 @@ export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }:
         <MoodIcon className="size-3" />
       </span>
       {isTurn && <span className="absolute -top-1 -left-1 size-3 animate-pulse-soft rounded-full bg-accent ring-2 ring-ink-900" aria-hidden="true" />}
+      {REACTIONS[mood] && (
+        // Keyed by mood, so each new reaction replays the pop once, then fades away.
+        <span
+          key={mood}
+          className={`pointer-events-none absolute -top-7 left-1/2 z-10 animate-reaction whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider shadow-lg ${m.badge}`}
+          aria-hidden="true"
+          data-reaction={mood}
+        >
+          {REACTIONS[mood]}
+        </span>
+      )}
     </div>
   )
 }

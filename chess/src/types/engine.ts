@@ -16,6 +16,8 @@ export interface SearchOptions {
   skillLevel?: number
   /** Restrict the search to these UCI moves (arena rules: traps, weather). */
   searchMoves?: readonly string[]
+  /** Chess960 rules: Shredder-FEN castling in, king-takes-rook castles out. */
+  chess960?: boolean
 }
 
 export interface SearchResult {
@@ -39,7 +41,7 @@ export interface DifficultyConfig {
   elo: number
 }
 
-export type EngineRole = 'play' | 'analysis'
+export type EngineRole = 'play' | 'analysis' | 'variant'
 
 export type EngineStatus = 'idle' | 'loading' | 'ready' | 'error'
 

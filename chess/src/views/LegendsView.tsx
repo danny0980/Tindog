@@ -1,4 +1,4 @@
-import { ArrowLeft, Crown, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Swords, Trophy, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Crown, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
@@ -23,6 +23,8 @@ import type { TournamentEntrant } from '../types/rpg'
 import { ArtIcon } from '../components/ui/ArtIcon'
 import { type IconSlot, artStore, iconFor } from '../assets/artManifest'
 import { ClassicView } from '../components/classic/ClassicView'
+import { OpeningSchool } from '../components/openings/OpeningSchool'
+import { VariantsView } from '../components/variants/VariantsView'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
 const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
@@ -53,6 +55,8 @@ const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: ty
   gauntlet: { title: 'ENDLESS GAUNTLET', subtitle: 'Back-to-back bosses on one clock — how far can you go?', icon: InfinityIcon, slot: 'gauntlet' },
   classic: { title: 'CLASSIC CHESS', subtitle: '100 historical opponents · pure chess, no spells or special rules', icon: Crown, slot: 'classic' },
   grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon, slot: 'grand-campaign' },
+  variants: { title: 'CHESS VARIANTS', subtitle: 'Chess960, King of the Hill and Three-Check against the computer', icon: Shuffle, slot: 'classic' },
+  openings: { title: 'OPENING SCHOOL', subtitle: 'Learn the main openings move by move, taught by the masters', icon: GraduationCap, slot: 'classic' },
 }
 
 /** Chronos Chess hub: universe selector → campaign map + dossier, or free play. */
@@ -161,6 +165,10 @@ export function LegendsView({ onChallenge, onChallengeClassic, onChallengeBoss, 
       )}
 
       {screen === 'classic' && <ClassicView onPlay={onChallengeClassic} />}
+
+      {screen === 'variants' && <VariantsView />}
+
+      {screen === 'openings' && <OpeningSchool />}
 
       {screen === 'freeplay' && <FreePlayPanel defeated={progress.defeated} selected={freeSelected} onSelect={setFreeSelected} onStart={onChallenge} />}
     </div>

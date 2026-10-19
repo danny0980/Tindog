@@ -60,6 +60,15 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'trapper', title: 'Trapper', description: 'Catch three enemy pieces in glue traps.', icon: 'wand', reward: 120, tier: 'silver' },
   { id: 'tournament-victor', title: 'Tournament Victor', description: 'Win a daily Chronos tournament.', icon: 'trophy', reward: 300, tier: 'gold' },
   { id: 'flawless-conqueror', title: 'Flawless Conqueror', description: 'Earn all 300 stars of the Grand Campaign.', icon: 'crown', reward: 2000, tier: 'platinum' },
+  // ── Variants, online & the Opening School ──
+  { id: 'fischer-random', title: 'Fischer Random', description: 'Win a game of Chess960.', icon: 'gem', reward: 60, tier: 'bronze' },
+  { id: 'king-of-the-hill', title: 'King of the Hill', description: 'Win by marching your king to the centre.', icon: 'crown', reward: 80, tier: 'silver' },
+  { id: 'triple-threat', title: 'Triple Threat', description: 'Win Three-Check by giving three checks.', icon: 'target', reward: 80, tier: 'silver' },
+  { id: 'variant-virtuoso', title: 'Variant Virtuoso', description: 'Win Chess960, King of the Hill and Three-Check.', icon: 'trophy', reward: 200, tier: 'gold' },
+  { id: 'globetrotter', title: 'Globetrotter', description: 'Finish an online game against a friend.', icon: 'globe', reward: 40, tier: 'bronze' },
+  { id: 'world-stage', title: 'On the World Stage', description: 'Win five online games.', icon: 'globe', reward: 200, tier: 'gold' },
+  { id: 'opening-student', title: 'Opening Student', description: 'Complete three Opening School lessons.', icon: 'scroll', reward: 50, tier: 'bronze' },
+  { id: 'opening-scholar', title: 'Opening Scholar', description: 'Complete every Opening School lesson.', icon: 'scroll', reward: 300, tier: 'gold' },
 ]
 
 export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

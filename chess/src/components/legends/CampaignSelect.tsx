@@ -1,4 +1,7 @@
-import { ChevronRight, Clapperboard, Hourglass, Swords, WandSparkles } from 'lucide-react'
+import { ChevronRight, Clapperboard, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
+import { useStore } from '../../hooks/useStore'
+import { LESSONS } from '../../openings/lessons'
+import { profileStore } from '../../stores/profileStore'
 import { openIntro } from '../../stores/introStore'
 import type { ReactNode } from 'react'
 import { CAMPAIGNS, LEGENDS, campaignLegends, isCampaignComplete, isLegendUnlocked, nextChapter } from '../../data/legends'
@@ -34,9 +37,28 @@ const STYLE: Record<CampaignId, { icon: ReactNode; gradient: string; glow: strin
 /** Universe switcher: pick a campaign path or jump into free play. */
 export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectProps) {
   const unlockedCount = LEGENDS.filter((l) => defeated[l.id]).length
+  const done = useStore(profileStore, (p) => p.feats.lessonsDone.length)
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <ClassicCard onOpen={() => onOpen('classic')} />
+      <PathTile
+        path="variants"
+        onOpen={() => onOpen('variants')}
+        icon={<Shuffle className="size-6" />}
+        kicker="New rules"
+        title="Chess Variants"
+        text="Chess960, King of the Hill and Three-Check"
+        glow="from-sky-300 via-indigo-500 to-violet-700"
+      />
+      <PathTile
+        path="openings"
+        onOpen={() => onOpen('openings')}
+        icon={<GraduationCap className="size-6" />}
+        kicker={`Learn · ${done}/${LESSONS.length} lessons`}
+        title="Opening School"
+        text="The main openings, move by move, taught by the masters"
+        glow="from-emerald-300 via-teal-500 to-cyan-700"
+      />
       <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-violet-200 lg:col-span-3" data-section="fantasy">
         Fantasy campaign modes · spells, relics &amp; arena rules
       </h2>
@@ -139,5 +161,26 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         </span>
       </button>
     </div>
+  )
+}
+
+/** A compact path tile on the hub (variants, Opening School). */
+function PathTile({ path, onOpen, icon, kicker, title, text, glow }: { path: string; onOpen: () => void; icon: ReactNode; kicker: string; title: string; text: string; glow: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-path={path}
+      className="glass group relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-left transition duration-300 hover:-translate-y-1 hover:border-white/25 lg:col-span-1"
+    >
+      <div className={`pointer-events-none absolute -right-14 -bottom-20 size-56 rounded-full bg-gradient-to-br ${glow} opacity-20 blur-3xl transition group-hover:opacity-35`} aria-hidden="true" />
+      <div className={`relative flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${glow} text-ink-950`}>{icon}</div>
+      <div className="relative min-w-0 flex-1">
+        <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">{kicker}</div>
+        <div className="font-display text-lg font-extrabold tracking-wide text-white">{title}</div>
+        <div className="text-xs text-slate-400">{text}</div>
+      </div>
+      <ChevronRight className="relative size-5 text-accent transition group-hover:translate-x-1" />
+    </button>
   )
 }

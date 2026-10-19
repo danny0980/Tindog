@@ -25,6 +25,7 @@
     "test:ultimate": "node scripts/run-ts-test.mjs tests/ultimate.test.ts",
     "test:cinematic": "node scripts/run-ts-test.mjs tests/cinematic.test.ts",
     "assets:import": "node scripts/import-assets.mjs",
+    "assets:missing": "node scripts/run-ts-test.mjs scripts/missing-portraits.ts",
     "assets:scan": "node scripts/scan-assets.mjs",
     "test:assets": "node scripts/run-ts-test.mjs tests/assets.test.ts",
     "test:vfx": "node scripts/run-ts-test.mjs tests/vfx.test.ts",

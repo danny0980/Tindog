@@ -68,8 +68,8 @@ export interface BoardPicker {
 }
 
 const PICK_STYLE: Record<BoardPicker['tone'], CSSProperties> = {
-  glue: { boxShadow: 'inset 0 0 0 3px rgba(251,191,36,0.9)', background: 'rgba(251,191,36,0.18)' },
-  altar: { boxShadow: 'inset 0 0 0 3px rgba(244,63,94,0.95)', background: 'rgba(244,63,94,0.22)' },
+  glue: { boxShadow: 'inset 0 0 0 3px rgba(251,191,36,0.9)', backgroundColor: 'rgba(251,191,36,0.18)' },
+  altar: { boxShadow: 'inset 0 0 0 3px rgba(244,63,94,0.95)', backgroundColor: 'rgba(244,63,94,0.22)' },
 }
 
 const SQUARE_PATTERN = /^[a-h][1-8]$/
@@ -123,7 +123,7 @@ export function ChessBoard({
   const frameStatus = useImagesStatus(frameUrl ? [frameUrl] : [])
   const boardSkin = useMemo(() => {
     if (!art) return { light: theme.lightSquare, dark: theme.darkSquare, board: undefined }
-    if (art.board) return { light: { background: 'transparent' }, dark: { background: 'transparent' }, board: `url("${assetUrl(art.board)}") center / 100% 100% no-repeat` }
+    if (art.board) return { light: { backgroundColor: 'transparent' }, dark: { backgroundColor: 'transparent' }, board: assetUrl(art.board) }
     const tile = (path: string | undefined): CSSProperties => (path ? { backgroundImage: `url("${assetUrl(path)}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {})
     return { light: tile(art.light), dark: tile(art.dark), board: undefined }
   }, [art, theme.darkSquare, theme.lightSquare])
@@ -231,7 +231,7 @@ export function ChessBoard({
     // Spell / tactic destinations: a violet rune ring, distinct from normal targets.
     specialFromSelected.forEach((square) =>
       add(square, {
-        background: 'radial-gradient(circle, transparent 40%, rgba(167,139,250,0.95) 44%, rgba(167,139,250,0.35) 56%, transparent 62%)',
+        backgroundImage: 'radial-gradient(circle, transparent 40%, rgba(167,139,250,0.95) 44%, rgba(167,139,250,0.35) 56%, transparent 62%)',
         boxShadow: 'inset 0 0 14px rgba(167,139,250,0.6)',
       }),
     )
@@ -316,7 +316,7 @@ export function ChessBoard({
       onSquareClick: handleSquareClick,
       onMouseOverSquare: ({ square }: SquareHandlerArgs) => setHoverSquare(isSquare(square) ? square : null),
       onMouseOutSquare: () => setHoverSquare(null),
-      boardStyle: { borderRadius: '0.75rem', overflow: pieceArt && artPieceScale > 1 ? 'visible' : 'hidden', ...(boardSkin.board ? { background: boardSkin.board } : {}) },
+      boardStyle: { borderRadius: '0.75rem', overflow: pieceArt && artPieceScale > 1 ? 'visible' : 'hidden', ...(boardSkin.board ? { backgroundImage: `url("${boardSkin.board}")`, backgroundPosition: 'center', backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat' } : {}) },
       lightSquareStyle: boardSkin.light,
       darkSquareStyle: boardSkin.dark,
       dropSquareStyle: h.hover,

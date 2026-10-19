@@ -1,9 +1,28 @@
+import type { CSSProperties } from 'react'
 import type { BoardTheme, BoardThemeId, PieceSet, PieceSetId } from '../types/theme'
 
 const glowRing = (color: string) => `inset 0 0 0 3px ${color}, inset 0 0 18px ${color}`
 
 /** Inline SVG as a CSS url() — lets themes carry engraved motifs without image assets. */
 const svg = (markup: string) => `url("data:image/svg+xml,${encodeURIComponent(markup)}")`
+
+/** One image layer of a square; a plain string paints like a bare `background` layer (auto size, top-left, repeating). */
+type Layer = string | { image: string; size: string; position?: string; repeat?: string }
+
+/**
+ * A square's surface as background longhands. Square and highlight styles are merged per square, so they
+ * must never use the `background` shorthand: React warns when it and `backgroundColor` / `backgroundImage` collide.
+ */
+const surface = (color: string, layers: Layer[]): CSSProperties => {
+  const all = layers.map((l) => (typeof l === 'string' ? { image: l, size: 'auto', position: '0 0', repeat: 'repeat' } : { position: 'center', repeat: 'no-repeat', ...l }))
+  return {
+    backgroundColor: color,
+    backgroundImage: all.map((l) => l.image).join(', '),
+    backgroundSize: all.map((l) => l.size).join(', '),
+    backgroundPosition: all.map((l) => l.position).join(', '),
+    backgroundRepeat: all.map((l) => l.repeat).join(', '),
+  }
+}
 
 /** Runic strokes (algiz, tiwaz, and an ingwaz-style diamond) carved faintly into each square. */
 const RUNES = (stroke: string) =>
@@ -45,12 +64,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     price: 0,
     material: 'wood',
     lightSquare: {
-      background:
-        'linear-gradient(115deg, rgba(255,255,255,0.10), rgba(0,0,0,0.04)), repeating-linear-gradient(97deg, rgba(120,72,30,0.07) 0 2px, transparent 2px 9px), #ecd3a8',
+      ...surface('#ecd3a8', ['linear-gradient(115deg, rgba(255,255,255,0.10), rgba(0,0,0,0.04))', 'repeating-linear-gradient(97deg, rgba(120,72,30,0.07) 0 2px, transparent 2px 9px)']),
     },
     darkSquare: {
-      background:
-        'linear-gradient(115deg, rgba(255,255,255,0.06), rgba(0,0,0,0.08)), repeating-linear-gradient(83deg, rgba(60,30,10,0.12) 0 2px, transparent 2px 8px), #a8744a',
+      ...surface('#a8744a', ['linear-gradient(115deg, rgba(255,255,255,0.06), rgba(0,0,0,0.08))', 'repeating-linear-gradient(83deg, rgba(60,30,10,0.12) 0 2px, transparent 2px 8px)']),
     },
     notationLight: '#9a6b42',
     notationDark: '#f3e1c2',
@@ -60,11 +77,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(255, 214, 102, 0.45)' },
       selected: { backgroundColor: 'rgba(255, 160, 50, 0.55)' },
-      target: { background: 'radial-gradient(circle, rgba(60, 30, 10, 0.42) 22%, transparent 24%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(60, 30, 10, 0.42) 22%, transparent 24%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 58%, rgba(60,30,10,0.45) 60%, rgba(60,30,10,0.45) 72%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 58%, rgba(60,30,10,0.45) 60%, rgba(60,30,10,0.45) 72%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.6) 38%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.6) 38%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(255, 245, 220, 0.75)' },
       hint: { boxShadow: glowRing('rgba(255, 196, 0, 0.9)') },
     },
@@ -90,11 +107,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(250, 204, 21, 0.38)' },
       selected: { backgroundColor: 'rgba(52, 211, 153, 0.55)' },
-      target: { background: 'radial-gradient(circle, rgba(15, 23, 42, 0.38) 22%, transparent 24%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(15, 23, 42, 0.38) 22%, transparent 24%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 58%, rgba(15,23,42,0.42) 60%, rgba(15,23,42,0.42) 72%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 58%, rgba(15,23,42,0.42) 60%, rgba(15,23,42,0.42) 72%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.65) 35%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.65) 35%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(255, 255, 255, 0.55)' },
       hint: { boxShadow: glowRing('rgba(52, 211, 153, 0.9)') },
     },
@@ -120,11 +137,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(56, 189, 248, 0.28)' },
       selected: { backgroundColor: 'rgba(56, 189, 248, 0.45)' },
-      target: { background: 'radial-gradient(circle, rgba(226, 232, 240, 0.55) 18%, transparent 21%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(226, 232, 240, 0.55) 18%, transparent 21%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 58%, rgba(226,232,240,0.5) 60%, rgba(226,232,240,0.5) 70%, transparent 73%)',
+        backgroundImage: 'radial-gradient(circle, transparent 58%, rgba(226,232,240,0.5) 60%, rgba(226,232,240,0.5) 70%, transparent 73%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.55) 38%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,64,64,0.95) 0%, rgba(239,68,68,0.55) 38%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(56, 189, 248, 0.85)' },
       hint: { boxShadow: glowRing('rgba(56, 189, 248, 0.9)') },
     },
@@ -142,12 +159,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     price: 200,
     material: 'marble',
     lightSquare: {
-      background:
-        'radial-gradient(ellipse at 25% 30%, rgba(255,255,255,0.75), transparent 60%), linear-gradient(135deg, transparent 44%, rgba(110,110,135,0.28) 49%, transparent 54%), linear-gradient(60deg, transparent 62%, rgba(140,140,160,0.18) 66%, transparent 70%), #dcdee6',
+      ...surface('#dcdee6', ['radial-gradient(ellipse at 25% 30%, rgba(255,255,255,0.75), transparent 60%)', 'linear-gradient(135deg, transparent 44%, rgba(110,110,135,0.28) 49%, transparent 54%)', 'linear-gradient(60deg, transparent 62%, rgba(140,140,160,0.18) 66%, transparent 70%)']),
     },
     darkSquare: {
-      background:
-        'linear-gradient(135deg, rgba(255,255,255,0.08), transparent 40%), linear-gradient(315deg, rgba(139,92,246,0.16), transparent 60%), #262833',
+      ...surface('#262833', ['linear-gradient(135deg, rgba(255,255,255,0.08), transparent 40%)', 'linear-gradient(315deg, rgba(139,92,246,0.16), transparent 60%)']),
     },
     notationLight: '#6b6f80',
     notationDark: '#c9cbe0',
@@ -157,11 +172,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(167, 139, 250, 0.42)' },
       selected: { backgroundColor: 'rgba(129, 140, 248, 0.6)' },
-      target: { background: 'radial-gradient(circle, rgba(167,139,250,0.75) 18%, rgba(167,139,250,0.25) 23%, transparent 26%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(167,139,250,0.75) 18%, rgba(167,139,250,0.25) 23%, transparent 26%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 58%, rgba(167,139,250,0.65) 60%, rgba(167,139,250,0.65) 70%, transparent 73%)',
+        backgroundImage: 'radial-gradient(circle, transparent 58%, rgba(167,139,250,0.65) 60%, rgba(167,139,250,0.65) 70%, transparent 73%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,64,96,0.95) 0%, rgba(225,29,72,0.6) 38%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,64,96,0.95) 0%, rgba(225,29,72,0.6) 38%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(196, 181, 253, 0.8)' },
       hint: { boxShadow: glowRing('rgba(196, 181, 253, 0.95)') },
     },
@@ -181,11 +196,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'cyber',
     material: 'synth',
     lightSquare: {
-      background: 'linear-gradient(135deg, rgba(240,171,252,0.10), transparent 60%), #2a1650',
+      ...surface('#2a1650', ['linear-gradient(135deg, rgba(240,171,252,0.10), transparent 60%)']),
       boxShadow: 'inset 0 0 0 1px rgba(240,171,252,0.22)',
     },
     darkSquare: {
-      background: 'linear-gradient(135deg, rgba(34,211,238,0.08), transparent 60%), #0f0820',
+      ...surface('#0f0820', ['linear-gradient(135deg, rgba(34,211,238,0.08), transparent 60%)']),
       boxShadow: 'inset 0 0 0 1px rgba(34,211,238,0.16)',
     },
     notationLight: '#f0abfc',
@@ -196,11 +211,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(240, 171, 252, 0.30)', boxShadow: 'inset 0 0 14px rgba(240,171,252,0.7)' },
       selected: { backgroundColor: 'rgba(34, 211, 238, 0.35)', boxShadow: 'inset 0 0 16px rgba(34,211,238,0.9)' },
-      target: { background: 'radial-gradient(circle, rgba(34,211,238,0.95) 14%, rgba(34,211,238,0.35) 20%, transparent 26%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(34,211,238,0.95) 14%, rgba(34,211,238,0.35) 20%, transparent 26%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 56%, rgba(240,171,252,0.9) 60%, rgba(240,171,252,0.4) 68%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 56%, rgba(240,171,252,0.9) 60%, rgba(240,171,252,0.4) 68%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,0,110,1) 0%, rgba(255,0,110,0.55) 40%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,0,110,1) 0%, rgba(255,0,110,0.55) 40%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(34,211,238,0.9), inset 0 0 20px rgba(34,211,238,0.6)' },
       hint: { boxShadow: glowRing('rgba(250, 204, 21, 0.95)') },
     },
@@ -219,11 +234,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     price: 750,
     material: 'metal',
     lightSquare: {
-      background:
-        'linear-gradient(135deg, rgba(255,255,255,0.45), transparent 35%, rgba(180,130,30,0.15) 70%, rgba(255,255,255,0.2)), #e9d49a',
+      ...surface('#e9d49a', ['linear-gradient(135deg, rgba(255,255,255,0.45), transparent 35%, rgba(180,130,30,0.15) 70%, rgba(255,255,255,0.2))']),
     },
     darkSquare: {
-      background: 'radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.10), transparent 60%), linear-gradient(160deg, #8a1c2c, #5c0f1b)',
+      ...surface('transparent', ['radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.10), transparent 60%)', 'linear-gradient(160deg, #8a1c2c, #5c0f1b)']),
     },
     notationLight: '#8a1c2c',
     notationDark: '#f5d77a',
@@ -234,11 +248,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(253, 224, 71, 0.45)' },
       selected: { backgroundColor: 'rgba(250, 204, 21, 0.6)', boxShadow: 'inset 0 0 14px rgba(255,255,255,0.6)' },
-      target: { background: 'radial-gradient(circle, rgba(250,204,21,0.9) 16%, rgba(161,98,7,0.4) 22%, transparent 25%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(250,204,21,0.9) 16%, rgba(161,98,7,0.4) 22%, transparent 25%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 57%, rgba(250,204,21,0.85) 60%, rgba(161,98,7,0.6) 70%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 57%, rgba(250,204,21,0.85) 60%, rgba(161,98,7,0.6) 70%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(239,68,68,0.75) 30%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(239,68,68,0.75) 30%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(253, 230, 138, 0.9)' },
       hint: { boxShadow: glowRing('rgba(253, 230, 138, 0.95)') },
     },
@@ -260,13 +274,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'ancient',
     material: 'marble',
     lightSquare: {
-      background:
-        'repeating-linear-gradient(0deg, rgba(120,84,30,0.10) 0 1px, transparent 1px 6px), repeating-linear-gradient(90deg, rgba(120,84,30,0.08) 0 1px, transparent 1px 9px), linear-gradient(135deg, #f1dfaf, #e2c98a)',
+      ...surface('transparent', ['repeating-linear-gradient(0deg, rgba(120,84,30,0.10) 0 1px, transparent 1px 6px)', 'repeating-linear-gradient(90deg, rgba(120,84,30,0.08) 0 1px, transparent 1px 9px)', 'linear-gradient(135deg, #f1dfaf, #e2c98a)']),
     },
     // Sienna sandstone (not lapis) so the lapis-blue pieces stand out on every square.
     darkSquare: {
-      background:
-        'radial-gradient(circle at 30% 30%, rgba(250,204,21,0.25) 0 1px, transparent 2px), radial-gradient(circle at 70% 65%, rgba(250,204,21,0.2) 0 1px, transparent 2px), linear-gradient(135deg, #a8743a, #7f5326)',
+      ...surface('transparent', ['radial-gradient(circle at 30% 30%, rgba(250,204,21,0.25) 0 1px, transparent 2px)', 'radial-gradient(circle at 70% 65%, rgba(250,204,21,0.2) 0 1px, transparent 2px)', 'linear-gradient(135deg, #a8743a, #7f5326)']),
     },
     notationLight: '#8a6420',
     notationDark: '#fde7a8',
@@ -276,11 +288,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(45, 212, 191, 0.38)' },
       selected: { backgroundColor: 'rgba(224, 176, 74, 0.6)' },
-      target: { background: 'radial-gradient(circle, rgba(224,176,74,0.95) 16%, rgba(120,84,30,0.35) 22%, transparent 25%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(224,176,74,0.95) 16%, rgba(120,84,30,0.35) 22%, transparent 25%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 57%, rgba(45,212,191,0.85) 60%, rgba(45,212,191,0.5) 70%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 57%, rgba(45,212,191,0.85) 60%, rgba(45,212,191,0.5) 70%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,38,38,0.75) 32%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,38,38,0.75) 32%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(45, 212, 191, 0.85)' },
       hint: { boxShadow: glowRing('rgba(224, 176, 74, 0.95)') },
     },
@@ -301,12 +313,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'baroque',
     material: 'wood',
     lightSquare: {
-      background:
-        'linear-gradient(rgba(191,219,254,0.18) 1px, transparent 1px) 0 0 / 25% 25%, linear-gradient(90deg, rgba(191,219,254,0.18) 1px, transparent 1px) 0 0 / 25% 25%, #2d5a94',
+      ...surface('#2d5a94', [{ image: 'linear-gradient(rgba(191,219,254,0.18) 1px, transparent 1px)', size: '25% 25%', position: '0 0', repeat: 'repeat' }, { image: 'linear-gradient(90deg, rgba(191,219,254,0.18) 1px, transparent 1px)', size: '25% 25%', position: '0 0', repeat: 'repeat' }]),
     },
     darkSquare: {
-      background:
-        'linear-gradient(rgba(191,219,254,0.12) 1px, transparent 1px) 0 0 / 25% 25%, linear-gradient(90deg, rgba(191,219,254,0.12) 1px, transparent 1px) 0 0 / 25% 25%, #1b3a66',
+      ...surface('#1b3a66', [{ image: 'linear-gradient(rgba(191,219,254,0.12) 1px, transparent 1px)', size: '25% 25%', position: '0 0', repeat: 'repeat' }, { image: 'linear-gradient(90deg, rgba(191,219,254,0.12) 1px, transparent 1px)', size: '25% 25%', position: '0 0', repeat: 'repeat' }]),
     },
     notationLight: '#dbeafe',
     notationDark: '#93c5fd',
@@ -316,11 +326,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(253, 230, 138, 0.28)', boxShadow: 'inset 0 0 0 2px rgba(253,230,138,0.6)' },
       selected: { backgroundColor: 'rgba(253, 230, 138, 0.4)' },
-      target: { background: 'radial-gradient(circle, transparent 16%, rgba(253,230,138,0.95) 18%, rgba(253,230,138,0.95) 22%, transparent 24%)' },
+      target: { backgroundImage: 'radial-gradient(circle, transparent 16%, rgba(253,230,138,0.95) 18%, rgba(253,230,138,0.95) 22%, transparent 24%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 60%, rgba(253,230,138,0.9) 62%, rgba(253,230,138,0.9) 66%, transparent 68%)',
+        backgroundImage: 'radial-gradient(circle, transparent 60%, rgba(253,230,138,0.9) 62%, rgba(253,230,138,0.9) 66%, transparent 68%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(248,113,113,0.7) 35%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(248,113,113,0.7) 35%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(253, 230, 138, 0.9)' },
       hint: { boxShadow: glowRing('rgba(253, 230, 138, 0.95)') },
     },
@@ -340,9 +350,9 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     legendUnlock: 'napoleon',
     musicTexture: 'imperial',
     material: 'metal',
-    lightSquare: { background: 'linear-gradient(135deg, rgba(255,255,255,0.4), transparent 45%), #efe4cc' },
+    lightSquare: surface('#efe4cc', ['linear-gradient(135deg, rgba(255,255,255,0.4), transparent 45%)']),
     darkSquare: {
-      background: 'radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.12), transparent 60%), linear-gradient(160deg, #24357a, #141f4d)',
+      ...surface('transparent', ['radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.12), transparent 60%)', 'linear-gradient(160deg, #24357a, #141f4d)']),
     },
     notationLight: '#24357a',
     notationDark: '#e8c766',
@@ -352,11 +362,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(212, 175, 55, 0.42)' },
       selected: { backgroundColor: 'rgba(212, 175, 55, 0.6)' },
-      target: { background: 'radial-gradient(circle, rgba(185,28,28,0.85) 16%, rgba(185,28,28,0.3) 22%, transparent 25%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(185,28,28,0.85) 16%, rgba(185,28,28,0.3) 22%, transparent 25%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 57%, rgba(185,28,28,0.85) 60%, rgba(185,28,28,0.55) 70%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 57%, rgba(185,28,28,0.85) 60%, rgba(185,28,28,0.55) 70%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(220,38,38,0.8) 30%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(220,38,38,0.8) 30%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(212, 175, 55, 0.9)' },
       hint: { boxShadow: glowRing('rgba(212, 175, 55, 0.95)') },
     },
@@ -377,10 +387,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'modern',
     material: 'soft',
     lightSquare: {
-      background: 'radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.10), transparent 70%), #4f6157',
+      ...surface('#4f6157', ['radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.10), transparent 70%)']),
     },
     darkSquare: {
-      background: 'radial-gradient(ellipse at 60% 70%, rgba(255,255,255,0.06), transparent 70%), #2c3a33',
+      ...surface('#2c3a33', ['radial-gradient(ellipse at 60% 70%, rgba(255,255,255,0.06), transparent 70%)']),
     },
     notationLight: '#f8fafc',
     notationDark: '#e2e8f0',
@@ -390,11 +400,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(254, 243, 199, 0.22)', boxShadow: 'inset 0 0 0 2px rgba(254,243,199,0.55)' },
       selected: { backgroundColor: 'rgba(147, 197, 253, 0.35)' },
-      target: { background: 'radial-gradient(circle, rgba(248,250,252,0.85) 15%, transparent 19%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(248,250,252,0.85) 15%, transparent 19%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 58%, rgba(248,250,252,0.75) 60%, rgba(248,250,252,0.75) 65%, transparent 68%)',
+        backgroundImage: 'radial-gradient(circle, transparent 58%, rgba(248,250,252,0.75) 60%, rgba(248,250,252,0.75) 65%, transparent 68%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(254,202,202,0.9) 0%, rgba(239,68,68,0.6) 35%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(254,202,202,0.9) 0%, rgba(239,68,68,0.6) 35%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(248, 250, 252, 0.8)' },
       hint: { boxShadow: glowRing('rgba(254, 243, 199, 0.95)') },
     },
@@ -416,10 +426,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'nordic',
     material: 'wood',
     lightSquare: {
-      background: `${RUNES('rgba(92,56,25,0.13)')} center / 62% no-repeat, repeating-linear-gradient(92deg, rgba(110,70,35,0.08) 0 2px, transparent 2px 8px), #d9c3a0`,
+      ...surface('#d9c3a0', [{ image: RUNES('rgba(92,56,25,0.13)'), size: '62%' }, 'repeating-linear-gradient(92deg, rgba(110,70,35,0.08) 0 2px, transparent 2px 8px)']),
     },
     darkSquare: {
-      background: `${RUNES('rgba(232,214,180,0.11)')} center / 62% no-repeat, repeating-linear-gradient(88deg, rgba(0,0,0,0.12) 0 2px, transparent 2px 7px), #5c3d24`,
+      ...surface('#5c3d24', [{ image: RUNES('rgba(232,214,180,0.11)'), size: '62%' }, 'repeating-linear-gradient(88deg, rgba(0,0,0,0.12) 0 2px, transparent 2px 7px)']),
     },
     notationLight: '#6b4423',
     notationDark: '#ead9bd',
@@ -430,11 +440,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(125, 211, 252, 0.32)' },
       selected: { backgroundColor: 'rgba(214, 185, 140, 0.6)' },
-      target: { background: 'radial-gradient(circle, rgba(30,20,10,0.5) 20%, transparent 23%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(30,20,10,0.5) 20%, transparent 23%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 57%, rgba(185,28,28,0.75) 60%, rgba(185,28,28,0.5) 70%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 57%, rgba(185,28,28,0.75) 60%, rgba(185,28,28,0.5) 70%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,38,38,0.8) 30%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,38,38,0.8) 30%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 4px rgba(125, 211, 252, 0.85)' },
       hint: { boxShadow: glowRing('rgba(125, 211, 252, 0.95)') },
     },
@@ -455,11 +465,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'japanese',
     material: 'wood',
     lightSquare: {
-      background: `${INK_STROKE} center / 100% no-repeat, repeating-linear-gradient(0deg, transparent 0 46%, rgba(120,110,40,0.22) 46% 50%, transparent 50% 100%), linear-gradient(90deg, #e7dfb2, #f1ead0 50%, #e2d8a6)`,
+      ...surface('transparent', [{ image: INK_STROKE, size: '100%' }, 'repeating-linear-gradient(0deg, transparent 0 46%, rgba(120,110,40,0.22) 46% 50%, transparent 50% 100%)', 'linear-gradient(90deg, #e7dfb2, #f1ead0 50%, #e2d8a6)']),
     },
     darkSquare: {
-      background:
-        'radial-gradient(circle at 25% 35%, rgba(212,167,44,0.55) 0 1.2px, transparent 2px), radial-gradient(circle at 70% 70%, rgba(212,167,44,0.45) 0 1px, transparent 2px), radial-gradient(circle at 60% 20%, rgba(212,167,44,0.35) 0 0.8px, transparent 1.5px), #1c1917',
+      ...surface('#1c1917', ['radial-gradient(circle at 25% 35%, rgba(212,167,44,0.55) 0 1.2px, transparent 2px)', 'radial-gradient(circle at 70% 70%, rgba(212,167,44,0.45) 0 1px, transparent 2px)', 'radial-gradient(circle at 60% 20%, rgba(212,167,44,0.35) 0 0.8px, transparent 1.5px)']),
     },
     notationLight: '#57534e',
     notationDark: '#d4a72c',
@@ -467,11 +476,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(212, 167, 44, 0.38)' },
       selected: { backgroundColor: 'rgba(239, 68, 68, 0.45)' },
-      target: { background: 'radial-gradient(circle, rgba(185,28,28,0.75) 15%, transparent 19%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(185,28,28,0.75) 15%, transparent 19%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 58%, rgba(185,28,28,0.8) 60%, rgba(185,28,28,0.8) 66%, transparent 69%)',
+        backgroundImage: 'radial-gradient(circle, transparent 58%, rgba(185,28,28,0.8) 60%, rgba(185,28,28,0.8) 66%, transparent 69%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(220,38,38,0.85) 30%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(220,38,38,0.85) 30%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(212, 167, 44, 0.9)' },
       hint: { boxShadow: glowRing('rgba(239, 68, 68, 0.9)') },
     },
@@ -493,11 +502,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'elven',
     material: 'crystal',
     lightSquare: {
-      background:
-        'conic-gradient(from 45deg at 50% 50%, rgba(255,255,255,0.35), rgba(186,230,253,0.15), rgba(255,255,255,0.35), rgba(196,181,253,0.2), rgba(255,255,255,0.35)), #c7e8e4',
+      ...surface('#c7e8e4', ['conic-gradient(from 45deg at 50% 50%, rgba(255,255,255,0.35), rgba(186,230,253,0.15), rgba(255,255,255,0.35), rgba(196,181,253,0.2), rgba(255,255,255,0.35))']),
     },
     darkSquare: {
-      background: `${LEAF} center / 85% no-repeat, radial-gradient(ellipse at 30% 25%, rgba(134,239,172,0.25), transparent 65%), linear-gradient(150deg, #0f766e, #134e4a)`,
+      ...surface('transparent', [{ image: LEAF, size: '85%' }, 'radial-gradient(ellipse at 30% 25%, rgba(134,239,172,0.25), transparent 65%)', 'linear-gradient(150deg, #0f766e, #134e4a)']),
     },
     notationLight: '#0f766e',
     notationDark: '#bbf7d0',
@@ -507,11 +515,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(196, 181, 253, 0.38)', boxShadow: 'inset 0 0 12px rgba(255,255,255,0.45)' },
       selected: { backgroundColor: 'rgba(134, 239, 172, 0.5)', boxShadow: 'inset 0 0 16px rgba(134,239,172,0.9)' },
-      target: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 12%, rgba(134,239,172,0.55) 19%, transparent 25%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 12%, rgba(134,239,172,0.55) 19%, transparent 25%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 57%, rgba(196,181,253,0.95) 60%, rgba(196,181,253,0.45) 68%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 57%, rgba(196,181,253,0.95) 60%, rgba(196,181,253,0.45) 68%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(244,63,94,0.7) 32%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(244,63,94,0.7) 32%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(134,239,172,0.9), inset 0 0 18px rgba(134,239,172,0.6)' },
       hint: { boxShadow: glowRing('rgba(196, 181, 253, 0.95)') },
     },
@@ -532,10 +540,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'shadow',
     material: 'ember',
     lightSquare: {
-      background: `${FISSURE} center / 100% no-repeat, radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.08), transparent 70%), #6b605c`,
+      ...surface('#6b605c', [{ image: FISSURE, size: '100%' }, 'radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.08), transparent 70%)']),
     },
     darkSquare: {
-      background: 'radial-gradient(ellipse at 50% 120%, rgba(249,115,22,0.35), transparent 60%), linear-gradient(140deg, #231d1f, #120d0f)',
+      ...surface('transparent', ['radial-gradient(ellipse at 50% 120%, rgba(249,115,22,0.35), transparent 60%)', 'linear-gradient(140deg, #231d1f, #120d0f)']),
     },
     notationLight: '#fdba74',
     notationDark: '#f97316',
@@ -545,11 +553,11 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(249, 115, 22, 0.32)', boxShadow: 'inset 0 0 14px rgba(249,115,22,0.6)' },
       selected: { backgroundColor: 'rgba(168, 85, 247, 0.45)', boxShadow: 'inset 0 0 16px rgba(168,85,247,0.8)' },
-      target: { background: 'radial-gradient(circle, rgba(253,186,116,0.95) 13%, rgba(249,115,22,0.45) 19%, transparent 25%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(253,186,116,0.95) 13%, rgba(249,115,22,0.45) 19%, transparent 25%)' },
       captureTarget: {
-        background: 'radial-gradient(circle, transparent 56%, rgba(249,115,22,0.95) 60%, rgba(220,38,38,0.5) 68%, transparent 74%)',
+        backgroundImage: 'radial-gradient(circle, transparent 56%, rgba(249,115,22,0.95) 60%, rgba(220,38,38,0.5) 68%, transparent 74%)',
       },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(168,85,247,0.85) 32%, transparent 75%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(168,85,247,0.85) 32%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(249,115,22,0.9), inset 0 0 18px rgba(249,115,22,0.6)' },
       hint: { boxShadow: glowRing('rgba(168, 85, 247, 0.95)') },
     },
@@ -570,10 +578,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'nautical',
     material: 'wood',
     lightSquare: {
-      background: `${SEA_CHART} center / 100% no-repeat, radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.25), transparent 70%), #e3cfa2`,
+      ...surface('#e3cfa2', [{ image: SEA_CHART, size: '100%' }, 'radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.25), transparent 70%)']),
     },
     darkSquare: {
-      background: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 12px), linear-gradient(160deg, #1f5f66, #123c45)',
+      ...surface('transparent', ['repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 12px)', 'linear-gradient(160deg, #1f5f66, #123c45)']),
     },
     notationLight: '#7c4a1e',
     notationDark: '#e3cfa2',
@@ -583,9 +591,9 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(250, 204, 21, 0.38)' },
       selected: { backgroundColor: 'rgba(45, 212, 191, 0.5)', boxShadow: 'inset 0 0 12px rgba(45,212,191,0.6)' },
-      target: { background: 'radial-gradient(circle, rgba(13,148,136,0.75) 15%, transparent 21%)' },
-      captureTarget: { background: 'radial-gradient(circle, transparent 56%, rgba(180,83,9,0.85) 60%, transparent 70%)' },
-      check: { background: 'radial-gradient(circle, rgba(239,68,68,0.95) 0%, rgba(239,68,68,0.45) 42%, transparent 75%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(13,148,136,0.75) 15%, transparent 21%)' },
+      captureTarget: { backgroundImage: 'radial-gradient(circle, transparent 56%, rgba(180,83,9,0.85) 60%, transparent 70%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(239,68,68,0.95) 0%, rgba(239,68,68,0.45) 42%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(217,178,106,0.95)' },
       hint: { boxShadow: glowRing('rgba(45, 212, 191, 0.95)') },
     },
@@ -606,10 +614,10 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     musicTexture: 'cosmic',
     material: 'crystal',
     lightSquare: {
-      background: `${STARFIELD} center / 100% no-repeat, radial-gradient(ellipse at 30% 25%, rgba(196,181,253,0.55), transparent 70%), #5b4a9b`,
+      ...surface('#5b4a9b', [{ image: STARFIELD, size: '100%' }, 'radial-gradient(ellipse at 30% 25%, rgba(196,181,253,0.55), transparent 70%)']),
     },
     darkSquare: {
-      background: `${STARFIELD} center / 100% no-repeat, radial-gradient(ellipse at 70% 80%, rgba(236,72,153,0.25), transparent 70%), #160f33`,
+      ...surface('#160f33', [{ image: STARFIELD, size: '100%' }, 'radial-gradient(ellipse at 70% 80%, rgba(236,72,153,0.25), transparent 70%)']),
     },
     notationLight: '#ede9fe',
     notationDark: '#c4b5fd',
@@ -619,9 +627,9 @@ export const BOARD_THEMES: ReadonlyArray<BoardTheme> = [
     highlights: {
       lastMove: { backgroundColor: 'rgba(196, 181, 253, 0.32)', boxShadow: 'inset 0 0 14px rgba(196,181,253,0.6)' },
       selected: { backgroundColor: 'rgba(236, 72, 153, 0.4)', boxShadow: 'inset 0 0 16px rgba(236,72,153,0.8)' },
-      target: { background: 'radial-gradient(circle, rgba(255,255,255,0.95) 12%, rgba(196,181,253,0.45) 19%, transparent 25%)' },
-      captureTarget: { background: 'radial-gradient(circle, transparent 56%, rgba(236,72,153,0.9) 60%, rgba(196,181,253,0.4) 68%, transparent 74%)' },
-      check: { background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,72,153,0.7) 35%, transparent 75%)' },
+      target: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.95) 12%, rgba(196,181,253,0.45) 19%, transparent 25%)' },
+      captureTarget: { backgroundImage: 'radial-gradient(circle, transparent 56%, rgba(236,72,153,0.9) 60%, rgba(196,181,253,0.4) 68%, transparent 74%)' },
+      check: { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,72,153,0.7) 35%, transparent 75%)' },
       hover: { boxShadow: 'inset 0 0 0 3px rgba(196,181,253,0.9), inset 0 0 18px rgba(196,181,253,0.6)' },
       hint: { boxShadow: glowRing('rgba(250, 204, 21, 0.95)') },
     },

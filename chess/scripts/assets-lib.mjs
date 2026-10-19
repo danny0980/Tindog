@@ -2,7 +2,7 @@
 // Windows, macOS and Linux): name normalisation, image-size sniffing, and the
 // rules that recognise portraits, piece sets / sprite sheets and board themes.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
-import { extname, join, relative, resolve, sep } from 'node:path'
+import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 
 export const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg', '.jpeg', '.jfif', '.gif', '.avif', '.svg']
 export const PIECE_CODES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']
@@ -217,7 +217,50 @@ export function portraitKey(fileName, catalog = null) {
 export function portraitPerson(fileName, catalog) {
   const stem = fileName.replace(/\.[a-z0-9]+$/i, '')
   const people = catalog?.people ?? []
-  return (matchPerson(cleanPortraitName(stem), people) ?? matchPerson(slugify(splitCamel(stem)), people) ?? matchPerson(slugify(stem), people))?.key ?? null
+  const cleaned = cleanPortraitName(stem)
+  return (matchPerson(cleaned, people) ?? matchPerson(slugify(splitCamel(stem)), people) ?? matchPerson(slugify(stem), people) ?? nearPerson(cleaned, people))?.key ?? null
+}
+
+/** Copy markers off an asset name: "starforged-crown1" → "starforged-crown", "boss-rush (2) copy" → "boss-rush". */
+export function tidyAssetName(slug) {
+  return slug
+    .replace(/(?<=[a-z])\d+(?=-|$)/g, '')
+    .split('-')
+    .filter((w) => w && !/^\d+$/.test(w) && !['copy', 'final', 'new', 'edit', 'edited', 'hd', 'v1', 'v2', 'v3'].includes(w))
+    .join('-')
+}
+
+/** Edit distance (insert / delete / substitute), for forgiving small spelling slips. */
+function editDistance(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]
+    row[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = row[j]
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
+      prev = tmp
+    }
+  }
+  return row[b.length]
+}
+
+/**
+ * A character whose name is spelt almost like the file ("major-tesseract" →
+ * Major Tessaract): one slip allowed in names of 6+ letters, two in 12+.
+ * Only the full name (or the name without its title) counts, never one word.
+ */
+function nearPerson(slug, people) {
+  if (!slug || slug.length < 6) return null
+  let best = null
+  for (const p of people) {
+    for (const v of p.variants.slice(0, 3)) {
+      if (v.length < 6 || Math.abs(v.length - slug.length) > 2) continue
+      const d = editDistance(slug, v)
+      if (d <= (v.length >= 12 ? 2 : 1) && (!best || d < best.d)) best = { key: p.key, len: v.length, d }
+    }
+  }
+  return best
 }
 
 const CANONICAL_EXT = { '.jpeg': '.jpg', '.jfif': '.jpg' }
@@ -231,7 +274,7 @@ const CANONICAL_EXT = { '.jpeg': '.jpg', '.jfif': '.jpg' }
  */
 export function normalizePortraitFolder(assetsDir, catalog = null, { dryRun = false } = {}) {
   const dir = join(assetsDir, 'portraits')
-  const report = { renamed: [], duplicates: [], unnamed: [] }
+  const report = { renamed: [], duplicates: [], unnamed: [], moved: [] }
   if (!existsSync(dir)) return report
   let files = []
   try {
@@ -248,6 +291,25 @@ export function normalizePortraitFolder(assetsDir, catalog = null, { dryRun = fa
   }
   // Pick one file per key (the larger), canonical names first so a re-run changes nothing.
   const chosen = new Map()
+  const misplaced = { icon: /^icons?-/, relic: /^relics?-/, background: /(^|-)(arenas?|bg|background)(-|$)/ }
+  for (const f of [...files]) {
+    const stem = slugify(f.replace(/\.[a-z0-9]+$/i, ''))
+    const kind = Object.entries(misplaced).find(([, re]) => re.test(stem))?.[0]
+    if (!kind) continue
+    // An icon / relic / arena that landed among the portraits (an older import): give it back to its own folder.
+    files.splice(files.indexOf(f), 1)
+    const hit = classify(f, catalog)
+    const target = hit && hit.kind === kind ? hit.target : null
+    report.moved.push({ from: f, to: target ?? 'portraits/duplicates/' + f })
+    if (dryRun) continue
+    if (target && !existsSync(join(assetsDir, ...target.split('/')))) {
+      mkdirSync(dirname(join(assetsDir, ...target.split('/'))), { recursive: true })
+      renameSync(join(dir, f), join(assetsDir, ...target.split('/')))
+    } else {
+      mkdirSync(join(dir, 'duplicates'), { recursive: true })
+      renameSync(join(dir, f), join(dir, 'duplicates', f))
+    }
+  }
   for (const f of files) {
     const ext = extname(f).toLowerCase()
     // Only files that name a known character are renamed; anything else keeps its name and is reported.
@@ -279,6 +341,7 @@ export function normalizePortraitFolder(assetsDir, catalog = null, { dryRun = fa
 
 /** Prints what normalizePortraitFolder changed. */
 export function logPortraitReport(report, log = console.log) {
+  for (const m of report.moved ?? []) log(`  not a portrait    ${m.from}  →  ${m.to}`)
   for (const r of report.renamed) log(`  portrait renamed  ${r.from}  →  ${r.to}`)
   for (const f of report.duplicates) log(`  portrait duplicate ${f}  →  portraits/duplicates/ (a larger image of the same character is kept)`)
   for (const f of report.unnamed) log(`  portrait unknown  ${f}  (names no character — rename it after one; see npm run assets:missing)`)
@@ -338,11 +401,12 @@ export function classify(relPath, catalog = null, size = null) {
   // 2. Relics, UI icons, arenas, player avatars and full-screen backgrounds are named by purpose, not by character.
   const inFolder = (re) => folders.some((f) => re.test(f))
   if (/^relics?(-|$)/.test(base) || inFolder(/^relics?$/)) {
-    const key = matchRelic(base, cat.relics ?? []) ?? (base.replace(/^relics?-/, '') || base)
+    const tidy = tidyAssetName(base.replace(/^relics?-/, '')) || base
+    const key = matchRelic(tidy, cat.relics ?? []) ?? matchRelic(base, cat.relics ?? []) ?? tidy
     return { kind: 'relic', key, target: `relics/${key}${ext}` }
   }
   if (/^icons?(-|$)/.test(base) || inFolder(/^(icons?|ui-icons?)$/)) {
-    const key = base.replace(/^icons?-/, '') || base
+    const key = tidyAssetName(base.replace(/^icons?-/, '')) || base
     return { kind: 'icon', key, target: `icons/${key}${ext}` }
   }
   if (/(^|-)arenas?(-|$)/.test(base) || inFolder(/^arenas?$/)) {
@@ -361,7 +425,7 @@ export function classify(relPath, catalog = null, size = null) {
   // 3. Known names: the longest match among board themes, piece sets and characters wins.
   const theme = longestMatch(base, cat.boardThemes)
   const set = longestMatch(base, cat.pieceSets)
-  const person = matchPerson(base, cat.people)
+  const person = matchPerson(base, cat.people) ?? nearPerson(cleanPortraitName(base), cat.people)
   const tLen = theme ? theme.length + (BOARD_HINT.test(base) ? 100 : 0) : -1
   let sLen = set ? set.length + (SHEET_HINT.test(base) ? 100 : 0) : -1
   const pLen = person ? person.len + (PORTRAIT_HINT.test(base) ? 100 : 0) : -1

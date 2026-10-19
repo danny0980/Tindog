@@ -343,5 +343,17 @@ check('per-folder counts are reported', scanned.folders.get('Cosmic Pantheon')?.
 check('a Windows path with a trailing backslash-quote still works', cleanPathArg('C:\\Users\\Gladi\\chess app"') === 'C:\\Users\\Gladi\\chess app' && cleanPathArg('"/tmp/art/"') === '/tmp/art')
 rmSync(src, { recursive: true, force: true })
 
+// ── Spelling slips, copy markers, misplaced files ───────────────────────────
+check('a one-letter slip still finds the character', at('major-tesseract.png')?.target === 'portraits/major-tessaract.png' && at('Napolean Bonaparte.png')?.target === 'portraits/napoleon-bonaparte.png')
+check('slips are not stretched to short or unrelated names', at('zeuss.png')?.target !== 'portraits/zeus.png' && portraitPerson('mystery-figure.png', catalog) === null)
+check('copy markers come off relic and icon names', at('relics/starforged-crown1.png')?.target === 'relics/starforged-crown.png' && at('icon-boss-rush (2).png')?.target === 'icons/boss-rush.png')
+const mdir = mkdtempSync(join(tmpdir(), 'misplaced-'))
+mkdirSync(join(mdir, 'portraits'), { recursive: true })
+writeFileSync(join(mdir, 'portraits', 'icon-boss-rush.png'), 'x')
+writeFileSync(join(mdir, 'portraits', 'Thor.png'), 'x')
+const moved = normalizePortraitFolder(mdir, catalog) as { moved: Array<{ to: string }> }
+check('an icon left among the portraits moves to icons/', moved.moved[0]?.to === 'icons/boss-rush.png' && (listImages(mdir) as string[]).includes('icons/boss-rush.png') && !(listImages(join(mdir, 'portraits')) as string[]).includes('icon-boss-rush.png'))
+rmSync(mdir, { recursive: true, force: true })
+
 console.log(failures === 0 ? '\nAll art-pack checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

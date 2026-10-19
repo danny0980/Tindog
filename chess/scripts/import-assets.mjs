@@ -198,6 +198,12 @@ if (report.length > 0) {
 }
 
 console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets (${cut} cut into pieces), ${counts.board} board images, ${counts.avatar} avatars, ${counts.background} backgrounds, ${counts.relic} relics, ${counts.icon} icons`)
+// Single pieces with no set name ("white king.png") collect in a "custom" set, used only once all 12 exist.
+const loosePieces = [...plan.values()].filter((e) => e.hit.kind === 'piece' && e.hit.set === 'custom').map((e) => e.rel)
+if (loosePieces.length > 0 && loosePieces.length < 12) {
+  console.log(`[assets] ${loosePieces.length} image(s) look like a single chess piece with no set name, so they wait in a "custom" set until all 12 exist:`)
+  for (const rel of loosePieces) console.log(`  ♟ ${rel}  (rename it if it is not a piece, e.g. add "portrait" or "icon-")`)
+}
 if (failedFiles.length > 0) {
   console.warn(`[assets] ${failedFiles.length} file(s) could not be read or written and were skipped (the game uses its built-in look for them):`)
   for (const f of failedFiles) console.warn(`  ✗ ${f.rel}: ${f.reason}`)

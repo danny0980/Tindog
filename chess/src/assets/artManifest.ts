@@ -40,9 +40,13 @@ export interface ArtManifest {
   avatars: Readonly<Record<string, string>>
   /** Full-screen art by purpose ("victory-screen", "loading-screen-space", "world-map-campaign" …). */
   backgrounds: Readonly<Record<string, string>>
+  /** Relic art by relic id ("smoke-veil", "fae-gold" …). */
+  relics: Readonly<Record<string, string>>
+  /** UI icons by purpose ("grand-campaign", "boss-rush", "daily-bounty" …). */
+  icons: Readonly<Record<string, string>>
 }
 
-export const EMPTY_MANIFEST: ArtManifest = { version: 1, portraits: {}, pieceSets: {}, boards: {}, avatars: {}, backgrounds: {} }
+export const EMPTY_MANIFEST: ArtManifest = { version: 1, portraits: {}, pieceSets: {}, boards: {}, avatars: {}, backgrounds: {}, relics: {}, icons: {} }
 
 // ── Sanitising (the manifest is just a file on disk — never trust it blindly) ─
 
@@ -87,7 +91,7 @@ export function sanitizeManifest(raw: unknown): ArtManifest {
     for (const role of ['board', 'light', 'dark', 'frame'] as const) if (isSafeAssetPath(v[role])) b[role] = v[role]
     if (b.board || (b.light && b.dark)) boards[id] = b
   }
-  return { version: 1, portraits, pieceSets, boards, avatars: files(raw.avatars), backgrounds: files(raw.backgrounds) }
+  return { version: 1, portraits, pieceSets, boards, avatars: files(raw.avatars), backgrounds: files(raw.backgrounds), relics: files(raw.relics), icons: files(raw.icons) }
 }
 
 // ── Store & loading ─────────────────────────────────────────────────────────
@@ -248,4 +252,36 @@ export function resolveBoardArt(manifest: ArtManifest, prefs: ArtPreferences, th
   if (prefs.artBoard && chosen) return { id: prefs.artBoard, board: chosen }
   const same = manifest.boards[themeId]
   return same ? { id: themeId, board: same } : null
+}
+
+// ── UI icons ────────────────────────────────────────────────────────────────
+
+/** Icon slots the game shows, and the file names that fill each one ("icon-boss-rush.png" → gauntlet). */
+export const ICON_SLOTS = {
+  chronos: ['chronos', 'chronos-chess', 'legends', 'paths'],
+  historical: ['historical', 'history', 'timeline', 'historical-timeline'],
+  fantasy: ['fantasy', 'fantasy-realm', 'magic'],
+  'free-play': ['free-play', 'freeplay', 'quick-battle', 'duel'],
+  tournament: ['tournament', 'daily-tournament', 'bracket', 'chronos-tournament'],
+  gauntlet: ['gauntlet', 'boss-rush', 'endless-gauntlet', 'endless'],
+  'grand-campaign': ['grand-campaign', 'campaign', 'world-map', 'grand'],
+  bounty: ['bounty', 'daily-bounty', 'bounties', 'bounty-board', 'contract'],
+  cinematic: ['cinematic', 'intro', 'cinematic-intro'],
+} as const satisfies Record<string, readonly string[]>
+
+export type IconSlot = keyof typeof ICON_SLOTS
+export const ICON_SLOT_IDS = Object.keys(ICON_SLOTS) as IconSlot[]
+
+/** The image for an icon slot, if the art pack has one under any of its names. */
+export function iconFor(manifest: ArtManifest, slot: IconSlot): string | null {
+  for (const name of ICON_SLOTS[slot]) {
+    const hit = manifest.icons[name]
+    if (hit) return hit
+  }
+  return null
+}
+
+/** The image for a relic (by id, or by the words of its name). */
+export function relicArtFor(manifest: ArtManifest, relic: { id: string; name: string }): string | null {
+  return manifest.relics[relic.id] ?? manifest.relics[slugify(relic.name)] ?? null
 }

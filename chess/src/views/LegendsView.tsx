@@ -20,6 +20,8 @@ import type { CampaignId, ChallengeOptions, LegendId } from '../types/legend'
 import type { Boss, BossId } from '../types/campaign'
 import type { LegendsScreen } from '../types/settings'
 import type { TournamentEntrant } from '../types/rpg'
+import { ArtIcon } from '../components/ui/ArtIcon'
+import { type IconSlot, artStore, iconFor } from '../assets/artManifest'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
 const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
@@ -40,14 +42,14 @@ function defaultChapter(campaign: CampaignId, defeated: Partial<Record<LegendId,
   return (nextChapter(campaign, defeated) ?? legends[legends.length - 1] ?? legends[0])?.id ?? 'cleopatra'
 }
 
-const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: typeof Hourglass }> = {
-  select: { title: 'CHRONOS CHESS', subtitle: 'Choose your path: history, fantasy, or free play', icon: Hourglass },
-  historical: { title: 'HISTORICAL TIMELINE', subtitle: 'Defeat each legend to open the next chapter of history', icon: Hourglass },
-  fantasy: { title: 'FANTASY REALM', subtitle: 'Earn the elves’ trust, then storm the Obsidian Spire', icon: WandSparkles },
-  freeplay: { title: 'FREE PLAY', subtitle: 'Quick battles against every legend you have defeated', icon: Swords },
-  tournament: { title: 'CHRONOS TOURNAMENT', subtitle: 'A daily 8-player knockout bracket of legends near your rating', icon: Trophy },
-  gauntlet: { title: 'ENDLESS GAUNTLET', subtitle: 'Back-to-back bosses on one clock — how far can you go?', icon: InfinityIcon },
-  grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon },
+const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: typeof Hourglass; slot: IconSlot }> = {
+  select: { title: 'CHRONOS CHESS', subtitle: 'Choose your path: history, fantasy, or free play', icon: Hourglass, slot: 'chronos' },
+  historical: { title: 'HISTORICAL TIMELINE', subtitle: 'Defeat each legend to open the next chapter of history', icon: Hourglass, slot: 'historical' },
+  fantasy: { title: 'FANTASY REALM', subtitle: 'Earn the elves’ trust, then storm the Obsidian Spire', icon: WandSparkles, slot: 'fantasy' },
+  freeplay: { title: 'FREE PLAY', subtitle: 'Quick battles against every legend you have defeated', icon: Swords, slot: 'free-play' },
+  tournament: { title: 'CHRONOS TOURNAMENT', subtitle: 'A daily 8-player knockout bracket of legends near your rating', icon: Trophy, slot: 'tournament' },
+  gauntlet: { title: 'ENDLESS GAUNTLET', subtitle: 'Back-to-back bosses on one clock — how far can you go?', icon: InfinityIcon, slot: 'gauntlet' },
+  grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon, slot: 'grand-campaign' },
 }
 
 /** Chronos Chess hub: universe selector → campaign map + dossier, or free play. */
@@ -78,6 +80,8 @@ export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onF
 
   const header = campaign ? { ...HEADERS[campaign], title: getCampaign(campaign).name.toUpperCase() } : HEADERS[screen]
   const Icon = header.icon
+  // A spinning hourglass suits the vector icon, not a picture.
+  const headerArt = useStore(artStore, (m) => iconFor(m, header.slot))
 
   return (
     <div className="safe-px mx-auto w-full max-w-6xl flex-1 space-y-4 pb-4">
@@ -87,8 +91,8 @@ export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onF
             <span className="hidden sm:inline">Paths</span>
           </Button>
         )}
-        <div className="idle-pause flex size-12 shrink-0 animate-spin-slow items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-ink-950">
-          <Icon className="size-6" />
+        <div className={`idle-pause flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-ink-950 ${headerArt ? '' : 'animate-spin-slow'}`}>
+          <ArtIcon slot={header.slot} fallback={<Icon className="size-6" />} />
         </div>
         <div className="min-w-0">
           <h1 className="truncate font-display text-xl font-extrabold tracking-wider text-white sm:text-2xl">{header.title}</h1>

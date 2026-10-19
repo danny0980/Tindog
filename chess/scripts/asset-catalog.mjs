@@ -82,7 +82,12 @@ export function loadCatalog(root) {
   for (const f of rosters) namesIn(readSafe(join(rosterDir, f))).forEach(addPerson)
   EXTRA_PEOPLE.forEach(addPerson)
 
+  // Relics: id and display name, so "relic-smoke-veil" and "Smoke Veil of Iga" both land on smoke-veil.
+  const relicsSrc = readSafe(join(root, 'src', 'data', 'campaign', 'relics.ts'))
+  const relics = [...new Map([...relicsSrc.matchAll(/id:\s*'([a-z0-9-]+)',\s*name:\s*'((?:[^'\\]|\\.)+)'/g)].map((m) => [m[1] ?? '', { id: m[1] ?? '', name: (m[2] ?? '').replace(/\\'/g, "'") }])).values()]
+
   return {
+    relics,
     people: [...people.values()],
     pieceSets: [...new Set([...pieceSets, ...EXTRA_PIECE_SETS])],
     boardThemes: [...new Set([...boardThemes, ...EXTRA_BOARD_THEMES])],

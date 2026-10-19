@@ -2,7 +2,7 @@
 // Windows, macOS and Linux): name normalisation, image-size sniffing, and the
 // rules that recognise portraits, piece sets / sprite sheets and board themes.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
-import { extname, join, relative, sep } from 'node:path'
+import { extname, join, relative, resolve, sep } from 'node:path'
 
 export const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg', '.jpeg', '.jfif', '.gif', '.avif', '.svg']
 export const PIECE_CODES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']
@@ -23,8 +23,9 @@ export const isImage = (file) => IMAGE_EXTENSIONS.includes(extname(file).toLower
 /** Folders never scanned for art (the app's own code, builds and dependencies). */
 export const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ssr', '.git', 'public', 'src', 'android', 'ios', 'scripts', 'tests', 'coverage', '.vite', '.idea', '.vscode'])
 
-/** Every image under `dir`, recursively (paths relative to `dir`), skipping SKIP_DIRS when asked. */
-export function listImages(dir, { skip = false } = {}) {
+/** Every image under `dir`, recursively (paths relative to `dir`), skipping SKIP_DIRS when asked, and any folder in `exclude` (absolute paths). */
+export function listImages(dir, { skip = false, exclude = [] } = {}) {
+  const excluded = new Set(exclude.map((p) => resolve(p).toLowerCase()))
   const out = []
   const walk = (current) => {
     let names = []
@@ -43,7 +44,7 @@ export function listImages(dir, { skip = false } = {}) {
         continue
       }
       if (st.isDirectory()) {
-        if (!(skip && SKIP_DIRS.has(name.toLowerCase()))) walk(full)
+        if (!(skip && SKIP_DIRS.has(name.toLowerCase())) && !excluded.has(resolve(full).toLowerCase())) walk(full)
       } else if (isImage(name)) out.push(relative(dir, full).split(sep).join('/'))
     }
   }
@@ -157,6 +158,15 @@ function longestMatch(slug, entries) {
   let best = null
   for (const e of entries) if (hasWords(slug, e) && (!best || e.length > best.length)) best = e
   return best
+}
+
+/** The relic a filename names: its id ("smoke-veil") or the words of its name ("Oberon's Fae Gold" → fae-gold). */
+function matchRelic(slug, relics) {
+  let best = null
+  for (const r of relics) {
+    for (const v of [r.id, slugify(r.name)]) if (hasWords(slug, v) && (!best || v.length > best.len)) best = { id: r.id, len: v.length }
+  }
+  return best?.id ?? null
 }
 
 /** The character a filename names (longest matching variant), if any. */
@@ -325,7 +335,20 @@ export function classify(relPath, catalog = null, size = null) {
     return { kind: 'piece', set, code, target: `pieces/${set}/${code}${ext}` }
   }
 
-  // 2. Player avatars and full-screen backgrounds are named by purpose, not by character.
+  // 2. Relics, UI icons, arenas, player avatars and full-screen backgrounds are named by purpose, not by character.
+  const inFolder = (re) => folders.some((f) => re.test(f))
+  if (/^relics?(-|$)/.test(base) || inFolder(/^relics?$/)) {
+    const key = matchRelic(base, cat.relics ?? []) ?? (base.replace(/^relics?-/, '') || base)
+    return { kind: 'relic', key, target: `relics/${key}${ext}` }
+  }
+  if (/^icons?(-|$)/.test(base) || inFolder(/^(icons?|ui-icons?)$/)) {
+    const key = base.replace(/^icons?-/, '') || base
+    return { kind: 'icon', key, target: `icons/${key}${ext}` }
+  }
+  if (/(^|-)arenas?(-|$)/.test(base) || inFolder(/^arenas?$/)) {
+    const key = `arena-${base.replace(/(^|-)arenas?(?=-|$)/g, '').replace(/^-+|-+$/g, '') || 'default'}`
+    return { kind: 'background', key, target: `backgrounds/${key}${ext}` }
+  }
   if (AVATAR_HINT.test(base)) {
     const key = base.replace(/(^|-)(player-avatar|player-icon|avatar|player)(?=-|$)/g, '').replace(/^-+|-+$/g, '') || 'default'
     return { kind: 'avatar', key, target: `avatars/${key}${ext}` }
@@ -390,7 +413,7 @@ export function classify(relPath, catalog = null, size = null) {
 
 /** Builds the manifest from the normalised public/assets layout. */
 export function buildManifest(assetsDir) {
-  const manifest = { version: 1, portraits: {}, pieceSets: {}, boards: {}, avatars: {}, backgrounds: {} }
+  const manifest = { version: 1, portraits: {}, pieceSets: {}, boards: {}, avatars: {}, backgrounds: {}, relics: {}, icons: {} }
   let files = []
   try {
     files = listImages(assetsDir)
@@ -400,7 +423,7 @@ export function buildManifest(assetsDir) {
   for (const rel of files) {
     const parts = rel.split('/')
     const [top, group, leaf] = parts
-    if ((top === 'portraits' || top === 'avatars' || top === 'backgrounds') && parts.length === 2 && group) {
+    if ((top === 'portraits' || top === 'avatars' || top === 'backgrounds' || top === 'relics' || top === 'icons') && parts.length === 2 && group) {
       manifest[top][slugify(group.replace(/\.[a-z0-9]+$/i, ''))] = rel
     } else if (top === 'pieces' && parts.length === 3 && group && leaf) {
       const name = leaf.replace(/\.[a-z0-9]+$/i, '')

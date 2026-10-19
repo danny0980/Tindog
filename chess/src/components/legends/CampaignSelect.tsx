@@ -9,6 +9,7 @@ import { GauntletCard } from '../gauntlet/GauntletCard'
 import { TournamentCard } from '../tournament/TournamentCard'
 import type { LegendsScreen } from '../../types/settings'
 import { LegendPortrait } from './LegendPortrait'
+import { ArtIcon } from '../ui/ArtIcon'
 
 interface CampaignSelectProps {
   defeated: Partial<Record<LegendId, string>>
@@ -18,12 +19,12 @@ interface CampaignSelectProps {
 
 const STYLE: Record<CampaignId, { icon: ReactNode; gradient: string; glow: string }> = {
   historical: {
-    icon: <Hourglass className="size-7" />,
+    icon: <ArtIcon slot="historical" fallback={<Hourglass className="size-7" />} />,
     gradient: 'from-amber-300 via-orange-400 to-sky-500',
     glow: 'shadow-[0_30px_80px_-30px_rgba(251,191,36,0.55)]',
   },
   fantasy: {
-    icon: <WandSparkles className="size-7" />,
+    icon: <ArtIcon slot="fantasy" fallback={<WandSparkles className="size-7" />} />,
     gradient: 'from-emerald-300 via-violet-400 to-orange-500',
     glow: 'shadow-[0_30px_80px_-30px_rgba(167,139,250,0.6)]',
   },
@@ -45,7 +46,7 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
       >
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(100deg,rgba(120,72,30,0.35),rgba(20,10,30,0.2)_45%,rgba(255,90,30,0.3))]" aria-hidden="true" />
         <div className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-200 via-orange-500 to-red-700 text-ink-950">
-          <Clapperboard className="size-7" />
+          <ArtIcon slot="cinematic" fallback={<Clapperboard className="size-7" />} />
         </div>
         <div className="relative min-w-0 flex-1">
           <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Cinematic</div>
@@ -113,7 +114,7 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
       >
         <div className="relative flex items-center gap-3">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-200 to-slate-500 text-ink-950">
-            <Swords className="size-7" />
+            <ArtIcon slot="free-play" fallback={<Swords className="size-7" />} />
           </div>
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Quick battle</div>

@@ -10,6 +10,7 @@ import { PORTRAIT_ICONS } from '../legends/portraitIcons'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { ArtIcon } from '../ui/ArtIcon'
 
 export type WorldItem = { type: 'event'; event: WorldEvent } | { type: 'bounty'; bounty: Bounty }
 
@@ -121,9 +122,14 @@ export function WorldEventSheet({ item, world, progress, roster, coins, onClose,
       >
         <div className="space-y-3 text-sm" data-bounty-sheet>
           {boss && <BossLine boss={boss} />}
-          <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 p-3">
-            <div className="font-bold text-white">{rule.name}</div>
-            <div className="text-slate-300">{rule.description}</div>
+          <div className="flex gap-3 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 p-3">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-emerald-300/20 text-emerald-200">
+              <ArtIcon slot="bounty" fallback={<ScrollText className="size-6" />} />
+            </span>
+            <div className="min-w-0">
+              <div className="font-bold text-white">{rule.name}</div>
+              <div className="text-slate-300">{rule.description}</div>
+            </div>
           </div>
           <Reward coins={b.reward.coins} potion={b.reward.potion} />
           <p className="text-xs text-slate-400">Bounties are unrated and can be retried until fulfilled. A rule you can’t break is enforced on the board; the rest are checked when you win.</p>

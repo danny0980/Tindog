@@ -1,6 +1,7 @@
-// Lists every campaign boss (and Chronos legend) that has no portrait image in
-// the art pack, using exactly the name matching the game uses at runtime
-// (portraitFor: exact name, aliases, then first / last name).
+// Art audit: lists every campaign boss and Chronos legend with no portrait,
+// and every relic, UI icon and screen background still without art — using
+// exactly the matching the game uses at runtime — plus files the game can't
+// place anywhere (characters / relics that aren't in the game).
 //
 //   npm run assets:missing
 //
@@ -12,7 +13,8 @@ import { buildManifest, logPortraitReport, normalizePortraitFolder } from './ass
 // @ts-expect-error — plain .mjs helper (no type declarations).
 import { loadCatalog } from './asset-catalog.mjs'
 import { join } from 'node:path'
-import { type ArtManifest, EMPTY_MANIFEST, portraitFor, sanitizeManifest, slugify } from '../src/assets/artManifest'
+import { type ArtManifest, type BackgroundSlot, EMPTY_MANIFEST, ICON_SLOTS, ICON_SLOT_IDS, backgroundsFor, iconFor, portraitFor, relicArtFor, sanitizeManifest, slugify } from '../src/assets/artManifest'
+import { RELICS } from '../src/data/campaign/relics'
 import { GRAND_REALMS } from '../src/data/campaign/realms'
 import chronicle from '../src/data/campaign/rosters/chronicle'
 import cosmic from '../src/data/campaign/rosters/cosmic'
@@ -66,9 +68,47 @@ for (const l of LEGENDS) {
 }
 const orphans = [...new Set([...Object.values(manifest.portraits).filter((path) => !used.has(path)), ...tidy.unnamed.map((f) => `portraits/${f}`)])]
 if (orphans.length > 0) {
-  console.log(`\nPORTRAIT FILES THAT MATCH NO CHARACTER — ${orphans.length} (rename them to a name from the lists above)`)
+  console.log(`\nPORTRAITS OF CHARACTERS NOT IN THE GAME (or misspelt) — ${orphans.length}: they show nowhere until renamed after a character above`)
   for (const path of orphans) console.log(`  ${path}`)
 }
 
-console.log(`\nSummary: ${missingTotal} of ${bossTotal} campaign bosses and ${legends.length} of ${LEGENDS.length} legends have no portrait.`)
-console.log('Name each image after the character (case, spaces and accents don’t matter), put it in your art folder and run npm run assets:import.')
+// ── Relics ─────────────────────────────────────────────────────────────────
+const relicsMissing = RELICS.filter((r) => !relicArtFor(manifest, r))
+console.log(`\nRELICS WITHOUT ART — ${relicsMissing.length} of ${RELICS.length} missing`)
+for (const r of relicsMissing) console.log(`  ${r.id.padEnd(22)} ${r.name.padEnd(26)} → relic-${r.id}.png`)
+const relicIds = new Set(RELICS.flatMap((r) => [r.id, slugify(r.name)]))
+const strayRelics = Object.entries(manifest.relics).filter(([key]) => !relicIds.has(key))
+if (strayRelics.length > 0) {
+  console.log(`  Relic images that match no relic in the game (${strayRelics.length}):`)
+  for (const [, path] of strayRelics) console.log(`    ${path}`)
+}
+
+// ── UI icons ───────────────────────────────────────────────────────────────
+const iconsMissing = ICON_SLOT_IDS.filter((slot) => !iconFor(manifest, slot))
+console.log(`\nUI ICONS WITHOUT ART — ${iconsMissing.length} of ${ICON_SLOT_IDS.length} missing`)
+for (const slot of iconsMissing) console.log(`  ${slot.padEnd(16)} → icon-${ICON_SLOTS[slot][0]}.png  (also: ${ICON_SLOTS[slot].slice(1).map((n) => `icon-${n}`).join(', ')})`)
+const iconNames = new Set<string>(Object.values(ICON_SLOTS).flat())
+const strayIcons = Object.entries(manifest.icons).filter(([key]) => !iconNames.has(key))
+if (strayIcons.length > 0) {
+  console.log(`  Icon images with no place in the game yet (${strayIcons.length}):`)
+  for (const [, path] of strayIcons) console.log(`    ${path}`)
+}
+
+// ── Screens & arenas ───────────────────────────────────────────────────────
+const SCREENS: Record<BackgroundSlot, string> = { victory: 'victory-screen-bg', defeat: 'defeat-screen-bg', loading: 'loading-screen-bg', map: 'world-map-bg', realm: 'chrono-realm-bg' }
+const screensMissing = (Object.keys(SCREENS) as BackgroundSlot[]).filter((slot) => backgroundsFor(manifest, slot).length === 0)
+console.log(`\nSCREEN BACKGROUNDS WITHOUT ART — ${screensMissing.length} of ${Object.keys(SCREENS).length} missing`)
+for (const slot of screensMissing) console.log(`  ${slot.padEnd(10)} → ${SCREENS[slot]}.png`)
+const arenas = Object.keys(manifest.backgrounds).filter((k) => k.startsWith('arena-'))
+console.log(`Arena backdrops (pick one in the battle Loadout): ${arenas.length}${arenas.length === 0 ? ' — put images in an "arenas" folder, or name them "arena-…"' : ''}`)
+
+// ── Piece sets ─────────────────────────────────────────────────────────────
+const uncut = Object.entries(manifest.pieceSets).filter(([, set]) => !set.files && set.sheet)
+console.log(`\nPIECE SETS: ${Object.keys(manifest.pieceSets).length} · boards: ${Object.keys(manifest.boards).length}`)
+if (uncut.length > 0) {
+  console.log(`  Still a grid-sliced sprite sheet (could not be cut into 12 pieces) — ${uncut.length}:`)
+  for (const [id] of uncut) console.log(`    ${id}`)
+}
+
+console.log(`\nSummary: ${missingTotal} of ${bossTotal} campaign bosses and ${legends.length} of ${LEGENDS.length} legends have no portrait; ${relicsMissing.length} relics, ${iconsMissing.length} icons and ${screensMissing.length} screens have no art.`)
+console.log('Name each image as shown (case, spaces and accents don’t matter), put it in your art folder and run npm run assets:import.')

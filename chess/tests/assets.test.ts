@@ -13,6 +13,8 @@ import { decodePng, encodePng, sliceSheet } from '../scripts/sprite-slicer.mjs'
 import { loadCatalog } from '../scripts/asset-catalog.mjs'
 import {
   EMPTY_MANIFEST,
+  iconFor,
+  relicArtFor,
   backgroundsFor,
   type ArtManifest,
   type PieceSheet,
@@ -295,6 +297,26 @@ check('tidying twice changes nothing', (normalizePortraitFolder(pdir, people) as
 const tidied = sanitizeManifest(buildManifest(pdir))
 check('the game finds the tidied portraits', portraitFor(tidied, 'Napoleon Bonaparte') === 'portraits/napoleon-bonaparte.png' && portraitFor(tidied, 'Charlemagne') === 'portraits/charlemagne.jpg')
 rmSync(pdir, { recursive: true, force: true })
+
+// ── Relics, UI icons, arenas ────────────────────────────────────────────────
+type Target = { kind: string; target: string } | null
+const at = (p: string): Target => classify(p, catalog) as Target
+check('relic art lands on the relic id', at('relic-fae-gold.png')?.target === 'relics/fae-gold.png' && at('relics/Smoke Veil of Iga.png')?.target === 'relics/smoke-veil.png')
+check('an unknown relic keeps its own name', at('relic-crown-of-kings.png')?.target === 'relics/crown-of-kings.png')
+check('UI icons by prefix or folder', at('icon-boss-rush.png')?.target === 'icons/boss-rush.png' && at('icons/Grand Campaign.png')?.target === 'icons/grand-campaign.png')
+check('arena images become arena backdrops', at('arenas/Volcano Arena.png')?.target === 'backgrounds/arena-volcano.png' && at('Frozen arena.jpg')?.target === 'backgrounds/arena-frozen.jpg')
+check('character portraits inside realm folders still go to portraits', at('Ninjas & Shinobi/Hattori Hanzo.png')?.target === 'portraits/hattori-hanzo.png')
+const iconArt: ArtManifest = { ...EMPTY_MANIFEST, icons: { 'boss-rush': 'icons/boss-rush.png', 'daily-bounty': 'icons/daily-bounty.png' }, relics: { 'fae-gold': 'relics/fae-gold.png' } }
+check('icon aliases fill the right slot', iconFor(iconArt, 'gauntlet') === 'icons/boss-rush.png' && iconFor(iconArt, 'bounty') === 'icons/daily-bounty.png' && iconFor(iconArt, 'tournament') === null)
+check('relic art is found by id', relicArtFor(iconArt, { id: 'fae-gold', name: 'Oberon’s Fae Gold' }) === 'relics/fae-gold.png' && relicArtFor(iconArt, { id: 'emp-spike', name: 'EMP Spike' }) === null)
+const roundTrip2 = sanitizeManifest(JSON.parse(JSON.stringify({ ...iconArt, icons: { ...iconArt.icons, '../x': 'icons/x.png', ok: '../../etc/passwd.png' } })))
+check('relic and icon entries are sanitised', roundTrip2.relics['fae-gold'] === 'relics/fae-gold.png' && Object.keys(roundTrip2.icons).join() === 'boss-rush,daily-bounty')
+const skipDir = mkdtempSync(join(tmpdir(), 'artroot-'))
+mkdirSync(join(skipDir, 'chess'))
+writeFileSync(join(skipDir, 'chess', 'debug.png'), 'x')
+writeFileSync(join(skipDir, 'thor.png'), 'x')
+check('the game folder inside the art folder is not scanned', (listImages(skipDir, { skip: true, exclude: [join(skipDir, 'chess')] }) as string[]).join() === 'thor.png')
+rmSync(skipDir, { recursive: true, force: true })
 
 console.log(failures === 0 ? '\nAll art-pack checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

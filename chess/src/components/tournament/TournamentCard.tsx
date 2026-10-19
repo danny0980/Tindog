@@ -3,6 +3,7 @@ import { useStore } from '../../hooks/useStore'
 import { profileStore } from '../../stores/profileStore'
 import { localDateKey } from '../../utils/date'
 import { ROUND_NAMES, currentMatch } from '../../utils/tournament'
+import { ArtIcon } from '../ui/ArtIcon'
 
 /** Path-selector card for today's auto-tournament. */
 export function TournamentCard({ onOpen }: { onOpen: () => void }) {
@@ -29,7 +30,7 @@ export function TournamentCard({ onOpen }: { onOpen: () => void }) {
       <div className="pointer-events-none absolute -right-16 -bottom-24 size-72 rounded-full bg-gradient-to-br from-sky-300 via-blue-500 to-amber-300 opacity-20 blur-3xl transition group-hover:opacity-35" aria-hidden="true" />
       <div className="relative flex flex-wrap items-center gap-4">
         <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-300 via-blue-500 to-amber-300 text-ink-950">
-          <Trophy className="size-7" />
+          <ArtIcon slot="tournament" fallback={<Trophy className="size-7" />} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Daily event</div>

@@ -44,7 +44,8 @@ const skipped = []
 // The app's own folders (src, public, node_modules …) are never scanned.
 /** Files that could not be read or written; the import carries on without them. */
 const failedFiles = []
-for (const rel of listImages(from, { skip: true })) {
+// The game's own folder (when it sits inside the art folder, like chess app/chess) is never art.
+for (const rel of listImages(from, { skip: true, exclude: from === resolve(root) ? [] : [root] })) {
   const full = join(from, ...rel.split('/'))
   let hit
   let bytes
@@ -113,7 +114,7 @@ const dropOldPieces = (set) => {
   for (const f of readdirSync(dir)) if (/^(sheet|[wb][KQRBNP])\.(png|jpe?g|webp|gif|avif|json)$/i.test(f)) rmSync(join(dir, f))
 }
 
-const counts = { portrait: 0, piece: 0, sheet: 0, board: 0, avatar: 0, background: 0 }
+const counts = { portrait: 0, piece: 0, sheet: 0, board: 0, avatar: 0, background: 0, relic: 0, icon: 0 }
 let cut = 0
 /** What happened to every sheet, for the visual report. */
 const report = []
@@ -209,7 +210,7 @@ if (report.length > 0) {
   if (!dryRun) console.log('[assets] Visual report: npm run dev, then open http://localhost:5173/assets/report.html (use the port Vite prints)')
 }
 
-console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets (${cut} cut into pieces), ${counts.board} board images, ${counts.avatar} avatars, ${counts.background} backgrounds`)
+console.log(`\n[assets] ${dryRun ? 'Would import' : 'Imported'}: ${counts.portrait} portraits, ${counts.piece} piece images, ${counts.sheet} sprite sheets (${cut} cut into pieces), ${counts.board} board images, ${counts.avatar} avatars, ${counts.background} backgrounds, ${counts.relic} relics, ${counts.icon} icons`)
 if (failedFiles.length > 0) {
   console.warn(`[assets] ${failedFiles.length} file(s) could not be read or written and were skipped (the game uses its built-in look for them):`)
   for (const f of failedFiles) console.warn(`  ✗ ${f.rel}: ${f.reason}`)
@@ -225,5 +226,5 @@ if (!dryRun) {
   logPortraitReport(normalizePortraitFolder(assetsDir, catalog))
   const manifest = buildManifest(assetsDir)
   writeFileSync(join(assetsDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  console.log(`[assets] manifest: ${Object.keys(manifest.portraits).length} portraits, ${Object.keys(manifest.pieceSets).length} piece sets, ${Object.keys(manifest.boards).length} boards, ${Object.keys(manifest.avatars).length} avatars, ${Object.keys(manifest.backgrounds).length} backgrounds`)
+  console.log(`[assets] manifest: ${Object.keys(manifest.portraits).length} portraits, ${Object.keys(manifest.pieceSets).length} piece sets, ${Object.keys(manifest.boards).length} boards, ${Object.keys(manifest.avatars).length} avatars, ${Object.keys(manifest.backgrounds).length} backgrounds, ${Object.keys(manifest.relics).length} relics, ${Object.keys(manifest.icons).length} icons`)
 }

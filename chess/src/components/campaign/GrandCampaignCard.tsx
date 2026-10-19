@@ -4,6 +4,7 @@ import { RELICS } from '../../data/campaign/relics'
 import type { CampaignProgress } from '../../types/campaign'
 import { clearedCount, isRealmUnlocked, maxStars, starCount } from '../../utils/campaign'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
+import { ArtIcon } from '../ui/ArtIcon'
 
 /** Hero card on the path selector: the 100-boss Grand Campaign at a glance. */
 export function GrandCampaignCard({ progress, onOpen }: { progress: CampaignProgress; onOpen: () => void }) {
@@ -19,7 +20,7 @@ export function GrandCampaignCard({ progress, onOpen }: { progress: CampaignProg
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center">
         <div className="flex items-center gap-3 lg:w-80">
           <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 via-fuchsia-400 to-indigo-500 text-ink-950">
-            <MapIcon className="size-7" />
+            <ArtIcon slot="grand-campaign" fallback={<MapIcon className="size-7" />} />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Epic campaign</div>

@@ -45,7 +45,7 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
       <TournamentCard onOpen={() => onOpen('tournament')} />
       <button
         type="button"
-        onClick={openIntro}
+        onClick={() => openIntro('visual-evolution')}
         data-path="intro"
         className="glass group relative flex items-center gap-4 overflow-hidden rounded-3xl p-5 text-left transition duration-300 hover:-translate-y-1 hover:border-white/25 lg:col-span-3"
       >
@@ -56,7 +56,7 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         <div className="relative min-w-0 flex-1">
           <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Cinematic</div>
           <div className="font-display text-xl font-extrabold tracking-wide text-white">The Visual Evolution</div>
-          <div className="text-xs text-slate-400">From a quiet study game to the Chronos Realm — watch the intro again</div>
+          <div className="text-xs text-slate-400">The earlier intro, from a quiet study game to the Chronos Realm — replay it any time</div>
         </div>
         <ChevronRight className="relative size-5 text-accent transition group-hover:translate-x-1" />
       </button>

@@ -12,6 +12,8 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     assetsInlineLimit: 0,
+    // three.js (the intro's lazy WebGL chunk) is ~150 kB gzipped on its own.
+    chunkSizeWarningLimit: 650,
     rolldownOptions: {
       output: {
         // Long-lived vendor chunks cache across app updates (and keep the app chunk small).
@@ -20,6 +22,8 @@ export default defineConfig({
             { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 30 },
             { name: 'board-vendor', test: /node_modules[\\/](react-chessboard|@dnd-kit|chess\.js)[\\/]/, priority: 20 },
             { name: 'ui-vendor', test: /node_modules[\\/](lucide-react|@capacitor)[\\/]/, priority: 10 },
+            // WebGL for the startup film only — fetched with the intro, cached across updates.
+            { name: 'three-vendor', test: /node_modules[\\/]three[\\/]/, priority: 25 },
           ],
         },
       },

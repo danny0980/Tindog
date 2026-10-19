@@ -43,6 +43,7 @@ const RushView = lazyWithRetry(() => import('./views/RushView'), (m) => m.RushVi
 const QuestsView = lazyWithRetry(() => import('./views/QuestsView'), (m) => m.QuestsView)
 // The cinematic intro (renderer, textures, score) is its own chunk, fetched only when it plays.
 const CinematicIntro = lazyWithRetry(() => import('./components/cinematic/CinematicIntro'), (m) => m.default)
+const LastGrainIntro = lazyWithRetry(() => import('./components/cinematic/lastGrain/LastGrainIntro'), (m) => m.default)
 
 function ViewFallback() {
   return (
@@ -58,7 +59,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   // First launch (or after this update) opens on the cinematic intro.
-  const introOpen = useStore(introStore, (open) => open)
+  const introFilm = useStore(introStore, (film) => film)
   useAppEnvironment()
   const layout = useLayoutMode()
   // The one-handed layout is a fixed-height screen (board flexes, dock pinned to the thumb zone).
@@ -95,19 +96,21 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  // Where an intro hands over: the chosen Legends mode screen, or straight into a game.
+  const enterFromIntro = useCallback((target: IntroExit) => {
+    updateSettings({ introSeen: true })
+    if (target !== 'play') updateSettings({ legendsScreen: target })
+    setView(target === 'play' ? 'play' : 'legends')
+  }, [])
   const closeIntro = useCallback(
     (target: IntroExit) => {
-      updateSettings({ introSeen: true })
-      if (target === 'grand') updateSettings({ legendsScreen: 'grand' })
-      if (target === 'gauntlet') updateSettings({ legendsScreen: 'gauntlet' })
       runViewTransition(() => {
         closeIntroOverlay()
-        setView(target === 'play' ? 'play' : 'legends')
+        enterFromIntro(target)
       }, 'zoom')
     },
-    [],
+    [enterFromIntro],
   )
-
 
   // Chronos Chess: launch a legend battle from the timeline.
   const challengeLegend = useCallback(
@@ -251,7 +254,7 @@ export default function App() {
       }`}
     >
       <FxDefs />
-      <AppHeader view={view} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} onOpenIntro={openIntro} />
+      <AppHeader view={view} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} onOpenIntro={() => openIntro('last-grain')} />
 
       <main className="flex min-h-0 flex-1 flex-col">
         {/* PlayView stays mounted (hidden) so board state and animations persist. */}
@@ -299,7 +302,7 @@ export default function App() {
         </ErrorBoundary>
       )}
       <ToastViewport />
-      {introOpen && (
+      {introFilm && (
         // The intro is optional: if it fails for any reason, skip straight into the app.
         <ErrorBoundary scope="view" label="the cinematic intro" onError={() => closeIntro('play')}>
           <Suspense
@@ -309,7 +312,12 @@ export default function App() {
               </div>
             }
           >
-            <CinematicIntro onExit={closeIntro} />
+            {introFilm === 'visual-evolution' ? (
+              <CinematicIntro onExit={closeIntro} />
+            ) : (
+              // The film dissolves its own live last frame over the chosen screen — no snapshot, no blank frame.
+              <LastGrainIntro onExit={enterFromIntro} onDone={closeIntroOverlay} />
+            )}
           </Suspense>
         </ErrorBoundary>
       )}

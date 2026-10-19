@@ -7,7 +7,8 @@ import { IntroRenderer } from './renderer'
 import { INTRO_TIMES, type IntroPhase, beatsBetween, moveAt, phaseAt } from './timeline'
 
 /** Where the player goes when the intro ends. */
-export type IntroExit = 'grand' | 'gauntlet' | 'play'
+/** Where an intro hands over: a Legends mode screen, or straight into a game. */
+export type IntroExit = 'classic' | 'grand' | 'gauntlet' | 'play'
 
 interface CinematicIntroProps {
   onExit: (target: IntroExit) => void

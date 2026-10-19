@@ -1,4 +1,4 @@
-# ♞ Chess Arena: AAA Edition (v6.2 · Chronos Chess — Art Pack)
+# ♞ Chess Arena: AAA Edition (v6.6 · Chronos Chess — The Last Grain)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
@@ -7,6 +7,50 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 - Works offline once loaded, apart from the Google Fonts stylesheet.
 
 ---
+
+## What's new in 6.6: "The Last Grain", a 15-second WebGL opening film
+
+The game now opens with a short film. The last grain of sand in time's hourglass falls onto an obsidian board, wakes chess pieces from five eras, and becomes the menu (`src/components/cinematic/lastGrain/`).
+
+| Shot | Time | What happens |
+|---|---|---|
+| 1 | 0.0–2.2 s | Macro slow motion: a golden grain falls, strikes the board and throws a crown-shaped splash of light into a gold seam. |
+| 2 | 2.2–5.0 s | The light races along the seam and wakes five era pieces in turn, each with a gold rim wipe, embers and its own material sound: Egyptian lapis, Roman bronze, samurai lacquer, Viking rune stone and Renaissance silver. |
+| 3 | 5.0–7.8 s | An orbit round the obsidian queen as molten fissures climb her body; her crown points flare on the brass peak. |
+| 4 | 7.8–10.4 s | Match cut to the king's cross. The camera dollies back, the last grain lands, and time freezes: the splash and embers hang in the air (bullet time) while the camera keeps moving. |
+| 5 | 10.4–12.8 s | The frozen grains stream together into **CHRONOS** (Cinzel Black) above *CHESS ARENA · AAA EDITION* (tracked Orbitron), and a ray of light sweeps across to lock the title. |
+| 6 | 12.8–15.0 s | The board flattens into frosted glass, and the three mode chips rise: **Classic Chess**, **Grand Campaign** and **Endless Gauntlet**. The film ends on *Tap to begin*. |
+
+- **How it is built.** The hybrid WebGL/React route.
+  - **three.js** draws the world: turned and carved pieces with shader-driven wake, crack, crown and rune effects; a gold-seam board shader; and about 2,500 deterministic particles.
+  - The post-processing chain is highlight roll-off, bloom, then a grade (freeze desaturation, vignette and flash), then ACES tone mapping.
+  - React owns the clock and the DOM layer (title, glass menu and chips).
+  - Everything is a pure function of film time (`timeline.ts`, `camera.ts`, `particles.ts`, `overlay.ts`), so Skip, a hidden tab or a frame capture always lands on exactly the right frame.
+- **Seamless hand-off.**
+  - The title grains home onto the real DOM letters, sampled from the rendered Cinzel glyphs. Each letter fades in as its grains arrive.
+  - The final frame *is* the live, clickable menu. Choosing a mode switches the app underneath at once, and the film's live last frame dissolves over it. There is no screenshot and no blank frame.
+- **Sound.**
+  - The synthesised score and effects follow the storyboard's sync map: celesta at the impact, a string ostinato, five material ticks, the brass and taiko peak, a reverse cymbal into the match cut, a clock tick in the frozen second, a heartbeat as time restarts, a chime per letter, an orchestral hit at the lock, UI clicks and a resolving chord.
+  - The film waits for the first tap, because browsers keep audio locked until then. A replay starts at once.
+  - Every voice runs on the film's own buses, so Skip silences anything still scheduled, reverb tails included.
+- **Controls.**
+  - **Skip** appears after one second and jumps to the title and menu.
+  - Esc skips, then leaves. Enter or Space begins.
+  - With reduced motion, the film opens on the finished menu.
+- **Performance and fallbacks.**
+  - **Quality tiers.** Battery Saver, low-memory or low-core devices, and phones get fewer particles, a lower pixel ratio and cheaper geometry.
+  - **Lazy loading.** three.js is its own lazily loaded chunk (`three-vendor`, ~139 kB gzipped). It is never loaded once the film has been seen.
+  - **No WebGL.** If WebGL is missing or the context is lost, a CSS obsidian board runs the same title and menu.
+- **The previous intro.** *The Visual Evolution* is still on the Legends screen as a replayable cinematic card. Settings → *Replay the cinematic intro* and the header's clapperboard play *The Last Grain*.
+- **Tests.** `npm run test:lastgrain` (32 checks) covers:
+  - the shot grid and the cue sheet;
+  - the seam light reaching each piece on its beat;
+  - no camera pops outside the two planned cuts;
+  - every particle frozen solid in bullet time;
+  - deterministic seeking;
+  - the grains converging on their letters;
+  - Skip timing;
+  - the final frame holding as the menu.
 
 ## What's new in 6.5: Classic Chess and a fair difficulty curve
 

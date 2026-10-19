@@ -33,6 +33,8 @@ export interface AppSettings {
   campaignTier: TierId
   /** Roll random mutators before campaign battles. */
   battleMutators: boolean
+  /** A Classic Chess character used as your avatar (null = none). */
+  classicAvatar: string | null
   /** Art-pack player avatar (null = the default icon). */
   playerAvatar: string | null
   // ── Audio mixer ──
@@ -72,4 +74,4 @@ export interface AppSettings {
   grandRealm: GrandRealmId
 }
 
-export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament'
+export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament' | 'classic'

@@ -7,6 +7,9 @@ import type { Persona } from '../types/persona'
 import { applyStrength, epochLabel, getEpoch, legendElo } from './legends'
 import { LEGEND_SPELLS, spellsForBoss } from './spells'
 import { ARCHETYPE_TONE, LEGEND_TONE } from './taunts'
+import { ARCHETYPES, buildProfile } from './campaign/archetypes'
+import { BOOKS } from './campaign/books'
+import { type ClassicCharacter, getClassicEra } from './classic/roster'
 
 /** Closest Quick Play difficulty bucket for a rating (coins and stats). */
 export function difficultyForElo(elo: number): Difficulty {
@@ -52,5 +55,38 @@ export function bossPersona(boss: Boss): Persona {
     settingName: boss.settingName,
     spells: spellsForBoss(boss),
     tone: boss.legendRef ? LEGEND_TONE[boss.legendRef] : ARCHETYPE_TONE[boss.archetype],
+  }
+}
+
+/**
+ * A Classic Chess opponent: pure chess. Strength comes from the shared Elo curve
+ * (shallow search, blunder guard early on), style from the archetype and the
+ * opening book; no spells — Classic games never get a battle setup at all.
+ */
+export function classicPersona(c: ClassicCharacter): Persona {
+  const era = getClassicEra(c.era)
+  const archetype = ARCHETYPES[c.archetype]
+  const book = BOOKS[c.book]
+  const short = c.name.split(' ')[0] ?? c.name
+  return {
+    key: `classic:${c.id}`,
+    name: c.name,
+    title: c.title,
+    elo: c.elo,
+    difficulty: difficultyForElo(c.elo),
+    profile: buildProfile(c.archetype, c.elo, { w: book.w, b: book.b }),
+    quotes: {
+      ...archetype.lines,
+      intro: [c.line],
+      legendWins: [`${short} takes the game. Study it — you were closer than you think.`, 'A fine fight. Come back stronger.'],
+      legendLoses: [`Well played. ${short} tips the king to you.`, 'The board was yours today. I salute you.'],
+    },
+    portrait: { icon: c.icon, from: era.from, to: era.to, monogram: (c.name.replace(/^(The|Sir|Queen|Captain) /, '')[0] ?? '?').toUpperCase() },
+    themeId: era.themeId,
+    pieceSetId: era.pieceSetId,
+    arrivalCaption: era.caption,
+    settingName: era.name,
+    spells: [],
+    tone: ARCHETYPE_TONE[c.archetype],
   }
 }

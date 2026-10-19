@@ -1,3 +1,4 @@
+import { isClassicId } from '../data/classic/roster'
 import { isTierId } from '../data/campaign/tiers'
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   artBoard: null,
   artPieceScale: 1.15,
   battleLook: 'realm',
+  classicAvatar: null,
   arenaBackdrop: null,
   campaignTier: 'normal',
   battleMutators: false,
@@ -80,6 +82,7 @@ function sanitizeGame(raw: unknown): GameSettings {
     // Games are not restored across reloads, and boss rosters load lazily — a
     // fresh session always starts outside a campaign battle.
     bossId: null,
+    classicId: null,
   }
 }
 
@@ -102,6 +105,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     artBoard: isArtId(s.artBoard) ? s.artBoard : null,
     artPieceScale: num(s.artPieceScale, d.artPieceScale, 0.8, 1.5),
     battleLook: oneOf(s.battleLook, ['realm', 'mine'], d.battleLook),
+    classicAvatar: isClassicId(s.classicAvatar) ? s.classicAvatar : null,
     arenaBackdrop: isArtId(s.arenaBackdrop) ? s.arenaBackdrop : null,
     campaignTier: isTierId(s.campaignTier) ? s.campaignTier : d.campaignTier,
     battleMutators: bool(s.battleMutators, d.battleMutators),
@@ -129,7 +133,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     showLegalMoves: bool(s.showLegalMoves, d.showLegalMoves),
     showCoordinates: bool(s.showCoordinates, d.showCoordinates),
     game: sanitizeGame(s.game),
-    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament'], d.legendsScreen),
+    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament', 'classic'], d.legendsScreen),
     grandRealm: oneOf(s.grandRealm, GRAND_REALM_IDS, d.grandRealm),
   }
 }

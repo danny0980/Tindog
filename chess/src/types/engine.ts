@@ -33,6 +33,8 @@ export interface DifficultyConfig {
   toleranceCp: number
   /** Random noise added to personality move scoring (0 = deterministic). */
   noise: number
+  /** Blunder guard: the most centipawns a chosen move may lose against the best one. */
+  maxLossCp: number
   /** Nominal rating used for player Elo calculations. */
   elo: number
 }
@@ -88,6 +90,12 @@ export interface OpponentProfile {
   noise: number
   /** null = play Stockfish's own best move. */
   weights: StyleWeights | null
+  /**
+   * Blunder guard: never choose a move that loses more than this against the
+   * best line the search found. Weak opponents stay weak through shallow
+   * search and a style window, not by hanging pieces. Default: see blunderGuard().
+   */
+  maxLossCp?: number
   /**
    * Opening lines per colour the opponent plays (space-separated SAN from the
    * initial position), followed while the game matches them.

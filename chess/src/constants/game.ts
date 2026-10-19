@@ -2,17 +2,17 @@ import type { Difficulty, GameSettings, Personality, TimeControl, TimeControlCat
 import type { DifficultyConfig, OpponentProfile, StyleWeights } from '../types/engine'
 
 export const DIFFICULTIES: ReadonlyArray<{ id: Difficulty; label: string; description: string }> = [
-  { id: 'beginner', label: 'Beginner', description: 'Makes frequent mistakes — great for learning' },
+  { id: 'beginner', label: 'Beginner', description: 'Sensible moves, misses tactics — beatable and great for learning' },
   { id: 'intermediate', label: 'Intermediate', description: 'A solid club player' },
   { id: 'advanced', label: 'Advanced', description: 'Strong, tactically sharp play' },
   { id: 'expert', label: 'Expert', description: 'Near full engine strength' },
 ]
 
 export const DIFFICULTY_CONFIGS: Readonly<Record<Difficulty, DifficultyConfig>> = {
-  beginner: { skillLevel: 0, depth: 3, moveTimeMs: 200, minThinkMs: 650, toleranceCp: 220, noise: 0.9, elo: 800 },
-  intermediate: { skillLevel: 6, depth: 7, moveTimeMs: 450, minThinkMs: 700, toleranceCp: 110, noise: 0.4, elo: 1400 },
-  advanced: { skillLevel: 13, depth: 12, moveTimeMs: 900, minThinkMs: 650, toleranceCp: 55, noise: 0.15, elo: 2000 },
-  expert: { skillLevel: 20, depth: 18, moveTimeMs: 1600, minThinkMs: 450, toleranceCp: 25, noise: 0.04, elo: 2600 },
+  beginner: { skillLevel: 3, depth: 2, moveTimeMs: 200, minThinkMs: 650, toleranceCp: 110, noise: 0.5, maxLossCp: 140, elo: 800 },
+  intermediate: { skillLevel: 7, depth: 6, moveTimeMs: 450, minThinkMs: 700, toleranceCp: 65, noise: 0.25, maxLossCp: 120, elo: 1400 },
+  advanced: { skillLevel: 13, depth: 11, moveTimeMs: 900, minThinkMs: 650, toleranceCp: 45, noise: 0.13, maxLossCp: 95, elo: 2000 },
+  expert: { skillLevel: 20, depth: 18, moveTimeMs: 1600, minThinkMs: 450, toleranceCp: 25, noise: 0.04, maxLossCp: 70, elo: 2600 },
 }
 
 export type PersonalityWeights = StyleWeights
@@ -120,6 +120,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   legendId: null,
   legendStrength: 'authentic',
   bossId: null,
+  classicId: null,
 }
 
 export const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 } as const
@@ -147,6 +148,7 @@ export function standardOpponent(difficulty: GameSettings['difficulty'], persona
     multiPv: weights ? 4 : 1,
     toleranceCp: config.toleranceCp,
     noise: config.noise,
+    maxLossCp: config.maxLossCp,
     weights,
   }
 }

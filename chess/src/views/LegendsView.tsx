@@ -1,4 +1,4 @@
-import { ArrowLeft, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Swords, Trophy, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Crown, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Swords, Trophy, WandSparkles } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
@@ -22,6 +22,7 @@ import type { LegendsScreen } from '../types/settings'
 import type { TournamentEntrant } from '../types/rpg'
 import { ArtIcon } from '../components/ui/ArtIcon'
 import { type IconSlot, artStore, iconFor } from '../assets/artManifest'
+import { ClassicView } from '../components/classic/ClassicView'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
 const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
@@ -30,6 +31,7 @@ const TournamentView = lazyWithRetry(() => import('../components/tournament/Tour
 
 interface LegendsViewProps {
   onChallenge: (legendId: LegendId, options: ChallengeOptions) => void
+  onChallengeClassic: (classicId: string, options: ChallengeClock) => void
   onChallengeBoss: (bossId: BossId, options: ChallengeClock, launch: BattleLaunch) => void
   onFightGauntlet: (boss: Boss) => void
   onFightTournament: (opponent: TournamentEntrant, round: number) => void
@@ -43,17 +45,18 @@ function defaultChapter(campaign: CampaignId, defeated: Partial<Record<LegendId,
 }
 
 const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: typeof Hourglass; slot: IconSlot }> = {
-  select: { title: 'CHRONOS CHESS', subtitle: 'Choose your path: history, fantasy, or free play', icon: Hourglass, slot: 'chronos' },
+  select: { title: 'CHRONOS CHESS', subtitle: 'Choose your path: classic chess, or the fantasy campaigns', icon: Hourglass, slot: 'chronos' },
   historical: { title: 'HISTORICAL TIMELINE', subtitle: 'Defeat each legend to open the next chapter of history', icon: Hourglass, slot: 'historical' },
   fantasy: { title: 'FANTASY REALM', subtitle: 'Earn the elves’ trust, then storm the Obsidian Spire', icon: WandSparkles, slot: 'fantasy' },
   freeplay: { title: 'FREE PLAY', subtitle: 'Quick battles against every legend you have defeated', icon: Swords, slot: 'free-play' },
   tournament: { title: 'CHRONOS TOURNAMENT', subtitle: 'A daily 8-player knockout bracket of legends near your rating', icon: Trophy, slot: 'tournament' },
   gauntlet: { title: 'ENDLESS GAUNTLET', subtitle: 'Back-to-back bosses on one clock — how far can you go?', icon: InfinityIcon, slot: 'gauntlet' },
+  classic: { title: 'CLASSIC CHESS', subtitle: '100 historical opponents · pure chess, no spells or special rules', icon: Crown, slot: 'classic' },
   grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon, slot: 'grand-campaign' },
 }
 
 /** Chronos Chess hub: universe selector → campaign map + dossier, or free play. */
-export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onFightTournament, onReturnToBoard }: LegendsViewProps) {
+export function LegendsView({ onChallenge, onChallengeClassic, onChallengeBoss, onFightGauntlet, onFightTournament, onReturnToBoard }: LegendsViewProps) {
   const progress = useStore(profileStore, (p) => p.legends)
   const campaignProgress = useStore(profileStore, (p) => p.campaign)
   const screen = useStore(settingsStore, (s) => s.legendsScreen)
@@ -156,6 +159,8 @@ export function LegendsView({ onChallenge, onChallengeBoss, onFightGauntlet, onF
           <LegendDossier key={selected} legend={getLegend(selected)} progress={progress} onChallenge={(options) => onChallenge(selected, options)} />
         </>
       )}
+
+      {screen === 'classic' && <ClassicView onPlay={onChallengeClassic} />}
 
       {screen === 'freeplay' && <FreePlayPanel defeated={progress.defeated} selected={freeSelected} onSelect={setFreeSelected} onStart={onChallenge} />}
     </div>

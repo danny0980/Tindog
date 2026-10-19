@@ -10,6 +10,7 @@ import { TournamentCard } from '../tournament/TournamentCard'
 import type { LegendsScreen } from '../../types/settings'
 import { LegendPortrait } from './LegendPortrait'
 import { ArtIcon } from '../ui/ArtIcon'
+import { ClassicCard } from '../classic/ClassicCard'
 
 interface CampaignSelectProps {
   defeated: Partial<Record<LegendId, string>>
@@ -35,6 +36,10 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
   const unlockedCount = LEGENDS.filter((l) => defeated[l.id]).length
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      <ClassicCard onOpen={() => onOpen('classic')} />
+      <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-violet-200 lg:col-span-3" data-section="fantasy">
+        Fantasy campaign modes · spells, relics &amp; arena rules
+      </h2>
       <GrandCampaignCard progress={campaign} onOpen={() => onOpen('grand')} />
       <GauntletCard onOpen={() => onOpen('gauntlet')} />
       <TournamentCard onOpen={() => onOpen('tournament')} />

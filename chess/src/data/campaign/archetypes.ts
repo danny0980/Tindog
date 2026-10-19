@@ -222,18 +222,25 @@ export interface StrengthProfile {
   moveTimeMs: number
   toleranceCp: number
   noise: number
+  /** Blunder guard (see chooseMove). */
+  maxLossCp: number
 }
 
 /** Calibration anchors (shared with the Quick Play difficulties, extended to 2800). */
+// Early levels are weak through SHALLOW search (they miss deeper tactics, like a
+// club player) and a modest style window — not through random blunders: the
+// blunder guard keeps every move within maxLossCp of the best line found.
 const ANCHORS: ReadonlyArray<readonly [number, StrengthProfile]> = [
-  [800, { skillLevel: 0, depth: 3, moveTimeMs: 200, toleranceCp: 220, noise: 0.9 }],
-  [1400, { skillLevel: 6, depth: 7, moveTimeMs: 450, toleranceCp: 110, noise: 0.4 }],
-  [2000, { skillLevel: 13, depth: 12, moveTimeMs: 900, toleranceCp: 55, noise: 0.15 }],
-  [2600, { skillLevel: 20, depth: 18, moveTimeMs: 1500, toleranceCp: 25, noise: 0.04 }],
-  [2800, { skillLevel: 20, depth: 20, moveTimeMs: 1800, toleranceCp: 12, noise: 0.02 }],
+  [600, { skillLevel: 2, depth: 2, moveTimeMs: 150, toleranceCp: 110, noise: 0.5, maxLossCp: 150 }],
+  [800, { skillLevel: 3, depth: 3, moveTimeMs: 200, toleranceCp: 95, noise: 0.42, maxLossCp: 140 }],
+  [1100, { skillLevel: 5, depth: 4, moveTimeMs: 300, toleranceCp: 80, noise: 0.32, maxLossCp: 130 }],
+  [1400, { skillLevel: 7, depth: 6, moveTimeMs: 450, toleranceCp: 65, noise: 0.24, maxLossCp: 120 }],
+  [2000, { skillLevel: 13, depth: 11, moveTimeMs: 900, toleranceCp: 45, noise: 0.13, maxLossCp: 95 }],
+  [2600, { skillLevel: 20, depth: 18, moveTimeMs: 1500, toleranceCp: 25, noise: 0.04, maxLossCp: 70 }],
+  [2800, { skillLevel: 20, depth: 20, moveTimeMs: 1800, toleranceCp: 12, noise: 0.02, maxLossCp: 55 }],
 ]
 
-/** Piecewise-linear Stockfish strength for a target Elo (clamped to 800–2800). */
+/** Piecewise-linear Stockfish strength for a target Elo (clamped to 600–2800). */
 export function strengthForElo(elo: number): StrengthProfile {
   const first = ANCHORS[0] as (typeof ANCHORS)[number]
   const last = ANCHORS[ANCHORS.length - 1] as (typeof ANCHORS)[number]
@@ -251,6 +258,7 @@ export function strengthForElo(elo: number): StrengthProfile {
       moveTimeMs: Math.round(lerp(lo.moveTimeMs, hi.moveTimeMs)),
       toleranceCp: Math.round(lerp(lo.toleranceCp, hi.toleranceCp)),
       noise: Number(lerp(lo.noise, hi.noise).toFixed(3)),
+      maxLossCp: Math.round(lerp(lo.maxLossCp, hi.maxLossCp)),
     }
   }
   return last[1]
@@ -272,6 +280,7 @@ export function buildProfile(archetype: ArchetypeId, elo: number, repertoire: Op
     toleranceCp: Math.round(strength.toleranceCp + spec.styleSlackCp * slackFactor(elo)),
     noise: Number((strength.noise + spec.noise * slackFactor(elo)).toFixed(3)),
     weights: spec.weights,
+    maxLossCp: strength.maxLossCp,
     ...(repertoire ? { repertoire } : {}),
   }
 }
@@ -289,5 +298,6 @@ export function rescaleProfile(profile: OpponentProfile, elo: number): OpponentP
     moveTimeMs: strength.moveTimeMs,
     toleranceCp: Math.round(strength.toleranceCp + profile.toleranceCp * 0.5 * slackFactor(elo)),
     noise: Number((strength.noise + profile.noise * 0.5).toFixed(3)),
+    maxLossCp: strength.maxLossCp,
   }
 }

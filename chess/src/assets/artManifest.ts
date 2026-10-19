@@ -258,6 +258,7 @@ export function resolveBoardArt(manifest: ArtManifest, prefs: ArtPreferences, th
 
 /** Icon slots the game shows, and the file names that fill each one ("icon-boss-rush.png" → gauntlet). */
 export const ICON_SLOTS = {
+  classic: ['classic', 'classic-chess', 'pure-chess'],
   chronos: ['chronos', 'chronos-chess', 'legends', 'paths'],
   historical: ['historical', 'history', 'timeline', 'historical-timeline'],
   fantasy: ['fantasy', 'fantasy-realm', 'magic'],

@@ -3,12 +3,13 @@ import { Chess } from 'chess.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ambientMusic, resolveMaterial, sfx } from '../audio'
 import { DIFFICULTIES, PERSONALITIES, resolveTimeControl, standardOpponent } from '../constants/game'
+import { getClassic } from '../data/classic/roster'
 import { getBoardTheme, getPieceSet } from '../constants/themes'
 import { getCachedBoss, loadRealmRoster, rosterStore } from '../data/campaign/loader'
 import { realmOfBoss } from '../data/campaign/realms'
 import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, applyRelicsToProfile } from '../data/campaign/relics'
 import { getLegend, strengthInfo } from '../data/legends'
-import { bossPersona, legendPersona } from '../data/personas'
+import { bossPersona, classicPersona, legendPersona } from '../data/personas'
 import { POTIONS, RESTRICTIONS, WEATHER } from '../data/arena'
 import { displayTitle } from '../data/titles'
 import { gauntletStore } from '../stores/gauntletStore'
@@ -224,11 +225,12 @@ export function useGameController({ active }: { active: boolean }) {
   // Boss rosters load lazily; subscribing re-renders once the realm chunk arrives.
   const boss = useStore(rosterStore, () => (isAiMode && gameSettings.bossId ? getCachedBoss(gameSettings.bossId) : null))
   const legend = isAiMode && !gameSettings.bossId && gameSettings.legendId ? getLegend(gameSettings.legendId) : null
+  const classic = isAiMode && !gameSettings.bossId && !gameSettings.legendId && gameSettings.classicId ? getClassic(gameSettings.classicId) : null
   const reviewBoss = useStore(rosterStore, () => (review?.bossId ? getCachedBoss(review.bossId) : null))
   const reviewLegend = review?.legendId ? getLegend(review.legendId) : null
   const persona = useMemo<Persona | null>(
-    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : null),
-    [boss, gameSettings.legendStrength, legend],
+    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic) : null),
+    [boss, classic, gameSettings.legendStrength, legend],
   )
   const reviewPersona = useMemo<Persona | null>(
     () => (reviewBoss ? bossPersona(reviewBoss) : reviewLegend ? legendPersona(reviewLegend, 'authentic') : null),
@@ -880,11 +882,14 @@ export function useGameController({ active }: { active: boolean }) {
       const tc = resolveTimeControl(next)
       clock.reset(tc)
       const challengerBoss = next.mode === 'ai' && next.bossId ? getCachedBoss(next.bossId) : null
+      const challengerClassic = next.mode === 'ai' && !next.bossId && !next.legendId && next.classicId ? getClassic(next.classicId) : null
       const challenger = challengerBoss
         ? bossPersona(challengerBoss)
         : next.mode === 'ai' && next.legendId
           ? legendPersona(getLegend(next.legendId), next.legendStrength)
-          : null
+          : challengerClassic
+            ? classicPersona(challengerClassic)
+            : null
       const kind: BattleKind = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
       // Shrine blessings join the next campaign battle's tactics.
       let tactics: readonly TacticId[] = launch?.tactics ?? []
@@ -910,7 +915,8 @@ export function useGameController({ active }: { active: boolean }) {
         clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: launch.humanClockMs })
       }
       // Spells & tactics for character battles.
-      const setup = challenger ? buildBattleSetup(kind, challenger.spells, tactics, tc.initialMs > 0, campaign.relics, { ...launch?.arena, ironman }) : null
+      // Classic Chess is pure chess: no spells, tactics, weather or contracts — no battle setup at all.
+      const setup = challenger && !challengerClassic ? buildBattleSetup(kind, challenger.spells, tactics, tc.initialMs > 0, campaign.relics, { ...launch?.arena, ironman }) : null
       setBattle(setup)
       effectsLogRef.current = setup ? [createEffects(setup)] : []
       setEffectsLog(effectsLogRef.current)
@@ -1013,6 +1019,13 @@ export function useGameController({ active }: { active: boolean }) {
   const captured = useMemo(() => getCapturedPieces(visibleHistory), [visibleHistory])
   const lastMove = visibleHistory[visibleHistory.length - 1] ?? null
 
+  // A Classic Chess character chosen as your avatar (portrait only — it never speaks for you).
+  const classicAvatar = settings.classicAvatar ? getClassic(settings.classicAvatar) : null
+  const avatarCharacter = useMemo<PlayerInfo['character']>(() => {
+    if (!classicAvatar) return null
+    const p = classicPersona(classicAvatar)
+    return { key: `avatar:${classicAvatar.id}`, name: p.name, portrait: p.portrait }
+  }, [classicAvatar])
   const players: Record<Color, PlayerInfo> = useMemo(() => {
     const info = (color: Color): PlayerInfo => {
       const thinking = aiThinking && color === aiColor
@@ -1052,12 +1065,12 @@ export function useGameController({ active }: { active: boolean }) {
       if (isAiMode) {
         const profile = profileStore.get()
         const title = displayTitle({ profile, gauntletBest: gauntletStore.get().record.bestStreak }).name
-        return { color, name: profile.name, subtitle: `${title} · ${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood, character: null }
+        return { color, name: profile.name, subtitle: `${title} · ${profile.elo} Elo${casual ? ' · casual' : ''}`, isEngine: false, mood, character: avatarCharacter }
       }
       return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood, character: null }
     }
     return { w: info('w'), b: info('b') }
-  }, [aiColor, aiThinking, boss, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, persona, personality, review, reviewPersona])
+  }, [aiColor, aiThinking, avatarCharacter, boss, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, persona, personality, review, reviewPersona])
 
   const bestMoveArrow =
     !timeMachine.isLive && analysis.state.status === 'done' && evaluation?.bestMove

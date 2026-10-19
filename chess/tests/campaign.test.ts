@@ -42,7 +42,7 @@ check('ranks: #10 milestone, #20 overlord', ALL.every((b) => (b.index === MILEST
 const relicDrops = ALL.flatMap((b) => (b.relic ? [b.relic] : []))
 check('each of the 10 relics drops exactly once', relicDrops.length === 10 && new Set(relicDrops).size === 10 && RELICS.every((r) => relicDrops.includes(r.id)))
 const elos = ALL.map((b) => b.elo)
-check('Elo spans 800–2800', Math.min(...elos) === 800 && Math.max(...elos) === 2800, `${Math.min(...elos)}–${Math.max(...elos)}`)
+check('Elo spans 650–2800 (a gentle first realm)', Math.min(...elos) === 650 && Math.max(...elos) === 2800, `${Math.min(...elos)}–${Math.max(...elos)}`)
 check('Elo rises along every realm path', GRAND_REALMS.every((r) => (ROSTERS[r.id] ?? []).every((b, i, arr) => i === 0 || b.elo > (arr[i - 1]?.elo ?? 0))))
 check('par grows with Elo', (chronicle[0]?.par ?? 0) < (cosmic[19]?.par ?? 0), `${chronicle[0]?.par} → ${cosmic[19]?.par}`)
 check('every boss speaks on every trigger', ALL.every((b) => TRIGGERS.every((t) => b.quotes[t].length > 0 && b.quotes[t].every((q) => q.trim().length > 0))))
@@ -57,11 +57,11 @@ check('short names are short', ALL.every((b) => b.shortName.length > 0 && b.shor
 check('every archetype voices every generic trigger', ARCHETYPE_IDS.every((a) => Object.values(ARCHETYPES[a].lines).every((pool) => pool.length > 0)))
 const ladder = [800, 1100, 1400, 1700, 2000, 2300, 2600, 2800].map(strengthForElo)
 check('strength curve is monotonic', ladder.every((s, i) => i === 0 || (s.skillLevel >= (ladder[i - 1]?.skillLevel ?? 0) && s.depth >= (ladder[i - 1]?.depth ?? 0) && s.toleranceCp <= (ladder[i - 1]?.toleranceCp ?? 999))))
-check('profiles are in engine range', ALL.every((b) => b.profile.skillLevel >= 0 && b.profile.skillLevel <= 20 && b.profile.depth >= 3 && b.profile.multiPv >= 3 && b.profile.toleranceCp > 0))
+check('profiles are in engine range', ALL.every((b) => b.profile.skillLevel >= 0 && b.profile.skillLevel <= 20 && b.profile.depth >= 2 && b.profile.multiPv >= 3 && b.profile.toleranceCp > 0 && (b.profile.maxLossCp ?? 0) >= 50))
 const infinite = cosmic[19] as Boss
 const hammurabi = chronicle[0] as Boss
 check('The Infinite plays at full strength', infinite.profile.skillLevel === 20 && infinite.profile.depth >= 20 && infinite.profile.toleranceCp < 25, JSON.stringify({ d: infinite.profile.depth, tol: infinite.profile.toleranceCp }))
-check('Hammurabi is a gentle opener', hammurabi.profile.skillLevel === 0 && hammurabi.profile.depth <= 4)
+check('Hammurabi is a gentle opener — shallow, but guarded against blunders', hammurabi.profile.skillLevel <= 3 && hammurabi.profile.depth <= 3 && (hammurabi.profile.maxLossCp ?? 0) >= 120)
 const sameElo = (a: string, b: string) => [ALL.find((x) => x.id === a), ALL.find((x) => x.id === b)] as const
 const [ironjaw, lattice] = sameElo('cyber.ironjaw', 'cyber.tessaract')
 check('archetype slack: Berserker wider than Fortifier', Boolean(ironjaw && lattice && ironjaw.profile.toleranceCp > lattice.profile.toleranceCp))

@@ -72,6 +72,8 @@ export function applyStrength(profile: OpponentProfile, strength: LegendStrength
       moveTimeMs: Math.round(profile.moveTimeMs * 0.6),
       toleranceCp: Math.round(profile.toleranceCp * 1.7 + 40),
       noise: profile.noise + 0.35,
+      // Gentler, but still no hung pieces.
+      maxLossCp: 150,
     }
   }
   if (strength === 'mythic') {
@@ -82,6 +84,7 @@ export function applyStrength(profile: OpponentProfile, strength: LegendStrength
       moveTimeMs: Math.round(profile.moveTimeMs * 1.4),
       toleranceCp: Math.max(10, Math.round(profile.toleranceCp * 0.6)),
       noise: profile.noise * 0.5,
+      maxLossCp: 60,
     }
   }
   return profile

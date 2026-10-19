@@ -113,8 +113,10 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
       }
     }
 
+    // A weakened engine needs alternatives on the table so the blunder guard can compare its pick.
+    const lines = p.skillLevel < 20 ? Math.max(p.multiPv, 4) : p.multiPv
     Promise.all([
-      search(fen, { depth: p.depth, moveTimeMs: p.moveTimeMs, multiPv: allowed ? Math.min(p.multiPv, allowed.length) : p.multiPv, skillLevel: p.skillLevel, ...(allowed ? { searchMoves: allowed } : {}) }),
+      search(fen, { depth: p.depth, moveTimeMs: p.moveTimeMs, multiPv: allowed ? Math.min(lines, allowed.length) : lines, skillLevel: p.skillLevel, ...(allowed ? { searchMoves: allowed } : {}) }),
       delay(p.minThinkMs),
     ])
       .then(async ([result]) => {

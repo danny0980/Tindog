@@ -112,30 +112,38 @@ function styleScore(fen: string, uci: string, w: StyleWeights, rank: number, lin
  * is re-ranked by style features, so an attacking style really does prefer
  * the king hunt among sound options.
  */
+/** The blunder guard of a profile: its own, or one derived from its style window (35–170 cp). */
+export const blunderGuard = (profile: Pick<OpponentProfile, 'toleranceCp' | 'maxLossCp'>): number =>
+  profile.maxLossCp ?? Math.min(170, Math.max(35, profile.toleranceCp))
+
 export function chooseMove(
   fen: string,
   result: SearchResult,
-  profile: Pick<OpponentProfile, 'weights' | 'toleranceCp' | 'noise'>,
+  profile: Pick<OpponentProfile, 'weights' | 'toleranceCp' | 'noise' | 'maxLossCp'>,
   random: () => number = Math.random,
 ): string {
   const weights = profile.weights
-  if (!weights || result.lines.length === 0) return result.bestMove
+  if (result.lines.length === 0) return result.bestMove
 
   const scored = result.lines
     .filter((line) => line.pv[0])
     .map((line, rank) => ({ move: line.pv[0] as string, cp: scoreToCp(line.score), rank }))
+  if (scored.length === 0) return result.bestMove
   const top = Math.max(...scored.map((c) => c.cp))
+  const best = scored.find((c) => c.cp === top) ?? (scored[0] as (typeof scored)[number])
   // Never pass up a forced mate.
-  if (top >= 9000) return scored.find((c) => c.cp === top)?.move ?? result.bestMove
+  if (top >= 9000) return best.move
+  // Smart but beatable: a weakened engine may pick a lesser line, but never one that loses
+  // more than the guard (no hung pieces, no walking into mate) — and never an unevaluated move.
+  const guard = blunderGuard(profile)
+  const engineChoice = scored.find((c) => c.move === result.bestMove)
+  if (!weights) return engineChoice && engineChoice.cp >= top - guard ? engineChoice.move : best.move
 
-  const candidates = scored.filter((c) => c.cp >= top - profile.toleranceCp)
-  // The skill-limited best move stays in the pool so lower levels remain beatable.
-  if (!candidates.some((c) => c.move === result.bestMove)) {
-    const fromLines = scored.find((c) => c.move === result.bestMove)
-    if (fromLines) candidates.push(fromLines)
-  }
+  const candidates = scored.filter((c) => c.cp >= top - Math.min(profile.toleranceCp, guard))
+  // The skill-limited best move stays in the pool so lower levels remain beatable — within the guard.
+  if (engineChoice && engineChoice.cp >= top - guard && !candidates.some((c) => c.move === engineChoice.move)) candidates.push(engineChoice)
 
-  let best = candidates[0]
+  let pick = candidates[0]
   let bestValue = -Infinity
   for (const candidate of candidates) {
     const value =
@@ -144,10 +152,10 @@ export function chooseMove(
       (random() * 2 - 1) * profile.noise
     if (value > bestValue) {
       bestValue = value
-      best = candidate
+      pick = candidate
     }
   }
-  return best?.move ?? result.bestMove
+  return pick?.move ?? best.move
 }
 
 /**

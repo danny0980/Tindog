@@ -8,6 +8,18 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 
 ---
 
+## What's new in 6.5: Classic Chess and a fair difficulty curve
+
+- **Classic Chess, a separate mode** (Legends → *Classic Chess*, shown above the fantasy modes). It has 100 historical opponents who play strictly by the rules of chess, with no spells, tactics, weather, contracts or relics; a Classic game never gets a battle setup.
+  - The opponents come from ten eras of ten: cradles of civilisation, Greece & Rome, kings & crusaders, empires of the East, the Renaissance, the age of sail, the Enlightenment, the 19th century, minds of science, and the masters of the board (Philidor → Fischer).
+  - Together they form one rating ladder, from about 600 to 2760 Elo. Each has their own playing style, opening book and lines of dialogue (`src/data/classic/roster.ts`).
+  - The screen has era filters, search, a suggested next opponent near your rating and a count of opponents beaten. Any character can be your avatar.
+  - Portraits come from the art pack by name, using the same names as the campaign where a character appears in both.
+- **Smart but winnable AI.**
+  - Early opponents are now weak through shallow search: they miss deeper tactics, like a club player. Before, they were weak through random engine blunders.
+  - A **blunder guard** (`maxLossCp`) never lets an opponent choose a move that loses more than ~1.5 pawns at the lowest levels, tightening to ~0.5 at the top. They no longer hang pieces or throw games away. A mate in one is never missed.
+  - The first campaign realm now starts at 650 Elo. Quick Play Beginner and the legends' Novice strength follow the same rules.
+
 ## What's new in 6.4: Campaign expansion and the pre-battle loadout
 
 - **Branching roads.** Each zone of the Grand Campaign now forks after its gate into two branches that rejoin before the zone boss. Clear either branch to go on; the skipped one stays open for later (`src/data/campaign/paths.ts`).

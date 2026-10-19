@@ -117,6 +117,7 @@ export default function App() {
         mode: 'ai',
         legendId,
         bossId: null,
+        classicId: null,
         legendStrength: options.strength,
         playerColor: options.color,
         timeControlId: options.timeControlId,
@@ -137,6 +138,7 @@ export default function App() {
           mode: 'ai',
           bossId,
           legendId: null,
+          classicId: null,
           legendStrength: 'authentic',
           playerColor: options.color,
           timeControlId: options.timeControlId,
@@ -145,6 +147,26 @@ export default function App() {
         },
         launch,
       )
+      navigate('play')
+    },
+    [game, navigate],
+  )
+
+  // Classic Chess: pure chess against one of the 100 historical opponents (no spells, no arena rules).
+  const challengeClassic = useCallback(
+    (classicId: string, options: ChallengeClock) => {
+      game.startNewGame({
+        ...game.gameSettings,
+        mode: 'ai',
+        classicId,
+        bossId: null,
+        legendId: null,
+        legendStrength: 'authentic',
+        playerColor: options.color,
+        timeControlId: options.timeControlId,
+        ...(options.customMinutes !== undefined ? { customMinutes: options.customMinutes } : {}),
+        ...(options.customIncrementSeconds !== undefined ? { customIncrementSeconds: options.customIncrementSeconds } : {}),
+      })
       navigate('play')
     },
     [game, navigate],
@@ -160,6 +182,7 @@ export default function App() {
           mode: 'ai',
           legendId: opponent.legendId,
           bossId: null,
+          classicId: null,
           legendStrength: opponent.strength,
           playerColor: round % 2 === 0 ? 'w' : 'b',
           timeControlId: 'blitz-5-3',
@@ -183,6 +206,7 @@ export default function App() {
           mode: 'ai',
           bossId: boss.id,
           legendId: null,
+          classicId: null,
           legendStrength: 'authentic',
           playerColor: run.round % 2 === 1 ? 'w' : 'b',
           timeControlId: 'custom',
@@ -248,7 +272,7 @@ export default function App() {
         <Suspense fallback={<ViewFallback />}>
           {/* Browsers without view transitions get a gentle CSS entrance instead. */}
           <div key={view} className={`flex min-h-0 flex-1 flex-col ${view === 'play' ? 'hidden' : ''} ${supportsViewTransitions() ? '' : 'animate-view-in'}`}>
-          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
+          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onChallengeClassic={challengeClassic} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}

@@ -42,6 +42,8 @@ export interface GameSettings {
   legendStrength: LegendStrength
   /** Grand Campaign boss opponent (AI mode); overrides legend, difficulty & personality. */
   bossId: BossId | null
+  /** Classic Chess opponent (AI mode): pure chess, no spells. Below boss and legend in precedence. */
+  classicId: string | null
 }
 
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient'

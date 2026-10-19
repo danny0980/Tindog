@@ -18,7 +18,7 @@ export const GRAND_REALMS: ReadonlyArray<GrandRealmDef> = [
     tagline: 'From Babylon to Princeton',
     description: 'Twenty rulers, generals and geniuses across four ages of history.',
     icon: 'scroll',
-    eloRange: [800, 1450],
+    eloRange: [650, 1400],
     colors: { from: '#f59e0b', via: '#b45309', to: '#1e3a8a' },
     zones: [
       { id: 'ancient', name: 'Ancient World', caption: '1750 BCE – 30 BCE', themeId: 'papyrus-gold', pieceSetId: 'lapis', from: '#d4a24c', to: '#1e3a8a' },

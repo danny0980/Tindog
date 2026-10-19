@@ -1,5 +1,6 @@
 // Adapters that turn any character — a hand-crafted Chronos legend or a
 // generated Grand Campaign boss — into the Persona the play screen stages.
+import { loreFor } from './classic/lore'
 import type { Boss } from '../types/campaign'
 import type { Difficulty } from '../types/chess'
 import type { Legend, LegendStrength } from '../types/legend'
@@ -68,6 +69,7 @@ export function classicPersona(c: ClassicCharacter): Persona {
   const archetype = ARCHETYPES[c.archetype]
   const book = BOOKS[c.book]
   const short = c.name.split(' ')[0] ?? c.name
+  const lore = loreFor(c.id)
   return {
     key: `classic:${c.id}`,
     name: c.name,
@@ -78,8 +80,9 @@ export function classicPersona(c: ClassicCharacter): Persona {
     quotes: {
       ...archetype.lines,
       intro: [c.line],
-      legendWins: [`${short} takes the game. Study it — you were closer than you think.`, 'A fine fight. Come back stronger.'],
-      legendLoses: [`Well played. ${short} tips the king to you.`, 'The board was yours today. I salute you.'],
+      // Their own words at the end of the game (from the lore), with the generic lines as fallback.
+      legendWins: lore ? [lore.victory] : [`${short} takes the game. Study it — you were closer than you think.`, 'A fine fight. Come back stronger.'],
+      legendLoses: lore ? [lore.defeat] : [`Well played. ${short} tips the king to you.`, 'The board was yours today. I salute you.'],
     },
     portrait: { icon: c.icon, from: era.from, to: era.to, monogram: (c.name.replace(/^(The|Sir|Queen|Captain) /, '')[0] ?? '?').toUpperCase() },
     themeId: era.themeId,

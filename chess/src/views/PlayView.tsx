@@ -2,6 +2,8 @@ import { Download, History, Share2, X } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
+import { MoveInsightCard } from '../components/analysis/MoveInsightCard'
+import { factFor } from '../data/classic/lore'
 import { BoardHologram } from '../components/board/BoardHologram'
 import { ChessBoard } from '../components/board/ChessBoard'
 import { EvalBar } from '../components/board/EvalBar'
@@ -288,12 +290,12 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
     </div>
   )
 
-  const analysisHint = currentMoveAnalysis && !timeMachine.isLive && currentMoveAnalysis.bestMoveSan && (
-    <div className="glass animate-fade-in rounded-xl px-3 py-2 text-center text-xs text-slate-300">
-      {currentMoveAnalysis.san} was a <span className="font-bold capitalize text-white">{currentMoveAnalysis.classification}</span> — best was{' '}
-      <span className="font-mono font-bold text-lime-300">{currentMoveAnalysis.bestMoveSan}</span>
-    </div>
-  )
+  // Classic Chess: a true fact about the opponent once the game is over (a different one game to game).
+  const classicId = game.persona?.key.startsWith('classic:') ? game.persona.key.slice('classic:'.length) : null
+  const classicFact = classicId ? factFor(classicId, total) : null
+  const classicLesson = classicFact && game.persona ? { name: game.persona.name, fact: classicFact } : null
+
+  const analysisHint = currentMoveAnalysis && !timeMachine.isLive && <MoveInsightCard move={currentMoveAnalysis} />
 
   const reviewTools = (defaultOpen: boolean): ReactNode => (
     <>
@@ -526,6 +528,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         open={game.showGameOver && !newGameOpen && active}
         summary={game.summary}
         opponent={game.persona ? { spec: game.persona.portrait, label: game.persona.name } : null}
+        lesson={classicLesson}
         isAiMode={game.isAiMode}
         moveCount={total}
         onNewGame={openNewGame}

@@ -1,8 +1,9 @@
-import { Bell, CloudRain, Crown, Flame, Handshake, Music, Orbit, Play, Skull, Sparkles, Trophy, Volume2, VolumeX, Wind } from 'lucide-react'
+import { Bell, CloudRain, Crown, Flame, Handshake, MessageSquareQuote, Music, Orbit, Play, Skull, Sparkles, Trophy, Volume2, VolumeX, Wind } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { FOCUS_TRACKS, type FocusTrack, audioEngine, focusSoundscape, sfx } from '../../audio'
 import { playAchievement, playCheck, playCoins, playDefeat, playDraw, playVictory } from '../../audio/fanfares'
 import { playPieceSound } from '../../audio/pieceSounds'
+import { type VoiceMode, hushVoices, speakLine, voicesSupported } from '../../audio/voice'
 import { getBoardTheme } from '../../constants/themes'
 import { updateSettings } from '../../stores/settingsStore'
 import type { AppSettings, SoundMaterialSetting } from '../../types/settings'
@@ -25,6 +26,19 @@ const unlock = () => audioEngine.unlock()
 const FOCUS_ICON: Record<FocusTrack, typeof Wind> = { off: VolumeX, rain: CloudRain, fireplace: Flame, cosmic: Orbit }
 
 /** Granular mixer: master + three tracks, piece-sound material and cue previews. */
+const VOICE_MODES: ReadonlyArray<{ id: VoiceMode; label: string }> = [
+  { id: 'off', label: 'Off' },
+  { id: 'key', label: 'Key moments' },
+  { id: 'all', label: 'Every line' },
+]
+
+const VOICE_SAMPLES = [
+  { speaker: 'Cleopatra VII', text: 'Rome fell for my charm. You will fall for my traps.', mood: 'smug' as const },
+  { speaker: 'Napoleon Bonaparte', text: "Every pawn carries a marshal's baton. Shall we see whose?", mood: 'calm' as const },
+  { speaker: 'Genghis Khan', text: 'Your pawns scatter like the steppe wind.', mood: 'smug' as const },
+  { speaker: 'ORACLE-7', text: 'Probability of your victory: recalculating.', mood: 'calm' as const },
+]
+
 export function AudioPanel({ settings }: { settings: AppSettings }) {
   const themeMaterial: SoundMaterial = getBoardTheme(settings.boardTheme).material
   const materialFor = (id: SoundMaterialSetting): SoundMaterial => (id === 'theme' ? themeMaterial : id)
@@ -76,6 +90,43 @@ export function AudioPanel({ settings }: { settings: AppSettings }) {
             playCoins()
           }}
         />
+      </Section>
+
+      <Section title="Character voices">
+        <p className="mb-2 text-xs text-slate-400">Characters read their lines aloud in voices of their own, using your device's built-in speech.</p>
+        {voicesSupported() ? (
+          <>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Character voices">
+              {VOICE_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={settings.characterVoice === m.id}
+                  data-voice-mode={m.id}
+                  onClick={() => {
+                    updateSettings({ characterVoice: m.id })
+                    if (m.id === 'off') hushVoices()
+                  }}
+                  className={`min-h-12 rounded-xl border p-2 text-sm font-semibold transition ${settings.characterVoice === m.id ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={settings.characterVoice === 'off'}
+              onClick={() => speakLine(VOICE_SAMPLES[Math.floor(Math.random() * VOICE_SAMPLES.length)] ?? VOICE_SAMPLES[0]!, settings.sfxVolume)}
+              className="mt-2 flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-40"
+              data-voice-sample
+            >
+              <MessageSquareQuote className="size-4" /> Hear a sample
+            </button>
+          </>
+        ) : (
+          <p className="text-xs text-slate-500">This browser has no speech synthesis.</p>
+        )}
       </Section>
 
       <Section title="Focus soundscape">

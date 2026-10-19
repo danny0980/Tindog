@@ -1,4 +1,4 @@
-import { Coins, Crown, Eye, Infinity as InfinityIcon, Handshake, Hourglass, Map as MapIcon, Microscope, RotateCcw, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Coins, Crown, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
@@ -27,9 +27,11 @@ interface GameOverModalProps {
   onShare: () => void
   /** The character you faced (legend or boss): their portrait crowns the card. */
   opponent?: { spec: PortraitSpec; label: string } | null
+  /** A true fact about the historical opponent (Classic Chess), shown after the game. */
+  lesson?: { name: string; fact: string } | null
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -127,6 +129,15 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               </div>
               <div className="mt-1 font-mono text-xl font-bold text-yellow-300">+{summary.coins}</div>
             </div>
+          </div>
+        )}
+
+        {lesson && (
+          <div className="mt-3 w-full rounded-xl border border-amber-300/30 bg-amber-300/[0.07] p-3 text-left" data-gameover-lesson>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
+              <ScrollText className="size-3.5" /> History lesson · {lesson.name}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-200">{lesson.fact}</p>
           </div>
         )}
 

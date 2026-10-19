@@ -1,4 +1,6 @@
-import { Check, ChevronRight, Crown, Search, Swords, UserRound } from 'lucide-react'
+import { Check, ChevronRight, Crown, ScrollText, Search, Sparkle, Swords, UserRound, Volume2 } from 'lucide-react'
+import { speakLine, voicesSupported } from '../../audio/voice'
+import { loreFor } from '../../data/classic/lore'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ARCHETYPES } from '../../data/campaign/archetypes'
 import { BOOKS } from '../../data/campaign/books'
@@ -80,6 +82,7 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
       {selected && (
         <aside className="glass space-y-3 self-start rounded-3xl p-4 lg:sticky lg:top-4" data-classic-dossier={selected.id}>
           <Dossier c={selected} beaten={beaten.has(selected.name)} />
+          <LoreBlock c={selected} />
           <Segmented
             label="Play as"
             options={[
@@ -188,5 +191,42 @@ function Segmented({ label, options, value, onChange }: { label: string; options
         ))}
       </div>
     </div>
+  )
+}
+
+/** Who they really were: dates, story and three true facts (and their greeting, read aloud). */
+function LoreBlock({ c }: { c: ClassicCharacter }) {
+  const lore = loreFor(c.id)
+  const voiceOn = useStore(settingsStore, (s) => s.characterVoice !== 'off')
+  if (!lore) return null
+  return (
+    <section className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3" data-classic-lore={c.id}>
+      <div className="flex items-center gap-2">
+        <ScrollText className="size-4 shrink-0 text-amber-200" />
+        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-200">History</span>
+        <span className="ml-auto font-mono text-[11px] text-slate-400">{lore.lived}</span>
+      </div>
+      <p className="text-xs leading-relaxed text-slate-300">{lore.bio}</p>
+      <details className="group" open>
+        <summary className="cursor-pointer list-none text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 group-open:mb-1.5">Did you know?</summary>
+        <ul className="space-y-1.5">
+          {lore.facts.map((fact) => (
+            <li key={fact} className="flex gap-1.5 text-xs leading-relaxed text-slate-300">
+              <Sparkle className="mt-0.5 size-3 shrink-0 text-amber-300" /> {fact}
+            </li>
+          ))}
+        </ul>
+      </details>
+      {voicesSupported() && voiceOn && (
+        <button
+          type="button"
+          onClick={() => speakLine({ speaker: c.name, text: c.line, mood: 'calm' }, settingsStore.get().sfxVolume)}
+          className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10"
+          data-classic-voice
+        >
+          <Volume2 className="size-3.5" /> Hear {c.name.split(' ')[0]}
+        </button>
+      )}
+    </section>
   )
 }

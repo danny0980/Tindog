@@ -127,7 +127,7 @@ const ROWS: Readonly<Record<ClassicEraId, readonly Row[]>> = {
     ['voltaire', 'Voltaire', 'Philosopher of the Enlightenment', 'trickster', 'irregular', 'feather', 'Judge a player by his questions rather than his answers.'],
     ['mozart', 'Wolfgang Amadeus Mozart', 'Prodigy of Salzburg', 'maverick', 'romantic', 'music', 'Every move in its place, like notes in a sonata.'],
     ['franklin', 'Benjamin Franklin', 'Inventor and Statesman', 'calculator', 'classical', 'zap', 'Chess teaches foresight, circumspection and caution.'],
-    ['jefferson', 'Thomas Jefferson', 'Author of the Declaration', 'fortifier', 'classical', 'scroll', 'The harder I work, the more luck I seem to have.'],
+    ['jefferson', 'Thomas Jefferson', 'Author of the Declaration', 'fortifier', 'classical', 'scroll', 'All pieces are created equal. Let us see which of them you can keep.'],
     ['peter-the-great', 'Peter the Great', 'Tsar of All Russia', 'warlord', 'classical', 'anchor', 'I built a city on a swamp. I can build an attack from nothing.'],
     ['frederick-the-great', 'Frederick the Great', 'King of Prussia', 'sniper', 'hypermodern', 'flag', 'He who defends everything defends nothing.'],
     ['catherine-the-great', 'Catherine the Great', 'Empress of Russia', 'warlord', 'classical', 'crown', 'I shall be an autocrat: that is my trade.'],
@@ -138,7 +138,7 @@ const ROWS: Readonly<Record<ClassicEraId, readonly Row[]>> = {
   nineteenth: [
     ['florence-nightingale', 'Florence Nightingale', 'The Lady with the Lamp', 'fortifier', 'fortress', 'sunrise', 'I never gave or took an excuse.'],
     ['harriet-tubman', 'Harriet Tubman', 'Conductor of the Underground Railroad', 'sniper', 'hypermodern', 'compass', 'I never ran my train off the track.'],
-    ['darwin', 'Charles Darwin', 'Naturalist of the Beagle', 'calculator', 'classical', 'leaf', 'Not the strongest survives, but the most adaptable.'],
+    ['darwin', 'Charles Darwin', 'Naturalist of the Beagle', 'calculator', 'classical', 'leaf', 'I spent twenty years on one book. I can spare a few minutes for one position.'],
     ['wellington', 'The Duke of Wellington', 'Victor of Waterloo', 'fortifier', 'fortress', 'shield', 'Hard pounding. Let us see who pounds longest.'],
     ['bolivar', 'Simón Bolívar', 'The Liberator', 'gambiteer', 'romantic', 'sword', 'Freedom is won by daring.'],
     ['queen-victoria', 'Queen Victoria', 'Empress of India', 'fortifier', 'fortress', 'crown', 'We are not interested in the possibilities of defeat.'],

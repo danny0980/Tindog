@@ -1,5 +1,4 @@
-import { Check, ChevronRight, Crown, ScrollText, Search, Sparkle, Swords, UserRound, Volume2 } from 'lucide-react'
-import { speakLine, voicesSupported } from '../../audio/voice'
+import { Check, ChevronRight, Crown, ScrollText, Search, Sparkle, Swords, UserRound } from 'lucide-react'
 import { loreFor } from '../../data/classic/lore'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ARCHETYPES } from '../../data/campaign/archetypes'
@@ -194,10 +193,9 @@ function Segmented({ label, options, value, onChange }: { label: string; options
   )
 }
 
-/** Who they really were: dates, story and three true facts (and their greeting, read aloud). */
+/** Who they really were: dates, story and three true facts. */
 function LoreBlock({ c }: { c: ClassicCharacter }) {
   const lore = loreFor(c.id)
-  const voiceOn = useStore(settingsStore, (s) => s.characterVoice !== 'off')
   if (!lore) return null
   return (
     <section className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3" data-classic-lore={c.id}>
@@ -217,16 +215,6 @@ function LoreBlock({ c }: { c: ClassicCharacter }) {
           ))}
         </ul>
       </details>
-      {voicesSupported() && voiceOn && (
-        <button
-          type="button"
-          onClick={() => speakLine({ speaker: c.name, text: c.line, mood: 'calm' }, settingsStore.get().sfxVolume)}
-          className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10"
-          data-classic-voice
-        >
-          <Volume2 className="size-3.5" /> Hear {c.name.split(' ')[0]}
-        </button>
-      )}
     </section>
   )
 }

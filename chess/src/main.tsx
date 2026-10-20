@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/index.css'
-import { startCharacterVoices } from './audio/voice'
 import { loadAccount } from './online/ranked/account'
 import { startCloudSync } from './online/ranked/cloudSync'
 
@@ -15,8 +14,6 @@ if (!container) throw new Error('Root element #root not found')
 // offer "Reload App". We deliberately don't auto-reload on `vite:preloadError`:
 // Vite fires it on the first failed attempt, which would pre-empt the retries
 // and throw the player out of the screen they were on.
-// Characters read their lines aloud (Settings → Audio → Character voices).
-startCharacterVoices()
 // Your account on the game server (also finishes a sign-in from an email link), and cloud saves.
 void loadAccount()
 startCloudSync()

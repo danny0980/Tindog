@@ -1,31 +1,25 @@
-import { BookOpen, MessageCircle, Volume2 } from 'lucide-react'
+import { BookOpen, MessageCircle } from 'lucide-react'
 import { useState } from 'react'
-import { hushVoices, speakLine, voicesSupported } from '../../audio/voice'
 import { QUESTIONS, type QuestionId, interviewAnswer } from '../../data/classic/interview'
 import type { ClassicCharacter } from '../../data/classic/roster'
 import { classicPersona } from '../../data/personas'
 import { useStore } from '../../hooks/useStore'
 import { applyFeat } from '../../stores/featActions'
 import { profileStore } from '../../stores/profileStore'
-import { settingsStore } from '../../stores/settingsStore'
 import { recordInterview } from '../../utils/feats'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 
-/** Character Interview: ask a beaten Classic character questions; they answer aloud. */
+/** Character Interview: ask a beaten Classic character questions. */
 export function InterviewPanel({ c }: { c: ClassicCharacter }) {
   const persona = classicPersona(c)
   const seed = useStore(profileStore, (p) => p.matches.length + p.feats.interviewed.length)
-  const voiceMode = useStore(settingsStore, (s) => s.characterVoice)
   const [asked, setAsked] = useState<QuestionId | null>(null)
   const answer = asked ? interviewAnswer(c, asked, seed) : null
-  const canSpeak = voicesSupported() && voiceMode !== 'off'
 
   const ask = (q: QuestionId) => {
     setAsked(q)
-    const a = interviewAnswer(c, q, seed)
-    if (canSpeak) speakLine({ speaker: c.name, text: a.text, mood: a.factual ? 'calm' : 'smug' }, settingsStore.get().sfxVolume)
     applyFeat((p) => recordInterview(p, c.id))
   }
 
@@ -65,20 +59,12 @@ export function InterviewPanel({ c }: { c: ClassicCharacter }) {
           </button>
         ))}
       </div>
-      {canSpeak && answer && (
-        <button type="button" onClick={() => speakLine({ speaker: c.name, text: answer.text, mood: 'calm' }, settingsStore.get().sfxVolume)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white">
-          <Volume2 className="size-3.5" /> Hear it again
-        </button>
-      )}
     </div>
   )
 }
 
 export function InterviewModal({ c, onClose }: { c: ClassicCharacter | null; onClose: () => void }) {
-  const close = () => {
-    hushVoices()
-    onClose()
-  }
+  const close = onClose
   return (
     <Modal
       open={c !== null}

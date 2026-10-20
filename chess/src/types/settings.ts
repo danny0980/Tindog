@@ -44,8 +44,6 @@ export interface AppSettings {
   // ── Audio mixer ──
   masterVolume: number
   sfxEnabled: boolean
-  /** Characters' lines read aloud: never, key moments (greetings, results, big reactions), or every line. */
-  characterVoice: 'off' | 'key' | 'all'
   sfxVolume: number
   musicEnabled: boolean
   musicVolume: number

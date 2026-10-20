@@ -1,7 +1,6 @@
 import { Flag, Flame, Play, RefreshCw, ScrollText, Swords, Target } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sfx } from '../../audio'
-import { speakLine, voicesSupported } from '../../audio/voice'
 import { getBoardTheme, getPieceSet } from '../../constants/themes'
 import { BATTLES, type Battle } from '../../data/battles'
 import { getClassic } from '../../data/classic/roster'
@@ -47,21 +46,11 @@ export function BattlesView() {
   const game = v.game
   const battle = v.battle
   const firedRef = useRef(0)
-  const voice = voicesSupported() && settings.characterVoice !== 'off'
-
-  const say = useCallback(
-    (speaker: string, text: string) => {
-      if (voice) speakLine({ speaker, text, mood: 'calm' }, settingsStore.get().sfxVolume)
-    },
-    [voice],
-  )
 
   const start = (b: Battle, me: Color) => {
     firedRef.current = 0
     setBanner(null)
     v.start({ variant: 'battle', battle: b, color: me, level })
-    const opp = opponentOf(b, me)
-    say(opp.name, b.lines[me === 'w' ? 'b' : 'w'].intro)
   }
 
   // Reinforcements: announce each event once, as it happens.
@@ -73,22 +62,13 @@ export function BattlesView() {
       firedRef.current = game.fired.length
       if (event) {
         sfx.pickup()
-        say('Narrator', event.text)
         const t = window.setTimeout(() => setBanner(event.text), 0)
         return () => window.clearTimeout(t)
       }
     }
-  }, [battle, game, say, v.version])
+  }, [battle, game, v.version])
 
-  // The opposing commander has the last word.
   const result = game?.result ?? null
-  useEffect(() => {
-    if (!result || !battle || !game) return
-    const me = v.myColor
-    const opp = opponentOf(battle, me)
-    const lines = battle.lines[me === 'w' ? 'b' : 'w']
-    say(opp.name, result.winner === me ? lines.defeat : result.winner === null ? lines.intro : lines.victory)
-  }, [battle, game, result, say, v.myColor])
 
   if (!game || !battle) {
     return (

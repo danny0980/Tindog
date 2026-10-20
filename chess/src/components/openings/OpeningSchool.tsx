@@ -1,7 +1,6 @@
-import { ArrowLeft, Check, GraduationCap, Lightbulb, RotateCcw, Volume2 } from 'lucide-react'
+import { ArrowLeft, Check, GraduationCap, Lightbulb, RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { sfx } from '../../audio'
-import { speakLine, voicesSupported } from '../../audio/voice'
 import { getBoardTheme, getPieceSet } from '../../constants/themes'
 import { getClassic } from '../../data/classic/roster'
 import { classicPersona } from '../../data/personas'
@@ -67,15 +66,7 @@ function LessonPlayer({ lesson, onBack }: { lesson: Lesson; onBack: () => void }
   const settings = useStore(settingsStore, (s) => s)
   const teacher = getClassic(lesson.teacher)
   const persona = teacher ? classicPersona(teacher) : null
-  const voiceOn = voicesSupported() && settings.characterVoice !== 'off'
   const finished = state.ply >= lesson.line.length
-
-  const say = useCallback(
-    (text: string) => {
-      if (voiceOn && teacher) speakLine({ speaker: teacher.name, text, mood: 'calm' }, settingsStore.get().sfxVolume)
-    },
-    [teacher, voiceOn],
-  )
 
   // The opponent's scripted reply, after a short pause.
   useEffect(() => {
@@ -86,11 +77,6 @@ function LessonPlayer({ lesson, onBack }: { lesson: Lesson; onBack: () => void }
     }, 900)
     return () => window.clearTimeout(id)
   }, [state])
-
-  // The teacher reads the explanations aloud (when character voices are on).
-  useEffect(() => {
-    if (state.message.kind !== 'your-move') say(state.message.text)
-  }, [say, state.message])
 
   // Record the lesson once it is finished.
   useEffect(() => {
@@ -149,11 +135,6 @@ function LessonPlayer({ lesson, onBack }: { lesson: Lesson; onBack: () => void }
           {state.message.kind === 'why' && <span className="mr-1 font-mono font-bold text-white">{state.message.san}</span>}
           {state.message.text}
           {!finished && studentToMove(state) && state.message.kind !== 'wrong' && <div className="mt-2 text-xs text-sky-200">{prompt(state)}</div>}
-          {voiceOn && (
-            <button type="button" onClick={() => say(state.message.text)} className="mt-2 flex items-center gap-1 text-[11px] text-slate-400 hover:text-white" aria-label="Read aloud">
-              <Volume2 className="size-3.5" /> Read aloud
-            </button>
-          )}
         </div>
 
         {finished && (

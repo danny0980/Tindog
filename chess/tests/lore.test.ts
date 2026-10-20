@@ -1,6 +1,5 @@
 // Tests for the historical lore of the Classic Chess opponents, the post-game
-// move insight, and the character voices. Run with `npm run test:lore`.
-import { deliver, hash, pickVoice, registerOf, shouldSpeak, voiceProfile } from '../src/audio/voice'
+// move insight. Run with `npm run test:lore`.
 import { CLASSIC_LORE, factFor, loreFor } from '../src/data/classic/lore'
 import { CLASSIC_ROSTER } from '../src/data/classic/roster'
 import { classicPersona } from '../src/data/personas'
@@ -41,26 +40,6 @@ const blunder = moveInsight(move({}))
 check('a blunder says what it cost and what was better', blunder.title === '14. Qxf7 — Blunder' && blunder.swing === '+0.8 → −2.6' && blunder.verdict.includes('38%') && blunder.better === 'Nf3' && /captures, checks and threats/.test(blunder.tip))
 const black = moveInsight(move({ ply: 28, color: 'b', san: 'Nf6', classification: 'best', evalBefore: ev(-50), evalAfter: ev(-60), winChanceLoss: 0, bestMoveSan: 'Nf6' }))
 check('a best move is praised, with no "better" move', black.title === '14… Nf6 — Best move' && black.better === null && black.swing === '+0.5 → +0.6' && /Kept every bit/.test(black.verdict))
-
-// ── Voices ──────────────────────────────────────────────────────────────────
-check('registers: women, men and machines', registerOf('Cleopatra VII') === 'female' && registerOf('Hatshepsut') === 'female' && registerOf('Genghis Khan') === 'male' && registerOf('ORACLE-7') === 'machine')
-check('a character always sounds the same', JSON.stringify(voiceProfile('Bobby Fischer')) === JSON.stringify(voiceProfile('Bobby Fischer')) && hash('a') !== hash('b'))
-const all = CLASSIC_ROSTER.map((c) => voiceProfile(c.name))
-check('pitch and pace stay natural for everyone', all.every((p) => p.pitch > 0.4 && p.pitch < 1.5 && p.rate > 0.8 && p.rate < 1.2))
-check('distinct characters get distinct voices', new Set(all.map((p) => `${p.pitch}/${p.rate}`)).size > 60)
-const lines = { angry: deliver(voiceProfile('Attila the Hun'), 'angry'), calm: deliver(voiceProfile('Attila the Hun'), 'calm') }
-check('mood colours the delivery', lines.angry.rate > lines.calm.rate)
-const system = [
-  { name: 'Google Deutsch', lang: 'de-DE' },
-  { name: 'Daniel', lang: 'en-GB' },
-  { name: 'Samantha', lang: 'en-US' },
-  { name: 'Google UK English Male', lang: 'en-GB' },
-  { name: 'Microsoft Zira', lang: 'en-US' },
-]
-check('women get a female voice', ['Samantha', 'Microsoft Zira'].includes(pickVoice(system, voiceProfile('Cleopatra VII'))?.name ?? ''))
-check('men get a male voice', ['Daniel', 'Google UK English Male'].includes(pickVoice(system, voiceProfile('Napoleon Bonaparte'))?.name ?? ''))
-check('English voices are preferred, any voice beats none', pickVoice([{ name: 'Google Deutsch', lang: 'de-DE' }], voiceProfile('Zeus'))?.name === 'Google Deutsch' && pickVoice([], voiceProfile('Zeus')) === null)
-check('"key moments" reads only the important lines', shouldSpeak('key', { urgent: true }) && !shouldSpeak('key', { urgent: false }) && shouldSpeak('all', { urgent: false }) && !shouldSpeak('off', { urgent: true }))
 
 console.log(failures === 0 ? '\nAll lore checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

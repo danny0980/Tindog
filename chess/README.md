@@ -10,6 +10,8 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 
 ## What's new in 6.10: living history (Phase A)
 
+The character speech voices are gone: they sounded robotic, so every line is now text only. Sound effects and music are unchanged.
+
 ### Play the Real Battle (Legends → *Play the Real Battle*)
 
 Three famous battles as chess positions, playable from either side against Stockfish (Beginner, Club or Master):
@@ -20,11 +22,11 @@ Three famous battles as chess positions, playable from either side against Stock
 | **Cannae**, 216 BCE | Rome masses pawns in the centre; Hannibal is strong on the wings. | At Hannibal's 12th move, his cavalry returns behind the Roman lines. | Hannibal must win by the end of move 35. |
 | **Waterloo**, 1815 | Napoleon is a bishop short (Grouchy never arrived). | At the Allies' 14th move, Blücher's Prussians arrive on the French flank. | Checkmate wins; otherwise material decides after move 30. |
 
-The opposing commander (Leonidas, Hannibal, Wellington or Napoleon) greets you and has the last word, aloud if character voices are on. Reinforcements land only on empty squares and never where they would give check. The engine side lives in `src/variants/rules.ts` (`BattleRules`) and the battles in `src/data/battles.ts`. Four new achievements are included, among them *Rewrite History*, for winning a battle for the side that lost it.
+The opposing commander (Leonidas, Hannibal, Wellington or Napoleon) greets you and has the last word. Reinforcements land only on empty squares and never where they would give check. The engine side lives in `src/variants/rules.ts` (`BattleRules`) and the battles in `src/data/battles.ts`. Four new achievements are included, among them *Rewrite History*, for winning a battle for the side that lost it.
 
 ### Character Interviews
 
-After you beat a Classic character, **Interview** on the game-over card lets you ask them seven questions. Answers are read aloud with the browser's speech engine. Each answer is labelled:
+After you beat a Classic character, **Interview** on the game-over card lets you ask them seven questions. Each answer is labelled:
 - **From the history books:** who they were, when they lived, a true fact, or their real historical rival.
 - **In character:** their feelings about the game, chess advice in their playing style, or their view of today's world. These are imagined for the game.
 
@@ -135,10 +137,8 @@ After that, changes upload a few seconds after they happen.
   - The end-of-game lines are written as game dialogue and are never presented as quotations.
 - **In the game.** The Classic dossier shows the story and a *Did you know?* list. Every Classic game ends with a *History lesson*: one of the opponent's facts, a different one each game.
 
-### Character voices (Settings → Audio → Character voices)
-- **What's read aloud.** Characters read their lines aloud with your device's built-in speech, with no downloads. Choose *Off*, *Key moments* (greetings, results and big reactions; the default) or *Every line*.
-- **A voice for each character.** Each character keeps a voice of their own. The register matches who they are (female, male, or a flat synthetic voice for machines and AIs), with a personal pitch and pace, and the mood colours the delivery.
-- **Hearing a sample.** Use *Hear a sample* in Settings, or *Hear Bobby* (or whoever) in the Classic dossier.
+### Character voices (removed in 6.10)
+The browser speech voices were removed in 6.10: they sounded robotic. Characters' lines are shown as text only.
 
 ### Coaching in the game review
 The Stockfish review was already there: badges from brilliant to blunder, accuracy, the evaluation graph and key moments. Stepping through a reviewed game now shows a **move-insight card** for the move on the board:
@@ -163,7 +163,6 @@ The Stockfish review was already there: badges from brilliant to blunder, accura
   - You play your side and every move is explained.
   - A wrong move gets a hint; a second wrong move shows the answer with an arrow.
   - Each lesson ends with three key ideas.
-  - With voices on, the master reads the explanations aloud.
 
 ### Portrait reactions and new achievements
 - **Reaction pops.** Portraits already changed ring and badge with the mood. Now a short reaction pops above them when the game turns: *Check!*, *Ha!*, *Oh no…*, *Hurry!*, *Victory!*. It is hidden with reduced motion or Battery Saver.

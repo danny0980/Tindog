@@ -97,6 +97,22 @@ export interface LiveGameRow {
   watchers: number
 }
 
+export type RatedModeId = 'vanish' | 'cards' | 'royale'
+
+export interface ModeRatingRow {
+  rating: number
+  games: number
+  wins: number
+  losses: number
+  draws: number
+}
+
+export interface ModesInfo {
+  /** Your rating per mode (null when signed out). */
+  mine: Record<RatedModeId, ModeRatingRow> | null
+  tables: Record<RatedModeId, Array<{ name: string; rating: number; games: number; wins: number }>>
+}
+
 export class ApiError extends Error {
   readonly status: number
   constructor(status: number, message: string) {
@@ -157,4 +173,5 @@ export const api = {
   joinClan: (id: string) => call<{ ok: boolean }>(`/clans/${encodeURIComponent(id)}/join`, { method: 'POST', body: {} }),
   leaveClan: () => call<{ ok: boolean }>('/clans/leave', { method: 'POST', body: {} }),
   live: () => call<{ games: LiveGameRow[] }>('/live'),
+  modes: () => call<ModesInfo>('/modes'),
 }

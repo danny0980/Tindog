@@ -4,7 +4,8 @@ Twenty features in four phases, all shipped:
 - **Phase A** in 6.11;
 - **Phase B** in 6.12;
 - **Phase C** in 6.13;
-- **Phase D** in 6.14.
+- **Phase D** in 6.14;
+- the online modes and the production server in 6.15.
 
 The plan below is kept as the design record. The status table at the end says what shipped and what was left out.
 
@@ -160,15 +161,18 @@ Principles carried through every phase:
 
 ---
 
-## Status (6.14)
+## Status (6.15)
 
 | Item | Shipped | Left out (and why) |
 | --- | --- | --- |
 | Cinematic camera, battlefields, living pieces, highlight reels | 6.11 | — |
 | Ghost, engine brain, What-If, predictive coach | 6.12 | — |
 | World War, Custom Army, opponent memory, 3D hall | 6.13 | — |
-| Seasons, Weekly Knockout, spectating with eval graph, clans and clan war | 6.14 | Storage is still the JSON file: fine for a small community; move to SQLite before a large public launch. |
-| Battle Royale | 6.14 | Offline against three computer armies; online 4-seat rooms, castling and en passant are not included. |
-| Card Chess | 6.14 | Against the computer; not in online ranked (the server would need to referee card effects). |
-| Vanishing Chess | 6.14 | Rated against the computer with its own rating; no online pool yet. |
+| Seasons, Weekly Knockout, spectating with eval graph, clans and clan war | 6.14 | — |
+| SQLite storage, backups, production build, Docker and security headers | 6.15 | — |
+| Battle Royale | 6.14 (vs computer), 6.15 (online, 4 seats, computer armies fill empty seats) | Castling and en passant are not part of its rules. |
+| Card Chess | 6.14 (vs computer), 6.15 (online, rated) | — |
+| Vanishing Chess | 6.14 (vs computer), 6.15 (online ranked queue) | The fading is drawn by your own browser. The server has to send every move, so a modified client could show the pieces: a fair-play limit of any online blindfold mode. |
 | Escape Rooms | 6.14 | — |
+
+Live games are in-process: one server, and a restart ends the games in progress. Moving to several server processes would need a shared message bus, such as Redis, between them.

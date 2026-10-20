@@ -1,10 +1,79 @@
-# ♞ Chess Arena: AAA Edition (v6.14 · Chronos Chess — Leagues & New Modes)
+# ♞ Chess Arena: AAA Edition (v6.15 · Chronos Chess — Production & Online Modes)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.15: production server and the new modes online
+
+### Online modes (Online → *Online modes*)
+
+Each mode has its own rating and its own leaderboard; tap a rating to see the table. The server referees every move.
+
+- **Vanishing Chess, ranked.**
+  - Two queues: 3 + 2 and 5 + 3, matched by your Vanishing rating.
+  - The server referees ordinary chess. Your screen fades every piece a few moves after it last moved, and you get three peeks per game.
+  - Vanishing games stay out of the season table and the clan war.
+  - They can't be watched, since a second account would see every hidden piece.
+- **Card Chess, 1 v 1.**
+  - Both players secretly draft three of the same five cards in 30 seconds. If time runs out, the computer picks for you.
+  - Then a rated 5 + 3 game. The server checks every card: legality, wards, used cards, and the turn (a ward is a free action).
+  - Disconnects get the same 60-second grace as ranked chess. A game where nobody makes a first move is aborted, unrated.
+- **Battle Royale, four players.**
+  - A table seats four people at once.
+  - With two or three waiting for 20 seconds, computer armies take the empty seats. Alone for a minute, you play three computer armies, unrated.
+  - Each move has 30 seconds. When time runs out, the computer moves for you. Miss two turns in a row and your army is out.
+  - The board turns so your army is always at the bottom.
+  - Ratings work as if every pair of people played one game, the better finisher winning; each player's change is averaged over their opponents.
+  - When no people are left, the computer armies finish the game at once.
+- **How games stay in sync.** Card Chess and Battle Royale are sent as action logs. The server and the browser replay them with the same rules code (`src/online/ranked/modeRules.ts`), so the two sides always agree on the position.
+
+### SQLite storage and production deployment
+
+- **SQLite instead of the JSON file** (`server/store.ts`, `better-sqlite3`).
+  - Every change is durable when it returns, and multi-step changes run as transactions.
+  - Unique emails, Google ids, clan tags and one clan per player are enforced by the database.
+  - The schema is versioned: a newer database is refused rather than damaged.
+- **Upgrading from 6.14.** The old `db.json` is imported automatically on first start, with nobody signed out, then renamed so it is never imported twice.
+- **Backups.** Daily in production, taken while the server runs; the last 7 are kept. You can also run `npm run db -- backup | import | stats`.
+- **A production build.**
+  - `npm run build:all` builds the app and bundles the server into `dist-server/`; `npm start` runs it with plain Node.
+  - Browser-only packages are now `devDependencies`, so the runtime install is about 35 MB instead of 326 MB.
+  - There is a `Dockerfile` (non-root, with a health check, data in `/data`) and `deploy/docker-compose.yml` with Caddy for automatic HTTPS.
+- **Security headers.**
+  - A Content-Security-Policy: the inline boot script is allowed by its hash only, WebAssembly is allowed for Stockfish, and Google Sign-In is allowed.
+  - HSTS, `Permissions-Policy` and COOP.
+  - Gzip, plus year-long caching of hashed assets.
+  - A cap on API changes per IP.
+- **`/api/health`** now reports the database status, the version and the live room counts.
+- **The guide.** See **[docs/DEPLOY.md](docs/DEPLOY.md)** for the full deployment guide.
+
+### Code review and loading
+
+- **Faster first load.** The 100 characters' history (about 100 kB of text) now loads after start-up instead of with the first screen. Together with the interview and quiz panels, which load when opened, this makes the first download about 10% smaller: 324 → 292 kB of gzipped JavaScript.
+- **Already lazy.** three.js and Stockfish were already loaded only when needed.
+- **Bugs fixed, found by reviewing Phases B–D:**
+  - **Card Chess castling.** A card that captured a rook on its home square used to leave the opponent's castling right in place, so they could "castle" with no rook. Castling rights are now worked out from where the kings and rooks actually stand, and a bishop's Knight's Leap no longer takes away its own side's castling.
+  - **Weekly Knockout seeding.** A drawn, aborted or double-forfeit match used to send through whoever signed up first. It now sends the higher seed (the higher rating), as the rules say.
+- **Phones.** Every new screen was checked at phone width (390 px) with no sideways scrolling.
+
+### Tests
+
+- **`npm run test:storage`, 53 checks.** They cover:
+  - the database surviving a restart, its constraints and transactions;
+  - the JSON import (and never importing twice);
+  - backups and pruning;
+  - the settings;
+  - the production HTTP layer: the CSP with the boot-script hash, HSTS, caching, compression, health and CSRF.
+- **`npm run test:online-modes`, 64 checks.** They cover:
+  - Vanishing queues and ratings, which can't be watched;
+  - Card Chess: the secret draft, illegal and out-of-turn actions, cards played once, the draft timer, abandon and abort;
+  - Battle Royale: seating, filling with computer armies, the move timer, strikes, finishing order and ratings;
+  - the browser's manager playing whole games through a socket bridge, ending with the same position on both sides.
 
 ---
 
@@ -331,9 +400,10 @@ While you're signed in, your progress and settings are stored on the server and 
 After that, changes upload a few seconds after they happen.
 
 ### Deploying
-- **Build and start.** Run `npm run build`, then start the server with `npm run server:prod`. Set `PUBLIC_URL`, plus `GOOGLE_CLIENT_ID` and/or `SMTP_URL`.
+- **Build and start.** Run `npm run build:all`, then `npm start`; or use the `Dockerfile` or `deploy/docker-compose.yml`. Set `PUBLIC_URL`, plus `GOOGLE_CLIENT_ID` and/or `SMTP_URL`.
 - **One process.** The server serves the app, the API and the socket from one origin, behind any HTTPS host such as Render, Fly.io or a VPS.
-- **Data.** Mount a persistent disk for `DATA_FILE`. The JSON store suits a single server; `server/store.ts` is a small interface, so it can be swapped for Postgres when you outgrow it.
+- **Data.** SQLite since 6.15: mount a persistent disk for `DATABASE_FILE`.
+- **The guide.** See [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Tests
 - **`npm run test:server`, 67 checks.**

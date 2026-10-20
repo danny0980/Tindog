@@ -3,7 +3,7 @@
 // each takes a profile and returns the updated one plus what was unlocked.
 import type { AchievementDef, PlayerProfile } from '../types/profile'
 import type { VariantId, VariantResultReason } from '../variants/rules'
-import { quizReward } from '../data/classic/quiz'
+import { quizReward } from '../data/classic/quizReward'
 import { eloAfter } from '../modes/stats'
 import { grant } from './progression'
 

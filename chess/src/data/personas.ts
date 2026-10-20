@@ -1,7 +1,7 @@
 // Adapters that turn any character — a hand-crafted Chronos legend or a
 // generated Grand Campaign boss — into the Persona the play screen stages.
 import { rivalLines } from './classic/rivals'
-import { loreFor } from './classic/lore'
+import { loadedLore } from './classic/loreLoader'
 import type { Boss } from '../types/campaign'
 import type { Difficulty } from '../types/chess'
 import type { Legend, LegendStrength } from '../types/legend'
@@ -72,7 +72,8 @@ export function classicPersona(c: ClassicCharacter, facing: string | null = null
   const archetype = ARCHETYPES[c.archetype]
   const book = BOOKS[c.book]
   const short = c.name.split(' ')[0] ?? c.name
-  const lore = loreFor(c.id)
+  // Their own last words, once the lore has loaded (it loads right after start-up).
+  const lore = loadedLore()?.loreFor(c.id) ?? null
   const rival = rivalLines(c.id, facing)
   return {
     key: `classic:${c.id}`,

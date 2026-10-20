@@ -1,0 +1,5 @@
+# HTTPS, compression and WebSockets for Chronos Chess (Caddy proxies /ws upgrades on its own).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy chess:8787
+}

@@ -4,7 +4,11 @@
 // (your move shows at once and is corrected if the server disagrees).
 // Framework-free; the socket is injected so tests can drive it.
 import { Chess } from 'chess.js'
+import type { CardGame, CardId } from '../../cards/cardGame'
+import type { RoyaleGame } from '../../royale/royale'
 import type { Color, MoveInput, Square } from '../../types/chess'
+import type { CardAction, CardSnapshot, ModeOver, OnlineMode, RoyaleAction, RoyaleSeat, RoyaleSnapshot } from './modeProtocol'
+import { applyCardAction, applyRoyaleAction, endsTurn, replayCards, replayRoyale, seatPlayer } from './modeRules'
 import { type ClientMessage, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, type SpectateSnapshot, parseServerMessage } from './protocol'
 
 /** The parts of the browser WebSocket API we use (the `ws` package matches it too). */
@@ -56,6 +60,39 @@ export interface WatchGame {
   result: { winner: Color | null; reason: RankedReason } | null
 }
 
+/** An online Card Chess game. */
+export interface CardsOnline {
+  gameId: string
+  color: Color
+  opponent: PublicPlayer
+  phase: 'draft' | 'play'
+  offer: CardId[]
+  hands: { w: CardId[] | null; b: CardId[] | null }
+  /** When the draft closes (local time). */
+  draftEndsAt: number | null
+  actions: CardAction[]
+  /** The position (rebuilt from the log; a fresh object on every change). */
+  game: CardGame | null
+  clocks: { w: number; b: number }
+  clocksAt: number
+  running: Color | null
+  opponentAwayUntil: number | null
+  result: ModeOver | null
+}
+
+/** An online Battle Royale. */
+export interface RoyaleOnline {
+  gameId: string
+  seat: number
+  seats: RoyaleSeat[]
+  actions: RoyaleAction[]
+  game: RoyaleGame
+  /** When the player to move runs out of time (local time). */
+  turnEndsAt: number | null
+  rated: boolean
+  result: ModeOver | null
+}
+
 export interface RankedView {
   phase: RankedPhase
   me: PublicPlayer | null
@@ -63,10 +100,22 @@ export interface RankedView {
   game: RankedGame | null
   /** The game you are watching (null = none; 'loading' while it is being fetched). */
   watch: WatchGame | 'loading' | null
+  /** Waiting for a Card Chess or Battle Royale game. */
+  modeSearch: { mode: OnlineMode; since: number; queued: number } | null
+  cards: CardsOnline | null
+  royale: RoyaleOnline | null
   error: string | null
 }
 
-export type RankedEvent = { kind: 'move'; byMe: boolean; game: RankedGame } | { kind: 'found'; game: RankedGame } | { kind: 'over'; game: RankedGame } | { kind: 'draw-offered' } | { kind: 'tournament' }
+export type RankedEvent =
+  | { kind: 'move'; byMe: boolean; game: RankedGame }
+  | { kind: 'found'; game: RankedGame }
+  | { kind: 'over'; game: RankedGame }
+  | { kind: 'draw-offered' }
+  | { kind: 'tournament' }
+  | { kind: 'mode-found'; mode: OnlineMode }
+  | { kind: 'mode-move'; mode: OnlineMode; byMe: boolean; capture: boolean }
+  | { kind: 'mode-over'; result: ModeOver; won: boolean }
 
 export interface ManagerDeps {
   /** Opens the socket to /ws (cookies go along on their own in a browser). */
@@ -102,7 +151,9 @@ export function clocksNow(game: { running: Color | null; result: unknown; clocks
 }
 
 export class RankedManager {
-  private view: RankedView = { phase: 'offline', me: null, searching: null, game: null, watch: null, error: null }
+  private view: RankedView = { phase: 'offline', me: null, searching: null, game: null, watch: null, modeSearch: null, cards: null, royale: null, error: null }
+  /** The mode we are queueing for (re-sent after a reconnect). */
+  private wantMode: OnlineMode | null = null
   /** The game to watch once connected. */
   private wantWatch: string | null = null
   private readonly listeners = new Set<() => void>()
@@ -185,12 +236,13 @@ export class RankedManager {
   disconnect(): void {
     this.wanted = false
     this.wantPool = null
+    this.wantMode = null
     if (this.retryTimer !== null) this.deps.clearTimer(this.retryTimer)
     this.retryTimer = null
     const s = this.socket
     this.socket = null
     s?.close()
-    this.set({ phase: 'offline', searching: null })
+    this.set({ phase: 'offline', searching: null, modeSearch: null })
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -203,8 +255,75 @@ export class RankedManager {
 
   cancelSearch(): void {
     this.wantPool = null
+    this.wantMode = null
     this.send({ type: 'CANCEL_MATCH' })
-    this.set({ searching: null, phase: this.socket ? 'idle' : 'offline' })
+    this.set({ searching: null, modeSearch: null, phase: this.socket ? 'idle' : 'offline' })
+  }
+
+  // ── Card Chess & Battle Royale ────────────────────────────────────────────
+
+  /** Queues for an online mode (opens the connection if needed). */
+  findMode(mode: OnlineMode): void {
+    this.wantMode = mode
+    this.wantPool = null
+    this.set({ modeSearch: { mode, since: this.deps.now(), queued: 0 }, searching: null, error: null, ...(this.view.cards?.result ? { cards: null } : {}), ...(this.view.royale?.result ? { royale: null } : {}) })
+    if (!this.send({ type: 'FIND_MODE', mode })) this.connect()
+  }
+
+  /** Your three cards. */
+  draftCards(cards: CardId[]): boolean {
+    const c = this.view.cards
+    if (!c || c.phase !== 'draft' || c.hands[c.color] || c.result) return false
+    // Shown first, then sent: the server's answer (which may come at once) always lands on top.
+    this.set({ cards: { ...c, hands: { ...c.hands, [c.color]: cards } } })
+    if (this.send({ type: 'CARD_DRAFT', gameId: c.gameId, cards })) return true
+    this.set({ cards: c })
+    return false
+  }
+
+  /** Plays a Card Chess action: shown at once, confirmed (or corrected) by the server. */
+  cardAction(action: CardAction): boolean {
+    const c = this.view.cards
+    if (!c || !c.game || c.result || c.game.turn !== c.color) return false
+    const next = c.game.clone()
+    if (!applyCardAction(next, action)) return false
+    const now = this.deps.now()
+    const turnOver = endsTurn(action)
+    this.set({ cards: { ...c, actions: [...c.actions, action], game: next, ...(turnOver ? { clocks: clocksNow(c, now), clocksAt: now, running: next.result ? null : c.color === 'w' ? 'b' : 'w' } : {}) } })
+    if (!this.send({ type: 'CARD_ACTION', gameId: c.gameId, ply: c.actions.length, action })) {
+      this.set({ cards: c })
+      return false
+    }
+    this.emit({ kind: 'mode-move', mode: 'cards', byMe: true, capture: false })
+    return true
+  }
+
+  /** Plays your Battle Royale move. */
+  royaleMove(from: [number, number], to: [number, number]): boolean {
+    const r = this.view.royale
+    if (!r || r.result || r.game.result || r.game.turn !== seatPlayer(r.seat)) return false
+    const action: RoyaleAction = { k: 'm', from, to }
+    const capture = r.game.at(to) !== null
+    const next = r.game.clone()
+    if (!applyRoyaleAction(next, action)) return false
+    this.set({ royale: { ...r, actions: [...r.actions, action], game: next, turnEndsAt: null } })
+    if (!this.send({ type: 'ROYALE_MOVE', gameId: r.gameId, ply: r.actions.length, from, to })) {
+      this.set({ royale: r })
+      return false
+    }
+    this.emit({ kind: 'mode-move', mode: 'royale', byMe: true, capture })
+    return true
+  }
+
+  /** Resigns the Card Chess game, or leaves the Battle Royale (your army turns to rubble). */
+  resignMode(): void {
+    const id = this.view.cards && !this.view.cards.result ? this.view.cards.gameId : this.view.royale && !this.view.royale.result ? this.view.royale.gameId : null
+    if (id) this.send({ type: 'RESIGN', gameId: id })
+  }
+
+  /** Closes a finished mode game's screen. */
+  dismissMode(): void {
+    this.set({ ...(this.view.cards?.result ? { cards: null } : {}), ...(this.view.royale?.result ? { royale: null } : {}) })
   }
 
   /** Plays your move: shown at once, confirmed (or corrected) by the server. */
@@ -254,6 +373,35 @@ export class RankedManager {
   }
 
   /** Closes a finished game's screen. */
+  private fromCards(s: CardSnapshot, prev: CardsOnline | null): CardsOnline | null {
+    const now = this.deps.now()
+    const hands = s.hands.w && s.hands.b ? { w: s.hands.w, b: s.hands.b } : null
+    const game = s.phase === 'play' && hands ? replayCards(hands, s.actions) : null
+    if (s.phase === 'play' && !game) return null
+    return {
+      gameId: s.gameId,
+      color: s.color,
+      opponent: s.opponent,
+      phase: s.phase,
+      offer: s.offer,
+      hands: s.hands,
+      draftEndsAt: s.draftMs === null ? null : now + s.draftMs,
+      actions: s.actions,
+      game,
+      clocks: s.clocks,
+      clocksAt: now,
+      running: s.running,
+      opponentAwayUntil: prev?.gameId === s.gameId ? prev.opponentAwayUntil : null,
+      result: null,
+    }
+  }
+
+  private fromRoyale(s: RoyaleSnapshot): RoyaleOnline | null {
+    const game = replayRoyale(s.actions)
+    if (!game) return null
+    return { gameId: s.gameId, seat: s.seat, seats: s.seats, actions: s.actions, game, turnEndsAt: s.turnMs === null ? null : this.deps.now() + s.turnMs, rated: s.rated, result: null }
+  }
+
   dismissGame(): void {
     if (this.view.game?.result) this.set({ game: null, phase: this.socket ? 'idle' : 'offline' })
   }
@@ -288,6 +436,7 @@ export class RankedManager {
         this.set({ me: { name: msg.user.name, rating: msg.user.rating }, phase: g && !g.result ? 'playing' : this.wantPool ? 'searching' : 'idle', error: null })
         // We were queueing when the connection dropped: queue again.
         if (this.wantPool && !(g && !g.result)) this.send({ type: 'FIND_MATCH', pool: this.wantPool })
+        if (this.wantMode) this.send({ type: 'FIND_MODE', mode: this.wantMode })
         if (this.wantWatch) this.send({ type: 'SPECTATE', gameId: this.wantWatch })
         return
       case 'SEARCHING':
@@ -298,7 +447,8 @@ export class RankedManager {
         if (!game) return this.resync()
         const fresh = !g || g.gameId !== game.gameId
         this.wantPool = null
-        this.set({ game, phase: 'playing', searching: null, error: null })
+        this.wantMode = null
+        this.set({ game, phase: 'playing', searching: null, modeSearch: null, error: null })
         if (fresh) this.emit({ kind: 'found', game })
         return
       }
@@ -331,16 +481,24 @@ export class RankedManager {
       case 'DRAW_DECLINED':
         if (g && g.gameId === msg.gameId) this.set({ game: { ...g, drawOffer: null } })
         return
-      case 'OPPONENT_DISCONNECTED':
+      case 'OPPONENT_DISCONNECTED': {
         if (g && g.gameId === msg.gameId) this.set({ game: { ...g, opponentAwayUntil: this.deps.now() + msg.graceMs } })
+        const c = this.view.cards
+        if (c && c.gameId === msg.gameId) this.set({ cards: { ...c, opponentAwayUntil: this.deps.now() + msg.graceMs } })
         return
-      case 'OPPONENT_RECONNECTED':
+      }
+      case 'OPPONENT_RECONNECTED': {
         if (g && g.gameId === msg.gameId) this.set({ game: { ...g, opponentAwayUntil: null } })
+        const c = this.view.cards
+        if (c && c.gameId === msg.gameId) this.set({ cards: { ...c, opponentAwayUntil: null } })
         return
+      }
       case 'GAME_OVER': {
         if (!g || g.gameId !== msg.gameId) return
         const game: RankedGame = { ...g, clocks: clocksNow(g, this.deps.now()), running: null, drawOffer: null, opponentAwayUntil: null, result: { winner: msg.winner, reason: msg.reason, rating: msg.rating } }
-        this.set({ game, phase: 'over', me: this.view.me ? { ...this.view.me, rating: msg.rating.after } : null })
+        // Vanishing Chess changes its own rating, not the one shown as yours.
+        const standard = !g.pool.startsWith('vanish-')
+        this.set({ game, phase: 'over', me: this.view.me && standard ? { ...this.view.me, rating: msg.rating.after } : this.view.me })
         this.emit({ kind: 'over', game })
         return
       }
@@ -350,7 +508,13 @@ export class RankedManager {
           this.set({ watch: null, error: msg.message })
           return
         }
-        this.set({ error: msg.message, ...(msg.code === 'in-game' ? {} : this.view.phase === 'searching' ? { searching: null, phase: 'idle' } : {}) })
+        if (msg.code === 'refused' && (this.view.cards || this.view.royale)) {
+          // A mode move the server refused: it sends the true game too, which replaces ours.
+          this.set({ error: msg.message })
+          return
+        }
+        if (this.view.modeSearch && msg.code !== 'in-game') this.wantMode = null
+        this.set({ error: msg.message, ...(msg.code === 'in-game' ? {} : this.view.phase === 'searching' ? { searching: null, phase: 'idle' } : {}), ...(msg.code === 'in-game' ? {} : { modeSearch: null }) })
         return
       case 'PONG':
         return
@@ -378,6 +542,75 @@ export class RankedManager {
       case 'TOURNAMENT_CHANGED':
         this.emit({ kind: 'tournament' })
         return
+      case 'MODE_SEARCHING':
+        this.set({ modeSearch: { mode: msg.mode, since: this.view.modeSearch?.since ?? this.deps.now(), queued: msg.queued } })
+        return
+      case 'CARD_STATE': {
+        const prev = this.view.cards
+        const cards = this.fromCards(msg.game, prev)
+        if (!cards) return this.resync()
+        const fresh = !prev || prev.gameId !== cards.gameId
+        this.wantMode = null
+        this.set({ cards, modeSearch: null, error: null })
+        if (fresh) this.emit({ kind: 'mode-found', mode: 'cards' })
+        return
+      }
+      case 'CARD_PLAYED': {
+        const c = this.view.cards
+        if (!c || c.gameId !== msg.gameId || !c.game) return
+        const now = this.deps.now()
+        // Our own action coming back: only the clocks are news.
+        if (msg.ply < c.actions.length) {
+          this.set({ cards: { ...c, clocks: msg.clocks, clocksAt: now } })
+          return
+        }
+        if (msg.ply > c.actions.length) return this.resync()
+        const next = c.game.clone()
+        const capture = msg.action.k === 'm' && new Chess(c.game.fen).get(msg.action.uci.slice(2, 4) as Square) !== undefined
+        if (!applyCardAction(next, msg.action)) return this.resync()
+        this.set({ cards: { ...c, actions: [...c.actions, msg.action], game: next, clocks: msg.clocks, clocksAt: now, running: next.result ? null : next.turn } })
+        this.emit({ kind: 'mode-move', mode: 'cards', byMe: false, capture })
+        return
+      }
+      case 'ROYALE_STATE': {
+        const prev = this.view.royale
+        const royale = this.fromRoyale(msg.game)
+        if (!royale) return this.resync()
+        this.wantMode = null
+        this.set({ royale, modeSearch: null, error: null })
+        if (!prev || prev.gameId !== royale.gameId) this.emit({ kind: 'mode-found', mode: 'royale' })
+        return
+      }
+      case 'ROYALE_PLAYED': {
+        const r = this.view.royale
+        if (!r || r.gameId !== msg.gameId) return
+        const turnEndsAt = msg.turnMs === null ? null : this.deps.now() + msg.turnMs
+        if (msg.ply < r.actions.length) {
+          this.set({ royale: { ...r, turnEndsAt } })
+          return
+        }
+        if (msg.ply > r.actions.length) return this.resync()
+        const capture = msg.action.k === 'm' && r.game.at(msg.action.to) !== null
+        const next = r.game.clone()
+        if (!applyRoyaleAction(next, msg.action)) return this.resync()
+        this.set({ royale: { ...r, actions: [...r.actions, msg.action], game: next, turnEndsAt } })
+        this.emit({ kind: 'mode-move', mode: 'royale', byMe: false, capture })
+        return
+      }
+      case 'MODE_OVER': {
+        const res = msg.result
+        const c = this.view.cards
+        const r = this.view.royale
+        if (res.mode === 'cards' && c && c.gameId === res.gameId) {
+          this.set({ cards: { ...c, clocks: clocksNow(c, this.deps.now()), running: null, opponentAwayUntil: null, result: res } })
+          this.emit({ kind: 'mode-over', result: res, won: res.winner === c.color })
+        } else if (res.mode === 'royale' && r && r.gameId === res.gameId) {
+          // Leaving early: the final order arrives later, so keep what we know.
+          this.set({ royale: { ...r, turnEndsAt: null, result: res.ranking.length === 0 && r.result ? r.result : res } })
+          this.emit({ kind: 'mode-over', result: res, won: res.ranking[0] === r.seat })
+        }
+        return
+      }
     }
   }
 }

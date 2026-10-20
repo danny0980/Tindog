@@ -1,4 +1,4 @@
-import { Cloud, CloudAlert, CloudCheck, Flag, Handshake, Loader2, LogOut, Mail, Swords, Trophy, UserRound, WifiOff, X } from 'lucide-react'
+import { Cloud, CloudAlert, CloudCheck, Eye, EyeOff, Flag, Handshake, Loader2, LogOut, Mail, Swords, Trophy, UserRound, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { sfx } from '../../audio'
 import { getBoardTheme, getPieceSet } from '../../constants/themes'
@@ -10,6 +10,7 @@ import { type RankedGame, clocksNow, rankedResultText } from '../../online/ranke
 import { RANKED_POOLS, poolById } from '../../online/ranked/protocol'
 import { getRanked, useRanked } from '../../online/ranked/rankedSession'
 import { settingsStore } from '../../stores/settingsStore'
+import { PEEKS, hiddenCount, vanishMask } from '../../vanish/vanish'
 import type { Color, MoveInput } from '../../types/chess'
 import { ChessBoard } from '../board/ChessBoard'
 import { ChessClock } from '../game/ChessClock'
@@ -261,12 +262,27 @@ function useTicker(running: boolean, every = 250): number {
   return now
 }
 
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+/** How long a Vanishing peek shows the whole board. */
+const PEEK_MS = 1500
+
 /** A ranked game in progress (or just finished). */
 export function RankedGameView({ game }: { game: RankedGame }) {
   const ranked = getRanked()
   const view = useRanked()
   const settings = useStore(settingsStore, (s) => s)
   const [confirmResign, setConfirmResign] = useState(false)
+  // Vanishing Chess: pieces fade a few moves after they last moved; three peeks per game.
+  const vanish = poolById(game.pool)?.mode === 'vanish'
+  const [peeks, setPeeks] = useState({ gameId: game.gameId, left: PEEKS })
+  const [peeking, setPeeking] = useState(false)
+  const peeksLeft = peeks.gameId === game.gameId ? peeks.left : PEEKS
+  useEffect(() => {
+    if (!peeking) return
+    const t = window.setTimeout(() => setPeeking(false), PEEK_MS)
+    return () => window.clearTimeout(t)
+  }, [peeking])
+  const mask = vanish && !game.result && !peeking ? vanishMask(START_FEN, game.moves) : null
   const now = useTicker(!game.result && (game.running !== null || game.opponentAwayUntil !== null))
   const clocks = clocksNow(game, now)
   const me = game.color
@@ -281,14 +297,14 @@ export function RankedGameView({ game }: { game: RankedGame }) {
   const delta = game.result ? game.result.rating.after - game.result.rating.before : 0
   const myName = useMemo(() => (view.me ? `${view.me.name}` : 'You'), [view.me])
 
-  const bar = (color: Color, name: string, rating: number, mine: boolean) => (
+  const bar = (color: Color, name: string, rating: number | null, mine: boolean) => (
     <div className="glass flex items-center gap-3 rounded-2xl px-3 py-2" data-ranked-player={mine ? 'me' : 'them'}>
       <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-lg ${color === 'w' ? 'bg-slate-100 text-slate-900' : 'bg-slate-900 text-slate-100 ring-1 ring-white/20'}`}>♚</span>
       <div className="min-w-0 flex-1">
         <div className="truncate font-semibold text-white">
           {name} {mine && <span className="text-xs font-normal text-slate-400">(you)</span>}
         </div>
-        <div className="font-mono text-xs text-slate-400">{rating}</div>
+        <div className="font-mono text-xs text-slate-400">{rating ?? 'Vanishing rating'}</div>
       </div>
       {turn === color && !game.result && <span className="size-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_2px_rgba(52,211,153,0.7)]" aria-label="To move" />}
       <ChessClock timeMs={clocks[color]} active={game.running === color && !game.result} initialMs={initial} />
@@ -312,13 +328,23 @@ export function RankedGameView({ game }: { game: RankedGame }) {
           lowPower={settings.batterySaver}
           showLegalMoves={settings.showLegalMoves}
           showCoordinates={settings.showCoordinates}
+          pieceOpacity={mask}
         />
-        {bar(me, myName, view.me?.rating ?? 0, true)}
+        {bar(me, myName, vanish ? null : (view.me?.rating ?? 0), true)}
       </div>
       <aside className="flex flex-col gap-3">
         {game.label && (
           <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-xs font-semibold text-amber-100" data-ranked-label>
             <Trophy className="mr-1 inline size-3.5" /> {game.label}
+          </div>
+        )}
+        {vanish && !game.result && (
+          <div className="glass flex items-center gap-2 rounded-2xl px-3 py-2 text-xs text-slate-300" data-vanish-online>
+            <EyeOff className="size-4 shrink-0 text-fuchsia-300" />
+            <span className="flex-1">{mask ? `${hiddenCount(mask)} pieces hidden` : 'Peeking…'}</span>
+            <Button size="sm" onClick={() => (setPeeks({ gameId: game.gameId, left: peeksLeft - 1 }), setPeeking(true))} disabled={peeksLeft <= 0 || peeking} icon={<Eye className="size-4" />} data-vanish-online-peek>
+              Peek ({peeksLeft})
+            </Button>
           </div>
         )}
         <div className={`glass flex items-center gap-2 rounded-2xl px-4 py-3 text-sm ${awayFor !== null && !game.result ? 'text-amber-200' : 'text-slate-200'}`} role="status" data-ranked-status>
@@ -327,7 +353,7 @@ export function RankedGameView({ game }: { game: RankedGame }) {
         </div>
         {game.result && game.result.reason !== 'aborted' && (
           <div className="glass rounded-2xl px-4 py-3 text-center" data-ranked-rating-change>
-            <div className="text-[11px] uppercase tracking-wider text-slate-400">Online rating</div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-400">{vanish ? 'Vanishing rating' : 'Online rating'}</div>
             <div className="font-mono text-2xl font-bold text-white">
               {game.result.rating.after}{' '}
               <span className={delta >= 0 ? 'text-emerald-300' : 'text-red-300'}>
@@ -373,7 +399,7 @@ export function RankedGameView({ game }: { game: RankedGame }) {
             </Button>
           </div>
         )}
-        <p className="px-1 text-[11px] text-slate-500">{pool?.label} · rated · the server keeps the official clock.</p>
+        <p className="px-1 text-[11px] text-slate-500">{pool?.label} · rated{vanish ? ' (Vanishing rating)' : ''} · the server keeps the official clock.</p>
       </aside>
       <Modal
         open={confirmResign}

@@ -3,7 +3,7 @@
 // rated 5+3 games. A player who isn't there when their game starts forfeits;
 // a draw (or an aborted game) sends the higher seed through. The next week's
 // tournament opens as soon as one ends.
-import { MAX_ENTRANTS, nextRound, roundDone, roundName, seedBracket } from './bracket'
+import { MAX_ENTRANTS, bySeed, nextRound, roundDone, roundName, seedBracket } from './bracket'
 import type { GameResultHook } from './hub'
 import type { Store, TournamentState } from './store'
 
@@ -120,7 +120,9 @@ export class TournamentManager {
     const rounds = t.rounds.map((r) => r.map((m) => ({ ...m })))
     const round = rounds[rounds.length - 1]!
     const label = `${t.name} · ${roundName(round.length)}`
-    const seedOf = (id: string): number => t.entrants.findIndex((e) => e.id === id)
+    // Seeds, not sign-up order: a draw or forfeit sends the higher-rated seed through.
+    const seeds = bySeed(t.entrants)
+    const seedOf = (id: string): number => seeds.findIndex((e) => e.id === id)
     round.forEach((m, i) => {
       if (m.winner || m.gameId || !m.a || !m.b) return
       const aHere = this.d.isAvailable(m.a)

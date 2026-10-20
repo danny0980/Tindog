@@ -30,6 +30,7 @@ import { PlayView } from './views/PlayView'
 import { FxDefs } from './components/fx/FxDefs'
 import { ArtBackdrop } from './components/fx/ArtBackdrop'
 import { loadArtManifest } from './assets/artManifest'
+import { loadLore } from './data/classic/loreLoader'
 import type { IntroExit } from './components/cinematic/CinematicIntro'
 import { navDirection, runViewTransition, supportsViewTransitions } from './utils/viewTransition'
 import { closeIntroOverlay, introStore, openIntro } from './stores/introStore'
@@ -83,6 +84,9 @@ export default function App() {
   // Art pack (public/assets/manifest.json): portraits, piece sets and boards, if present.
   useEffect(() => {
     void loadArtManifest()
+    // The characters' history isn't needed for the first screen: fetch it once the app is idle.
+    const idle = window.requestIdleCallback ?? ((fn: () => void) => window.setTimeout(fn, 1500))
+    idle(() => void loadLore().catch(() => {}))
   }, [])
 
   // One-time notice when saved progress had to be recovered or upgraded.

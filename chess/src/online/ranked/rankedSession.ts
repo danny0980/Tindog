@@ -45,6 +45,24 @@ export function getRanked(): RankedManager {
       void api.me().then((user) => user && patchUser(user)).catch(() => {})
     } else if (e.kind === 'draw-offered' && !onlineScreen.visible) {
       showToast('info', 'Draw offered', 'Your ranked opponent offers a draw.')
+    } else if (e.kind === 'mode-found') {
+      sfx.pickup()
+      if (!onlineScreen.visible) showToast('success', e.mode === 'cards' ? 'Card Chess opponent found' : 'Battle Royale table ready', 'Your game is waiting for you in Online.')
+    } else if (e.kind === 'mode-move') {
+      // Your own moves already sounded when you made them.
+      if (!e.byMe || e.capture) {
+        const s = settingsStore.get()
+        sfx.place(resolveMaterial(s.soundMaterial, getBoardTheme(s.boardTheme)))
+      }
+    } else if (e.kind === 'mode-over') {
+      const r = e.result
+      if (r.rating) {
+        if (e.won) sfx.victory()
+        else if (r.mode === 'cards' && r.winner === null) sfx.draw()
+        else sfx.defeat()
+        applyFeat((p) => recordOnlineResult(p, e.won))
+      }
+      if (!onlineScreen.visible) showToast('info', r.mode === 'cards' ? 'Card Chess game over' : 'Battle Royale over', e.won ? 'You won!' : r.reason === 'aborted' ? 'The game was aborted.' : 'The game has ended.')
     }
   })
   // Signing out closes the connection.

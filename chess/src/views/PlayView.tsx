@@ -1,13 +1,12 @@
 import { BrainCircuit, Download, GitBranch, GraduationCap, History, Share2, X } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry } from '../utils/lazyWithRetry'
 import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
 import { MoveInsightCard } from '../components/analysis/MoveInsightCard'
-import { factFor } from '../data/classic/lore'
-import { postGameQuiz, type QuizQuestion } from '../data/classic/quiz'
+import { loadedLore } from '../data/classic/loreLoader'
+import type { QuizQuestion } from '../data/classic/quiz'
 import { type ClassicCharacter, getClassic } from '../data/classic/roster'
-import { InterviewModal } from '../components/history/InterviewPanel'
-import { QuizPanel } from '../components/history/QuizPanel'
 import { useBeatenClassics } from '../components/history/useBeaten'
 import { BoardHologram } from '../components/board/BoardHologram'
 import { ChessBoard } from '../components/board/ChessBoard'
@@ -61,6 +60,10 @@ import type { Color, GameSettings, MoveInput, Square } from '../types/chess'
 import { describeResult, givesCheck, opposite } from '../utils/chess'
 import { pgnFilename, sharePgn, shareText } from '../utils/share'
 import { statusSummary } from '../utils/status'
+
+// The interview and the quiz need the characters' history: loaded when opened.
+const InterviewModal = lazyWithRetry(() => import('../components/history/InterviewPanel'), (m) => m.InterviewModal)
+const QuizPanel = lazyWithRetry(() => import('../components/history/QuizPanel'), (m) => m.QuizPanel)
 
 interface PlayViewProps {
   game: GameController
@@ -405,7 +408,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
 
   // Classic Chess: a true fact about the opponent once the game is over (a different one game to game).
   const classicId = game.persona?.key.startsWith('classic:') ? game.persona.key.slice('classic:'.length) : null
-  const classicFact = classicId ? factFor(classicId, total) : null
+  const classicFact = classicId ? (loadedLore()?.factFor(classicId, total) ?? null) : null
   const classicLesson = classicFact && game.persona ? { name: game.persona.name, fact: classicFact } : null
   // Beat a Classic character: interview them, or take a quick quiz about them and the others you have beaten.
   const beatenClassic = classicId && game.summary?.outcome === 'win' ? getClassic(classicId) : null
@@ -418,7 +421,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         },
         onQuiz: () => {
           game.dismissGameOver()
-          setQuiz(postGameQuiz(beatenClassic, beatenClassics, total * 31 + beatenClassics.length))
+          void import('../data/classic/quiz').then((m) => setQuiz(m.postGameQuiz(beatenClassic, beatenClassics, total * 31 + beatenClassics.length)))
         },
       }
     : null
@@ -733,9 +736,13 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         engineLocked={engineLocked}
         onUnlockEngine={() => game.makeCasual('Engine help in the What-If sandbox')}
       />
-      <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
+      {interviewing && (
+        <Suspense fallback={null}>
+          <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
+        </Suspense>
+      )}
       <Modal open={quiz !== null} title="History quiz" onClose={() => setQuiz(null)}>
-        {quiz && <QuizPanel questions={quiz} onDone={() => undefined} />}
+        <Suspense fallback={null}>{quiz && <QuizPanel questions={quiz} onDone={() => undefined} />}</Suspense>
       </Modal>
     </>
   )

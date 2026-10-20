@@ -83,6 +83,21 @@ const sq = (f: number, r: number): Square | null => (f >= 0 && f < 8 && r >= 1 &
 const fileOf = (s: string) => FILES.indexOf(s[0] ?? 'a')
 const rankOf = (s: string) => Number(s[1])
 const LEAPS: ReadonlyArray<readonly [number, number]> = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]]
+const CASTLE_HOMES: ReadonlyArray<readonly [right: string, king: Square, rook: Square, color: Color]> = [
+  ['K', 'e1', 'h1', 'w'],
+  ['Q', 'e1', 'a1', 'w'],
+  ['k', 'e8', 'h8', 'b'],
+  ['q', 'e8', 'a8', 'b'],
+]
+function keptCastling(board: Chess, rights: string): string {
+  const at = (sq: Square, type: PieceSymbol, color: Color) => {
+    const p = board.get(sq)
+    return p?.type === type && p.color === color
+  }
+  return CASTLE_HOMES.filter(([r, k, rook, c]) => rights.includes(r) && at(k, 'k', c) && at(rook, 'r', c))
+    .map(([r]) => r)
+    .join('')
+}
 const WARD_PLIES: Record<'stone-wall' | 'aegis', number> = { 'stone-wall': 6, aegis: 4 }
 
 export class CardGame {
@@ -270,8 +285,8 @@ export class CardGame {
     // Rebuild the FEN: other side to move; a king or rook move by card gives up castling.
     const [placement] = after.fen().split(' ')
     const [, , castling = '-', , half = '0', full = '1'] = this.fenNow.split(' ')
-    let rights = castling
-    if (legal.card === 'royal-swap' || legal.card === 'knights-leap') rights = rights.replace(me === 'w' ? /[KQ]/g : /[kq]/g, '') || '-'
+    // A right survives only while its king and rook are still on their home squares (a card can move or capture either).
+    const rights = keptCastling(after, castling)
     const resetsClock = legal.card === 'jumping-pawn' || legal.card === 'reinforcements' || legal.label.includes('x')
     const fen = `${placement} ${other(me)} ${rights || '-'} - ${resetsClock ? 0 : Number(half) + 1} ${Number(full) + (me === 'b' ? 1 : 0)}`
     this.commit(fen, `${CARDS[legal.card].name}: ${legal.label}`, legal.from ? { from: legal.from, to: legal.to } : { from: legal.to, to: legal.to })

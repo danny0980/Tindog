@@ -1,6 +1,7 @@
 // Tests for the historical lore of the Classic Chess opponents, the post-game
 // move insight. Run with `npm run test:lore`.
 import { CLASSIC_LORE, factFor, loreFor } from '../src/data/classic/lore'
+import { loadLore, loadedLore } from '../src/data/classic/loreLoader'
 import { CLASSIC_ROSTER } from '../src/data/classic/roster'
 import { classicPersona } from '../src/data/personas'
 import { formatEval, moveInsight } from '../src/engine/insight'
@@ -29,6 +30,9 @@ const quoted = entries.filter(([, l]) => /^["“]|["”]$/.test(l.victory.trim()
 check('end-of-game lines are written as dialogue, not as quotations', quoted.length === 0, quoted.join(', '))
 check('facts change from game to game', factFor('fischer', 0) !== factFor('fischer', 1) && factFor('nobody', 3) === null)
 const fischer = CLASSIC_ROSTER.find((c) => c.id === 'fischer')
+// The lore loads after start-up: until then a Classic opponent uses the general lines, then their own words.
+check('before the lore has loaded, a Classic opponent still has end-of-game lines', fischer !== undefined && (classicPersona(fischer).quotes.legendWins[0] ?? '').length > 0 && loadedLore() === null)
+await loadLore()
 check('a Classic opponent ends the game with their own words', fischer !== undefined && classicPersona(fischer).quotes.legendWins[0] === loreFor('fischer')?.victory && classicPersona(fischer).quotes.legendLoses[0] === loreFor('fischer')?.defeat)
 
 // ── Move insight ────────────────────────────────────────────────────────────

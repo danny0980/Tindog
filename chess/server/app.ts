@@ -2,10 +2,11 @@
 // games, leaderboard) and the /ws WebSocket for ranked play. In production it
 // also serves the built app, so the cookie, the API and the socket share one
 // origin.
-import { randomBytes } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { join } from 'node:path'
+import compression from 'compression'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { Auth, type GoogleVerifier, RateLimiter, SESSION_COOKIE, cleanDisplayName, normaliseEmail } from './auth'
@@ -15,7 +16,7 @@ import { Hub } from './hub'
 import { TIERS, seasonEnd, tierFor } from './seasons'
 import { TournamentManager } from './tournaments'
 import type { Mailer } from './mailer'
-import type { Store, User } from './store'
+import { RATED_MODES, type RatedMode, type Store, type User } from './store'
 
 export interface AppDeps {
   config: Config
@@ -53,6 +54,38 @@ function readCookie(header: string | undefined, name: string): string | null {
 
 const newClanId = (): string => `c${randomBytes(9).toString('hex')}`
 
+const VERSION = process.env.APP_VERSION ?? process.env.npm_package_version ?? 'dev'
+
+/**
+ * The Content-Security-Policy for the built app: our own scripts (and the
+ * inline boot guard, by hash), WebAssembly for Stockfish, Google Sign-In,
+ * Google Fonts, and connections to this server and the PeerJS broker.
+ */
+export function contentSecurityPolicy(clientDir: string): string {
+  let hashes: string[] = []
+  try {
+    const html = readFileSync(join(clientDir, 'index.html'), 'utf8')
+    hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash('sha256').update(m[1] ?? '').digest('base64')}'`)
+  } catch {
+    // No build yet: no inline scripts to allow.
+  }
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client ${hashes.join(' ')}`.trim(),
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' data: blob:",
+    "connect-src 'self' https: wss:",
+    "worker-src 'self' blob:",
+    'frame-src https://accounts.google.com',
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ')
+}
+
 const publicUser = (u: User) => ({ id: u.id, name: u.name, email: u.email, google: u.googleSub !== null, rating: u.rating, games: u.games, wins: u.wins, losses: u.losses, draws: u.draws })
 
 export function createApp(deps: AppDeps): Running {
@@ -86,12 +119,27 @@ export function createApp(deps: AppDeps): Running {
 
   const app = express()
   app.disable('x-powered-by')
-  app.set('trust proxy', config.production ? 1 : false)
+  app.set('trust proxy', config.trustProxy > 0 ? config.trustProxy : false)
+  const csp = config.serveClient ? contentSecurityPolicy(config.serveClient) : null
+  const https = config.publicUrl.startsWith('https://')
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     // Sign-in links carry a token in the URL: never leak it through a Referer.
     res.setHeader('Referrer-Policy', 'no-referrer')
     res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()')
+    // Google Sign-In opens a popup that must be able to talk back.
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+    if (csp) res.setHeader('Content-Security-Policy', csp)
+    if (config.production && https) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    next()
+  })
+  if (config.production) app.use(compression())
+  // A light cap on changes per address (sign-in emails have their own, stricter one).
+  const perIpWrites = new RateLimiter(240, 60_000, now)
+  app.use('/api', (req, res, next) => {
+    if (req.method !== 'GET' && !perIpWrites.take(`w:${req.ip}`)) return void res.status(429).json({ error: 'Too many requests. Slow down a little.' })
     next()
   })
   app.use('/api', express.json({ limit: MAX_SAVE_BYTES + 1024 }))
@@ -113,7 +161,10 @@ export function createApp(deps: AppDeps): Running {
   }
 
   // ── Info ──────────────────────────────────────────────────────────────────
-  app.get('/api/health', (_req, res) => void res.json({ ok: true, ...hub.stats() }))
+  app.get('/api/health', (_req, res) => {
+    const db = store.healthy()
+    res.status(db ? 200 : 503).json({ ok: db, db, version: VERSION, uptime: Math.round(process.uptime()), ...hub.stats() })
+  })
   app.get('/api/config', (_req, res) => void res.json({ google: config.googleClientId, email: emailEnabled, devLinks: config.smtpUrl === null, dev: !config.production }))
 
   // ── Sign-in ───────────────────────────────────────────────────────────────
@@ -207,6 +258,16 @@ export function createApp(deps: AppDeps): Running {
   })
 
   app.get('/api/leaderboard', (_req, res) => void res.json({ players: store.leaderboard(50).map((u) => ({ name: u.name, rating: u.rating, games: u.games })) }))
+
+  // ── Online modes: your ratings and the tables ─────────────────────────────
+  app.get('/api/modes', (req, res) => {
+    const user = signedIn(req)
+    const table = (mode: RatedMode) => store.modeLeaderboard(mode, 20).map((r) => ({ name: r.name, rating: r.rating, games: r.games, wins: r.wins }))
+    res.json({
+      mine: user ? Object.fromEntries(RATED_MODES.map((m) => [m, store.modeRating(user.id, m)])) : null,
+      tables: Object.fromEntries(RATED_MODES.map((m) => [m, table(m)])),
+    })
+  })
 
   // ── Watch: live games ─────────────────────────────────────────────────────
   app.get('/api/live', (_req, res) => void res.json({ games: hub.liveGames() }))
@@ -328,8 +389,21 @@ export function createApp(deps: AppDeps): Running {
   // ── The built app (production) ────────────────────────────────────────────
   if (config.serveClient && existsSync(config.serveClient)) {
     const dir = config.serveClient
-    app.use(express.static(dir, { index: 'index.html', maxAge: '1h' }))
-    app.use((req, res, next) => (req.method === 'GET' ? res.sendFile(join(dir, 'index.html')) : next()))
+    // Hashed build files never change: cache them for a year. Everything else is checked each time.
+    app.use(
+      express.static(dir, {
+        index: false,
+        setHeaders: (res, path) => {
+          const rel = path.slice(dir.length).replace(/\\/g, '/')
+          res.setHeader('Cache-Control', rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : rel.startsWith('/stockfish/') ? 'public, max-age=604800' : 'no-cache')
+        },
+      }),
+    )
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+      res.setHeader('Cache-Control', 'no-cache')
+      res.sendFile(join(dir, 'index.html'))
+    })
   }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

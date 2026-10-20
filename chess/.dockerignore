@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-server
+server-data
+server/.env
+android
+ios
+*.log
+.DS_Store

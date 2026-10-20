@@ -5,7 +5,7 @@
 import type { AddressInfo } from 'node:net'
 import { type ServerMessage, parseServerMessage } from '../src/online/ranked/protocol'
 import { createApp } from '../server/app'
-import { MAX_ENTRANTS, nextRound, roundDone, roundName, seedBracket, seedOrder } from '../server/bracket'
+import { MAX_ENTRANTS, bySeed, nextRound, roundDone, roundName, seedBracket, seedOrder } from '../server/bracket'
 import { cleanClanName, cleanTag, warPoints, weekOf } from '../server/clans'
 import { loadConfig } from '../server/config'
 import { type Conn, Hub } from '../server/hub'
@@ -147,7 +147,7 @@ play(watched.gameId, 'w')
 check('watchers see the moves and the result', watcher.inbox.some((m) => m.type === 'SPECTATE_MOVE') && watcher.inbox.some((m) => m.type === 'SPECTATE_OVER'))
 // One drawn game: the higher seed goes through.
 const drawn = tm.state.rounds[0]!.find((m) => m.gameId && !m.winner)!
-const seed = (id: string | null) => tm.state.entrants.findIndex((e) => e.id === id)
+const seed = (id: string | null) => bySeed(tm.state.entrants).findIndex((e) => e.id === id)
 const higher = seed(drawn.a) <= seed(drawn.b) ? drawn.a : drawn.b
 play(drawn.gameId!, 'draw')
 check('a draw sends the higher seed through', tm.state.rounds[0]!.find((m) => m.a === drawn.a && m.b === drawn.b)?.winner === higher)
@@ -181,6 +181,33 @@ store.rollSeason(now)
 check('a new month starts a new season: ratings softly reset, history kept', store.seasonCurrent() === '2026-11' && store.user(a.user.id)!.rating === softReset(ratingBefore) && store.seasonHistory(a.user.id)[0]?.season === '2026-10')
 hub.close()
 tm.close()
+
+{
+  // Sign-up order is not seeding: the lower-rated player joins first, the final is drawn, the higher seed wins.
+  const st = new Store(null)
+  const h = new Hub({ store: st, now: () => now, setTimer, clearTimer, pairEveryMs: 0, graceMs: 1000 })
+  const weak = st.putUser({ id: 'weak00000001', email: null, googleSub: null, name: 'Weak', createdAt: 0, rating: 900, games: 5, wins: 0, losses: 0, draws: 0 })
+  const strong = st.putUser({ id: 'strong000001', email: null, googleSub: null, name: 'Strong', createdAt: 0, rating: 2000, games: 5, wins: 0, losses: 0, draws: 0 })
+  const inbox: ServerMessage[] = []
+  const conn: Conn = { send: (t) => void (parseServerMessage(t) && inbox.push(parseServerMessage(t)!)), close: () => {} }
+  h.connect(weak, conn)
+  h.connect(strong, conn)
+  const t2 = new TournamentManager({ store: st, now: () => now, setTimer, clearTimer, startGame: (pl, pool, label, cb) => h.startGame(pl, pool, label, cb), isAvailable: (id) => h.isAvailable(id), changed: () => {}, firstStartsAt: now + 1000 })
+  t2.join(weak.id, weak.rating)
+  t2.join(strong.id, strong.rating)
+  t2.start()
+  const gameId = t2.state.rounds[0]![0]!.gameId!
+  const found = inbox.find((m): m is Extract<ServerMessage, { type: 'MATCH_FOUND' }> => m.type === 'MATCH_FOUND' && m.game.gameId === gameId)!
+  const white = found.game.color === 'w' ? weak : strong
+  const black = white === weak ? strong : weak
+  h.message(white.id, conn, JSON.stringify({ type: 'MAKE_MOVE', gameId, ply: 0, uci: 'e2e4' }))
+  h.message(black.id, conn, JSON.stringify({ type: 'MAKE_MOVE', gameId, ply: 1, uci: 'e7e5' }))
+  h.message(white.id, conn, JSON.stringify({ type: 'OFFER_DRAW', gameId }))
+  h.message(black.id, conn, JSON.stringify({ type: 'ANSWER_DRAW', gameId, accept: true }))
+  check('a drawn final goes to the higher seed, not the first to sign up', st.tournament()?.previous?.champion === strong.id)
+  h.close()
+  t2.close()
+}
 
 // ── HTTP routes on a real server ────────────────────────────────────────────
 const links: string[] = []

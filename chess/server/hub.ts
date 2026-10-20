@@ -2,11 +2,12 @@
 // rooms, clocks, disconnect grace periods and reconnects. Transport-agnostic
 // (a Conn is anything that can send text and close) and with time injected,
 // so whole games — flags and abandons included — run in tests.
-import { RANKED_POOLS, RANKED_PROTOCOL, type ClientMessage, type GameSnapshot, type PublicPlayer, type ServerMessage, parseClientMessage, poolById } from '../src/online/ranked/protocol'
+import { RANKED_POOLS, RANKED_PROTOCOL, VANISH_POOLS, type ClientMessage, type GameSnapshot, type PublicPlayer, type ServerMessage, parseClientMessage, poolById } from '../src/online/ranked/protocol'
 import { warPoints } from './clans'
 import { newId } from './auth'
 import { GameRoom, type Result, type Side, eloChange } from './game'
 import { Matchmaker } from './matchmaker'
+import { ModeRooms } from './modes/modeRooms'
 import type { Store, User } from './store'
 
 export interface Conn {
@@ -23,6 +24,8 @@ export interface HubDeps {
   graceMs?: number
   /** How often the queue is paired. */
   pairEveryMs?: number
+  /** Overrides for the online modes (tests). */
+  modes?: { botDelayMs?: number; royaleFillMs?: number; royaleSoloMs?: number; random?: () => number }
   log?: (line: string) => void
 }
 
@@ -54,6 +57,8 @@ export class Hub {
   private readonly conns = new Map<string, Set<Conn>>()
   private readonly rates = new WeakMap<Conn, { second: number; count: number }>()
   readonly matchmaker = new Matchmaker()
+  /** Card Chess and Battle Royale. */
+  readonly modes: ModeRooms
   private readonly games = new Map<string, GameRoom>()
   private readonly activeGame = new Map<string, string>()
   private readonly gameTimers = new Map<string, unknown>()
@@ -76,6 +81,7 @@ export class Hub {
     this.clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>))
     this.graceMs = deps.graceMs ?? 60_000
     this.log = deps.log ?? (() => {})
+    this.modes = new ModeRooms({ store: this.store, now: this.now, setTimer: this.setTimer, clearTimer: this.clearTimer, log: this.log, send: (id, msg) => this.send(id, msg), isOnline: (id) => this.isOnline(id), graceMs: this.graceMs, ...deps.modes })
     const every = deps.pairEveryMs ?? 1000
     // Re-pair on a timer too: waiting windows widen, so a pair may become possible without anyone joining.
     const loop = (): void => {
@@ -96,7 +102,7 @@ export class Hub {
   }
 
   private snap(game: GameRoom, side: 'w' | 'b', now: number): GameSnapshot {
-    const s = game.snapshot(side, this.player(game.players[side === 'w' ? 'b' : 'w']), now)
+    const s = game.snapshot(side, this.player(game.players[side === 'w' ? 'b' : 'w'], game.pool.mode), now)
     const label = this.labels.get(game.id)
     return label ? { ...s, label } : s
   }
@@ -113,12 +119,13 @@ export class Hub {
 
   /** Free to start a game now: connected and not already playing. */
   isAvailable(userId: string): boolean {
-    return this.conns.has(userId) && !this.activeGame.has(userId)
+    return this.conns.has(userId) && !this.activeGame.has(userId) && !this.modes.isPlaying(userId)
   }
 
-  private player(userId: string): PublicPlayer {
+  /** Name and rating (a Vanishing Chess game shows the Vanishing rating). */
+  private player(userId: string, mode?: 'vanish'): PublicPlayer {
     const u = this.store.user(userId)
-    return { name: u?.name ?? 'Player', rating: u?.rating ?? 1200 }
+    return { name: u?.name ?? 'Player', rating: mode ? this.store.modeRating(userId, mode).rating : (u?.rating ?? 1200) }
   }
 
   /** A signed-in user connected (a new tab, or coming back). */
@@ -145,6 +152,7 @@ export class Hub {
       conn.send(JSON.stringify({ type: 'MATCH_FOUND', game: this.snap(game, side, this.now()) } satisfies ServerMessage))
       if (grace !== undefined) this.send(opp, { type: 'OPPONENT_RECONNECTED', gameId: game.id })
     }
+    this.modes.connected(user.id)
   }
 
   disconnect(userId: string, conn: Conn): void {
@@ -154,6 +162,7 @@ export class Hub {
     if (set && set.size > 0) return
     this.conns.delete(userId)
     this.matchmaker.leave(userId)
+    this.modes.disconnected(userId)
     const game = this.gameOf(userId)
     if (!game) return
     // The last tab closed mid-game: the opponent is told, and the player has a grace period.
@@ -197,20 +206,36 @@ export class Hub {
         conn.send(JSON.stringify({ type: 'PONG', at: msg.at } satisfies ServerMessage))
         return
       case 'FIND_MATCH': {
-        if (this.gameOf(userId)) return this.error(conn, 'in-game', 'Finish your current game first.')
+        if (this.gameOf(userId) || this.modes.isPlaying(userId)) return this.error(conn, 'in-game', 'Finish your current game first.')
         const user = this.store.user(userId)
         if (!user) return this.error(conn, 'no-user', 'Your account was not found.')
-        this.matchmaker.join(userId, user.rating, msg.pool, this.now())
+        const pool = poolById(msg.pool)
+        this.modes.leaveQueues(userId)
+        this.matchmaker.join(userId, pool?.mode ? this.store.modeRating(userId, pool.mode).rating : user.rating, msg.pool, this.now())
         this.send(userId, { type: 'SEARCHING', pool: msg.pool, queued: this.matchmaker.waiting(msg.pool) })
         this.pairNow()
         return
       }
       case 'CANCEL_MATCH':
         this.matchmaker.leave(userId)
+        this.modes.leaveQueues(userId)
         return
+      case 'FIND_MODE':
+      case 'CARD_DRAFT':
+      case 'CARD_ACTION':
+      case 'ROYALE_MOVE': {
+        if (msg.type === 'FIND_MODE') {
+          if (this.gameOf(userId)) return this.error(conn, 'in-game', 'Finish your current game first.')
+          this.matchmaker.leave(userId)
+        }
+        const refused = this.modes.handle(userId, msg)
+        if (refused) this.error(conn, refused.code, refused.message)
+        return
+      }
       case 'SPECTATE': {
         const game = this.games.get(msg.gameId)
-        if (!game) return this.error(conn, 'no-game', 'That game has finished.')
+        // Vanishing Chess games can't be watched: a second account would see every hidden piece.
+        if (!game || game.pool.mode) return this.error(conn, 'no-game', 'That game has finished.')
         if (game.sideOf(userId)) return this.error(conn, 'own-game', 'You are playing this game.')
         const set = this.spectators.get(game.id) ?? new Set<Conn>()
         if (!set.has(conn) && set.size >= MAX_SPECTATORS) return this.error(conn, 'full', 'Too many people are watching this game.')
@@ -253,6 +278,7 @@ export class Hub {
         return
       }
       case 'RESIGN': {
+        if (this.modes.resign(userId, msg.gameId)) return
         const game = this.games.get(msg.gameId)
         const side = game?.sideOf(userId)
         if (!game || !side) return
@@ -287,6 +313,7 @@ export class Hub {
 
   /** Pairs the queue now (also runs on a timer, as waiting windows widen). */
   pairNow(): void {
+    this.modes.pair()
     for (const [a, b] of this.matchmaker.pair(this.now())) {
       // Colours are random.
       const aWhite = Math.random() < 0.5
@@ -300,7 +327,7 @@ export class Hub {
    */
   startGame(players: { w: string; b: string }, poolId: string, label: string | null = null, onResult: GameResultHook | null = null): string | null {
     const pool = poolById(poolId)
-    if (!pool || players.w === players.b || this.activeGame.has(players.w) || this.activeGame.has(players.b)) return null
+    if (!pool || players.w === players.b || !this.isFree(players.w) || !this.isFree(players.b)) return null
     this.matchmaker.leave(players.w)
     this.matchmaker.leave(players.b)
     const game = new GameRoom(newId(), pool, players, this.now())
@@ -315,10 +342,15 @@ export class Hub {
     return game.id
   }
 
-  /** Games being played now, the strongest first (for the Watch list). */
+  /** Not in a game of any kind. */
+  private isFree(userId: string): boolean {
+    return !this.activeGame.has(userId) && !this.modes.isPlaying(userId)
+  }
+
+  /** Games being played now, the strongest first (for the Watch list; Vanishing Chess is never listed). */
   liveGames(limit = 20): LiveGame[] {
     return [...this.games.values()]
-      .filter((g) => !g.result)
+      .filter((g) => !g.result && !g.pool.mode)
       .map((g) => ({ gameId: g.id, white: this.player(g.players.w), black: this.player(g.players.b), pool: g.pool.id, moves: g.moves.length, label: this.labels.get(g.id) ?? null, watchers: this.spectators.get(g.id)?.size ?? 0 }))
       .sort((a, b) => b.white.rating + b.black.rating - (a.white.rating + a.black.rating))
       .slice(0, limit)
@@ -369,24 +401,37 @@ export class Hub {
     const rated = result.reason !== 'aborted' && w !== null && b !== null
     const score = (side: Side): 0 | 0.5 | 1 => (result.winner === null ? 0.5 : result.winner === side ? 1 : 0)
     const change = { w: 0, b: 0 }
+    const mode = game.pool.mode
+    // The rating this game counts for: the user's own, or (Vanishing Chess) the mode's.
+    const ratingOf = (u: User): { rating: number; games: number } => (mode ? this.store.modeRating(u.id, mode) : u)
+    const before = { w: w ? ratingOf(w).rating : 1200, b: b ? ratingOf(b).rating : 1200 }
     if (rated && w && b) {
-      change.w = eloChange(w.rating, b.rating, score('w'), w.games)
-      change.b = eloChange(b.rating, w.rating, score('b'), b.games)
-      for (const [side, u] of [['w', w], ['b', b]] as const) {
-        const s = score(side)
-        this.store.putUser({ ...u, rating: Math.max(100, u.rating + change[side]), games: u.games + 1, wins: u.wins + (s === 1 ? 1 : 0), losses: u.losses + (s === 0 ? 1 : 0), draws: u.draws + (s === 0.5 ? 1 : 0) })
-      }
-      this.store.addGame({ id: game.id, pool: game.pool.id, white: game.players.w, black: game.players.b, winner: result.winner, reason: result.reason, moves: [...game.moves], ratingChange: change, endedAt: this.now() })
-      // The season table and the clan war.
+      const rw = ratingOf(w)
+      const rb = ratingOf(b)
+      change.w = eloChange(rw.rating, rb.rating, score('w'), rw.games)
+      change.b = eloChange(rb.rating, rw.rating, score('b'), rb.games)
       const now = this.now()
-      this.store.rollSeason(now)
-      const clans = { w: this.store.clanOf(w.id)?.id ?? null, b: this.store.clanOf(b.id)?.id ?? null }
-      for (const side of ['w', 'b'] as const) {
-        const u = side === 'w' ? w : b
-        this.store.recordSeasonGame(u.id, score(side) === 1, Math.max(100, u.rating + change[side]))
-        const mine = clans[side]
-        if (mine) this.store.addWarPoints(mine, warPoints(mine, clans[side === 'w' ? 'b' : 'w'], score(side)), now)
-      }
+      this.store.transaction(() => {
+        for (const [side, u] of [['w', w], ['b', b]] as const) {
+          const s = score(side)
+          const tally = { wins: s === 1 ? 1 : 0, losses: s === 0 ? 1 : 0, draws: s === 0.5 ? 1 : 0 }
+          if (mode) {
+            const r = this.store.modeRating(u.id, mode)
+            this.store.putModeRating(u.id, mode, { rating: Math.max(100, r.rating + change[side]), games: r.games + 1, wins: r.wins + tally.wins, losses: r.losses + tally.losses, draws: r.draws + tally.draws })
+          } else this.store.putUser({ ...u, rating: Math.max(100, u.rating + change[side]), games: u.games + 1, wins: u.wins + tally.wins, losses: u.losses + tally.losses, draws: u.draws + tally.draws })
+        }
+        this.store.addGame({ id: game.id, pool: game.pool.id, white: game.players.w, black: game.players.b, winner: result.winner, reason: result.reason, moves: [...game.moves], ratingChange: change, endedAt: now })
+        if (mode) return
+        // The season table and the clan war (standard chess only).
+        this.store.rollSeason(now)
+        const clans = { w: this.store.clanOf(w.id)?.id ?? null, b: this.store.clanOf(b.id)?.id ?? null }
+        for (const side of ['w', 'b'] as const) {
+          const u = side === 'w' ? w : b
+          this.store.recordSeasonGame(u.id, score(side) === 1, Math.max(100, u.rating + change[side]))
+          const mine = clans[side]
+          if (mine) this.store.addWarPoints(mine, warPoints(mine, clans[side === 'w' ? 'b' : 'w'], score(side)), now)
+        }
+      })
     }
     this.toWatchers(game.id, { type: 'SPECTATE_OVER', gameId: game.id, winner: result.winner, reason: result.reason })
     this.spectators.delete(game.id)
@@ -395,12 +440,11 @@ export class Hub {
     this.hooks.delete(game.id)
     for (const side of ['w', 'b'] as const) {
       const id = game.players[side]
-      const before = side === 'w' ? (w?.rating ?? 1200) : (b?.rating ?? 1200)
       this.activeGame.delete(id)
       const grace = this.graceTimers.get(id)
       if (grace !== undefined) this.clearTimer(grace)
       this.graceTimers.delete(id)
-      const over: ServerMessage = { type: 'GAME_OVER', gameId: game.id, winner: result.winner, reason: result.reason, rating: { before, after: Math.max(100, before + change[side]) } }
+      const over: ServerMessage = { type: 'GAME_OVER', gameId: game.id, winner: result.winner, reason: result.reason, rating: { before: before[side], after: Math.max(100, before[side] + change[side]) } }
       if (this.conns.has(id)) this.send(id, over)
       else this.missedResults.set(id, over)
     }
@@ -409,10 +453,10 @@ export class Hub {
   }
 
   /** Live counts (for /api/health). */
-  stats(): { online: number; games: number; queued: number } {
-    let queued = 0
-    for (const p of RANKED_POOLS) queued += this.matchmaker.waiting(p.id)
-    return { online: this.conns.size, games: this.games.size, queued }
+  stats(): { online: number; games: number; queued: number; modes: { cards: number; royale: number } } {
+    let queued = this.modes.waiting()
+    for (const p of [...RANKED_POOLS, ...VANISH_POOLS]) queued += this.matchmaker.waiting(p.id)
+    return { online: this.conns.size, games: this.games.size, queued, modes: this.modes.stats() }
   }
 
   close(): void {
@@ -420,5 +464,6 @@ export class Hub {
     if (this.pairTimer !== null) this.clearTimer(this.pairTimer)
     for (const t of this.gameTimers.values()) this.clearTimer(t)
     for (const t of this.graceTimers.values()) this.clearTimer(t)
+    this.modes.close()
   }
 }

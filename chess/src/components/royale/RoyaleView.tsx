@@ -1,27 +1,19 @@
 import { Crown, Flag, Play, RefreshCw, Skull, Swords } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { defaultPieces } from 'react-chessboard'
 import { sfx } from '../../audio'
 import { useStore } from '../../hooks/useStore'
 import { applyFeat } from '../../stores/featActions'
 import { profileStore } from '../../stores/profileStore'
 import { recordModeResult } from '../../utils/feats'
-import { MAX_PLIES, PLAYERS, type PlayerId, type Pos, type RMove, type RPiece, RoyaleGame, type RoyaleLevel, SIZE, chooseRoyaleMove, onBoard } from '../../royale/royale'
+import { MAX_PLIES, PLAYERS, type PlayerId, type Pos, type RMove, RoyaleGame, type RoyaleLevel, chooseRoyaleMove } from '../../royale/royale'
+import { RoyaleBoard } from './RoyaleBoard'
+import { ROYALE_COLOR as COLOR, samePos as same } from './royaleTheme'
 import { Button } from '../ui/Button'
 import { Segmented } from '../ui/Segmented'
 
-const COLOR: Record<PlayerId | 'dead', string> = { red: '#ef4444', blue: '#3b82f6', yellow: '#eab308', green: '#22c55e', dead: '#64748b' }
 const NAME: Record<PlayerId, string> = { red: 'You (Red)', blue: 'Blue', yellow: 'Yellow', green: 'Green' }
 const AI_DELAY = 380
 const ME: PlayerId = 'red'
-
-function Piece({ piece }: { piece: RPiece }) {
-  const code = `w${piece.type.toUpperCase()}`
-  const render = defaultPieces[code]
-  return <div className={`size-full ${piece.owner === 'dead' ? 'opacity-60' : ''}`}>{render?.({ fill: COLOR[piece.owner], svgStyle: { width: '100%', height: '100%' } })}</div>
-}
-
-const same = (a: Pos, b: Pos): boolean => a[0] === b[0] && a[1] === b[1]
 
 /** Four-player Battle Royale on the cross-shaped board: you against three computer armies. */
 export function RoyaleView() {
@@ -121,34 +113,7 @@ export function RoyaleView() {
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start" data-royale="playing">
       <div className="mx-auto w-full" style={{ maxWidth: 'min(100%, max(18rem, calc(100dvh - 14rem)), 46rem)' }}>
-        <div className="grid aspect-square w-full overflow-hidden rounded-xl" style={{ gridTemplateColumns: `repeat(${SIZE}, minmax(0, 1fr))` }} role="grid" aria-label="Battle Royale board" data-royale-board>
-          {Array.from({ length: SIZE * SIZE }, (_, i) => {
-            const r = Math.floor(i / SIZE)
-            const c = i % SIZE
-            if (!onBoard(r, c)) return <div key={i} aria-hidden="true" />
-            const pos: Pos = [r, c]
-            const piece = game.at(pos)
-            const isTarget = targets.some((m) => same(m.to, pos))
-            const isSel = selected !== null && same(selected, pos)
-            const isLast = game.last !== null && (same(game.last.from, pos) || same(game.last.to, pos))
-            return (
-              <button
-                key={i}
-                type="button"
-                role="gridcell"
-                onClick={() => click(pos)}
-                data-cell={`${r}-${c}`}
-                data-piece={piece ? `${piece.owner}-${piece.type}` : undefined}
-                aria-label={piece ? `${piece.owner} ${piece.type} at row ${r + 1}, column ${c + 1}` : `row ${r + 1}, column ${c + 1}`}
-                className="relative p-[6%]"
-                style={{ background: isSel ? 'rgba(250,204,21,0.55)' : isLast ? 'rgba(250,204,21,0.28)' : (r + c) % 2 === 0 ? '#e7d3b1' : '#a77b55' }}
-              >
-                {piece && <Piece piece={piece} />}
-                {isTarget && <span className={`pointer-events-none absolute inset-0 m-auto rounded-full ${piece ? 'size-[90%] ring-4 ring-red-500/70' : 'size-[30%] bg-black/30'}`} />}
-              </button>
-            )
-          })}
-        </div>
+        <RoyaleBoard game={game} selected={selected} targets={targets} onCell={click} />
       </div>
       <aside className="flex flex-col gap-3">
         <div className="glass rounded-2xl px-4 py-3 text-sm text-white" role="status" data-royale-status>

@@ -37,3 +37,4 @@ public/assets/report.html
 # Game server: local data and secrets
 server-data/
 server/.env
+dist-server/

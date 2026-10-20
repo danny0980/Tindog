@@ -44,6 +44,9 @@ check('…and lapses after the enemy’s moves', !w.wardedBy('w').has('d4') && w
 // A card move may not leave your king in check.
 const pin = new CardGame({ w: ['knights-leap', 'jumping-pawn', 'reinforcements'], b: ['aegis', 'stone-wall', 'royal-swap'] }, '4r1k1/8/8/8/8/8/4B3/4K3 w - - 0 1')
 check('a pinned bishop may not leap away from the pin', !pin.cardMoves().some((m) => m.card === 'knights-leap' && m.from === 'e2'))
+// Capturing a rook on its home square by card takes away that side's castling; a bishop's leap keeps the mover's.
+const rookTaken = new CardGame({ w: ['knights-leap', 'jumping-pawn', 'reinforcements'], b: ['aegis', 'stone-wall', 'royal-swap'] }, 'r3k2r/pppp1ppp/6B1/8/8/8/PPPPPPPP/RN1QK1NR w KQkq - 0 1')
+check('a card that captures a home rook removes that castling right', rookTaken.playCard({ card: 'knights-leap', from: 'g6', to: 'h8', label: '' }) && rookTaken.fen.split(' ')[2] === 'KQq' && !rookTaken.legalMoves().some((m) => m.from === 'e8' && m.to === 'g8'))
 // Royal swap.
 const swap = new CardGame({ w: ['royal-swap', 'jumping-pawn', 'reinforcements'], b: ['aegis', 'stone-wall', 'knights-leap'] }, '4k3/8/8/8/8/8/8/3RK3 w - - 0 1')
 const s = swap.cardMoves().find((m) => m.card === 'royal-swap' && m.to === 'd1')

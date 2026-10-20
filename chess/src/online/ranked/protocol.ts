@@ -3,13 +3,17 @@
 // runs the clocks, decides results and updates ratings. Everything crossing
 // the wire is validated here, in both directions.
 
-export const RANKED_PROTOCOL = 1
+import { type ModeClientMessage, type ModeServerMessage, parseModeClientMessage, parseModeServerMessage } from './modeProtocol'
+
+export const RANKED_PROTOCOL = 2
 
 export interface RankedTimeControl {
   id: string
   label: string
   minutes: number
   increment: number
+  /** Vanishing Chess pools: blindfold on the client, their own rating on the server. */
+  mode?: 'vanish'
 }
 
 /** The pools you can queue in. */
@@ -19,7 +23,12 @@ export const RANKED_POOLS: readonly RankedTimeControl[] = [
   { id: '10+0', label: '10 + 0 Rapid', minutes: 10, increment: 0 },
   { id: '15+10', label: '15 + 10 Rapid', minutes: 15, increment: 10 },
 ]
-export const poolById = (id: string): RankedTimeControl | undefined => RANKED_POOLS.find((p) => p.id === id)
+/** Vanishing Chess: the same rules, its own queue and rating. */
+export const VANISH_POOLS: readonly RankedTimeControl[] = [
+  { id: 'vanish-3+2', label: 'Vanishing 3 + 2', minutes: 3, increment: 2, mode: 'vanish' },
+  { id: 'vanish-5+3', label: 'Vanishing 5 + 3', minutes: 5, increment: 3, mode: 'vanish' },
+]
+export const poolById = (id: string): RankedTimeControl | undefined => RANKED_POOLS.find((p) => p.id === id) ?? VANISH_POOLS.find((p) => p.id === id)
 
 export type RankedReason = 'checkmate' | 'resign' | 'timeout' | 'agreement' | 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient' | 'abandon' | 'aborted'
 
@@ -67,6 +76,7 @@ export type ClientMessage =
   | { type: 'PING'; at: number }
   | { type: 'SPECTATE'; gameId: string }
   | { type: 'UNSPECTATE' }
+  | ModeClientMessage
 
 // ── Server → client ─────────────────────────────────────────────────────────
 export type ServerMessage =
@@ -88,6 +98,7 @@ export type ServerMessage =
   | { type: 'SPECTATE_OVER'; gameId: string; winner: 'w' | 'b' | null; reason: RankedReason }
   /** The weekly tournament changed (sign-ups, results): fetch /api/tournament again. */
   | { type: 'TOURNAMENT_CHANGED' }
+  | ModeServerMessage
 
 const UCI = /^[a-h][1-8][a-h][1-8][qrbn]?$/
 const ID = /^[a-z0-9]{8,40}$/
@@ -139,7 +150,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'UNSPECTATE':
       return { type: 'UNSPECTATE' }
     default:
-      return null
+      return parseModeClientMessage(d)
   }
 }
 
@@ -271,6 +282,6 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'TOURNAMENT_CHANGED':
       return { type: 'TOURNAMENT_CHANGED' }
     default:
-      return null
+      return parseModeServerMessage(d)
   }
 }

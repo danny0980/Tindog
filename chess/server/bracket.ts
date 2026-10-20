@@ -34,8 +34,11 @@ const nextPow2 = (n: number): number => {
 }
 
 /** Round one: the strongest are seeded apart; missing places are byes for the top seeds. */
+/** Entrants in seeding order: highest rating first (ties by id). */
+export const bySeed = (entrants: readonly Entrant[]): Entrant[] => [...entrants].sort((x, y) => y.rating - x.rating || x.id.localeCompare(y.id))
+
 export function seedBracket(entrants: readonly Entrant[]): BracketMatch[] {
-  const seeded = [...entrants].sort((x, y) => y.rating - x.rating || x.id.localeCompare(y.id)).slice(0, MAX_ENTRANTS)
+  const seeded = bySeed(entrants).slice(0, MAX_ENTRANTS)
   const size = Math.max(2, nextPow2(seeded.length))
   const order = seedOrder(size)
   const at = (seed: number): string | null => seeded[seed - 1]?.id ?? null

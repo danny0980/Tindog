@@ -111,7 +111,7 @@ export function buildQuiz(pool: readonly ClassicCharacter[], count: number, seed
 }
 
 /** Coins for a finished quiz: 5 a correct answer. */
-export const quizReward = (correct: number): number => correct * 5
+export { quizReward } from './quizReward'
 
 /** After beating `c`: one question about them, then two about the others you have beaten. */
 export function postGameQuiz(c: ClassicCharacter, beaten: readonly ClassicCharacter[], seed: number): QuizQuestion[] {

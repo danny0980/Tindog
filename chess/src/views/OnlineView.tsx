@@ -13,6 +13,7 @@ import { getOnlineSession, onlineName, onlineScreen, useOnlineSession } from '..
 import { useRanked } from '../online/ranked/rankedSession'
 import { AccountPanel, FindMatchPanel, RankedGameView } from '../components/online/Ranked'
 import { LeaguePanel, SpectateView } from '../components/online/League'
+import { CardsOnlineView, OnlineModesPanel, RoyaleOnlineView } from '../components/online/OnlineModes'
 import { type ColorChoice, TIME_CONTROLS, parseRoomCode, trimName } from '../online/protocol'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
@@ -55,6 +56,8 @@ export function OnlineView({ inviteCode, onInviteUsed }: { inviteCode: string | 
 
   // A ranked game (matched by the server) takes the screen while it runs, and until you leave its result.
   if (ranked.game) return <RankedGameView game={ranked.game} />
+  if (ranked.cards) return <CardsOnlineView cards={ranked.cards} />
+  if (ranked.royale) return <RoyaleOnlineView royale={ranked.royale} />
   if (ranked.watch) return <SpectateView game={ranked.watch} />
   if (view.phase === 'playing' && view.match) return <OnlineGame match={view.match} opponent={view.opponent} link={view.link} />
   if (view.phase === 'opening' || view.phase === 'waiting') return <WaitingRoom code={view.code ?? ''} ready={view.phase === 'waiting'} onCancel={() => session.leave()} />
@@ -88,6 +91,7 @@ function Lobby({ error }: { error: string | null }) {
 
       <AccountPanel />
       <FindMatchPanel />
+      <OnlineModesPanel />
       <LeaguePanel />
 
       <h3 className="mt-2 flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400" data-online-friends>

@@ -16,6 +16,11 @@ mkdirSync(targetDir, { recursive: true })
 for (const file of files) {
   const source = join(sourceDir, file)
   if (!existsSync(source)) {
+    // A production install (npm ci --omit=dev) only runs the server: the engine is already in dist/.
+    if (process.env.npm_config_omit?.includes('dev') || process.env.NODE_ENV === 'production') {
+      console.log('[copy-stockfish] Skipped (production install: the built app already contains the engine).')
+      process.exit(0)
+    }
     console.error(`[copy-stockfish] Missing ${source}. Is the "stockfish" package installed?`)
     process.exit(1)
   }

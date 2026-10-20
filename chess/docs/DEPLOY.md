@@ -1,0 +1,134 @@
+# Deploying Chronos Chess
+
+One Node process serves everything from a single origin:
+- the built app;
+- the JSON API;
+- the `/ws` socket for ranked play, Card Chess, Battle Royale and Vanishing Chess.
+
+Everything players create lives in one SQLite database. Put the server behind any HTTPS front end; Caddy is included below.
+
+## The quick way: Docker + Caddy (automatic HTTPS)
+
+```bash
+cp server/.env.example server/.env        # then edit it (see "Settings")
+DOMAIN=chess.example.com docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+- **What this starts.**
+  - The `chess` container: the game server, built by the `Dockerfile`.
+  - The `caddy` container: it gets a Let's Encrypt certificate for `DOMAIN`, compresses responses, and passes `/ws` upgrades through.
+- **Where the data lives.** Both are in the `chess-data` volume, mounted at `/data`:
+  - `/data/chess.db` is the database;
+  - `/data/backups/` holds the daily backups.
+- **The image itself.** It runs as the unprivileged `node` user, on Node 22. Its runtime `node_modules` holds only the server's packages, about 35 MB. A `HEALTHCHECK` polls `/api/health`.
+
+Without Compose:
+
+```bash
+docker build -t chronos-chess .
+docker run -d -p 8787:8787 -v chess-data:/data --env-file server/.env chronos-chess
+```
+
+## Without Docker
+
+```bash
+npm ci                 # full install: the build needs Vite, TypeScript and the browser packages
+npm run build:all      # dist/ (the app) and dist-server/ (the server bundle)
+npm prune --omit=dev   # optional: keep only what the server needs at runtime
+NODE_ENV=production npm start
+```
+
+- **What `npm start` runs.** It runs `node dist-server/index.mjs`, a single bundle of the server and the shared rules code. Only the `dependencies` in `package.json` are needed at runtime.
+- **Browser-only packages.** React, three.js, Stockfish and the rest are `devDependencies`, because they are compiled into `dist/` at build time.
+- **Running from source.** `npm run server:prod` runs the server from source with `tsx` instead, which needs the full install.
+
+## Settings
+
+Set these in `server/.env` or in the environment. Every setting is documented in `server/.env.example`.
+
+| Setting | Required | Default | What it does |
+| --- | --- | --- | --- |
+| `PUBLIC_URL` | **yes** (production) | — | The origin players open, e.g. `https://chess.example.com`. Used for sign-in links and the Origin checks (CSRF and the socket). |
+| `SMTP_URL` / `MAIL_FROM` | one of the two sign-ins | — | Email magic links. |
+| `GOOGLE_CLIENT_ID` | one of the two sign-ins | — | Google Sign-In. |
+| `DATABASE_FILE` | no | `server-data/chess.db` | The SQLite database. In Docker this is `/data/chess.db`. |
+| `LEGACY_DATA_FILE` | no | `server-data/db.json` | The JSON data file from 6.14 and earlier, imported once (see below). |
+| `BACKUP_DIR` | no | `backups/` next to the database (production) | Where automatic backups go; `off` switches them off. |
+| `BACKUP_HOURS` / `BACKUP_KEEP` | no | `24` / `7` | How often to back up, and how many backups to keep. |
+| `TRUST_PROXY` | no | `1` in production | How many proxies sit in front, so rate limits see the real client IP. Use `0` when nothing is in front. |
+| `PORT` / `HOST` | no | `8787` / `0.0.0.0` | Where the server listens. |
+| `SESSION_DAYS` | no | `30` | How long a sign-in lasts. |
+
+The server refuses to start in production without `PUBLIC_URL` and at least one sign-in method.
+
+## Security
+
+In production the server sends these headers:
+- **`Content-Security-Policy`** allows:
+  - our own scripts;
+  - the inline boot script, by its SHA-256 hash only;
+  - WebAssembly, for Stockfish;
+  - Google Sign-In and Google Fonts;
+  - connections to this origin and the PeerJS broker (friend games).
+- **No framing:** `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+- **HSTS** when `PUBLIC_URL` is https.
+- **Other headers:** `nosniff`, `Referrer-Policy: no-referrer`, a restrictive `Permissions-Policy` and COOP `same-origin-allow-popups`.
+
+Other protections:
+- **Caching.** Hashed assets are cached for a year; the engine files for a week; the page itself is revalidated on every load.
+- **Sessions.** Session cookies are httpOnly, SameSite=Lax and Secure, and only their SHA-256 is stored.
+- **Origin checks.** Every change and every socket must come from `PUBLIC_URL`.
+- **Rate limits.**
+  - Sign-in emails: per address and per IP.
+  - API changes: 240 a minute per IP.
+  - Socket messages: 20 a second per connection; larger bursts close the socket.
+
+## The database
+
+The database is **SQLite** through `better-sqlite3`, set up as follows:
+- **WAL journal, foreign keys on.** Every change is durable when the call returns. Multi-step changes (a rated result, a season rollover, a clan war archive) are single transactions.
+- **One tracked schema version.** A database written by a newer server is refused rather than damaged.
+- **Constraints.** One account per email and per Google id, one clan per tag, and one clan per player.
+
+### Upgrading from 6.14 (the JSON file)
+
+On first start with an empty database, the server imports `LEGACY_DATA_FILE`. Everything comes across:
+- users and ratings;
+- sessions, so nobody is signed out;
+- magic links and cloud saves;
+- rated games;
+- seasons with their history;
+- the tournament;
+- clans and the clan war.
+
+The old file is then renamed to `db.json.imported`, so it is never imported twice. An old `DATA_FILE=…/db.json` setting still works: the database is created next to it as `db.db`.
+
+To import by hand:
+
+```bash
+npm run db -- import server-data/db.json    # from source
+node dist-server/cli.mjs import /data/db.json   # in the image
+```
+
+### Backups
+
+- **Automatic.** In production a consistent copy is taken every `BACKUP_HOURS` (the first a minute after start), using SQLite's online backup, which is safe while players are playing. The newest `BACKUP_KEEP` are kept.
+- **By hand:**
+
+  ```bash
+  npm run db -- backup                 # into the backup folder
+  npm run db -- backup /somewhere/chess.db
+  npm run db -- stats                  # how much is stored
+  ```
+- **Restoring.** Stop the server, copy a backup over `chess.db` (delete `chess.db-wal` and `chess.db-shm`), and start again.
+
+## Health and scaling
+
+- **Health check.** `GET /api/health` answers `200` with the version, the uptime, the database status, and live counts: people online, games, queues, Card Chess and Battle Royale rooms. It answers `503` if the database stops answering.
+- **One process.** Games, queues and clocks live in memory. SQLite handles thousands of rated games a minute on one machine.
+- **Restarts.** A restart ends the games in progress: players are told when they reconnect, and the weekly tournament replays its open round.
+- **Shutting down.** On `SIGTERM` the server stops taking connections, closes the sockets and checkpoints the database. After 10 seconds it exits regardless.
+
+## The app without the server
+
+`npm run build` alone produces a static `dist/` that works on any static host. Everything offline works there. Online ranked play, accounts and cloud saves need the server, and the Online screen says so.

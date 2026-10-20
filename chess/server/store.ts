@@ -5,6 +5,9 @@
 // can replace this file later without touching the rest of the server.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import type { BracketMatch, Entrant } from './bracket'
+import { type Clan, weekOf } from './clans'
+import { type SeasonResult, type SeasonRow, seasonOf, softReset, tierFor } from './seasons'
 
 export interface User {
   id: string
@@ -47,6 +50,27 @@ export interface GameRecord {
   endedAt: number
 }
 
+export interface TournamentState {
+  id: string
+  name: string
+  startsAt: number
+  pool: string
+  status: 'signup' | 'running' | 'done'
+  entrants: Entrant[]
+  rounds: BracketMatch[][]
+  champion: string | null
+  finishedAt: number | null
+  /** Last week's champion (for the lobby). */
+  previous: { champion: string; players: number; finishedAt: number } | null
+}
+
+export interface ClanWar {
+  week: string
+  points: Record<string, number>
+  /** Last week's final table (the winner first). */
+  last: { week: string; points: Record<string, number> } | null
+}
+
 interface Db {
   version: 1
   users: Record<string, User>
@@ -56,9 +80,15 @@ interface Db {
   magic: Record<string, MagicRow>
   saves: Record<string, SaveRow>
   games: GameRecord[]
+  seasons: { current: string; rows: Record<string, SeasonRow>; history: Record<string, SeasonResult[]> }
+  tournament: TournamentState | null
+  clans: Record<string, Clan>
+  clanWar: ClanWar
 }
 
-const empty = (): Db => ({ version: 1, users: {}, sessions: {}, magic: {}, saves: {}, games: [] })
+const empty = (): Db => ({ version: 1, users: {}, sessions: {}, magic: {}, saves: {}, games: [], seasons: { current: '', rows: {}, history: {} }, tournament: null, clans: {}, clanWar: { week: '', points: {}, last: null } })
+/** Seasons of history kept per player. */
+const MAX_SEASON_HISTORY = 24
 /** Rated games kept in the file (older ones are dropped; per-user stats stay on the user). */
 const MAX_GAMES = 5000
 
@@ -182,5 +212,98 @@ export class Store {
       .filter((u) => u.games > 0)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, limit)
+  }
+
+  // ── Seasons ───────────────────────────────────────────────────────────────
+  /** Starts a new season if the month has turned: final standings into history, ratings softly reset. */
+  rollSeason(now: number): boolean {
+    const season = seasonOf(now)
+    const s = this.db.seasons
+    if (s.current === season) return false
+    if (s.current) {
+      const ranked = Object.entries(s.rows)
+        .filter(([id, row]) => row.games > 0 && this.db.users[id])
+        .sort((a, b) => (this.db.users[b[0]]?.rating ?? 0) - (this.db.users[a[0]]?.rating ?? 0))
+      ranked.forEach(([id, row], i) => {
+        const rating = this.db.users[id]?.rating ?? 1200
+        const result: SeasonResult = { season: s.current, rating, tier: tierFor(rating).id, rank: i + 1, games: row.games }
+        s.history[id] = [result, ...(s.history[id] ?? [])].slice(0, MAX_SEASON_HISTORY)
+      })
+      for (const u of Object.values(this.db.users)) if (u.games > 0) u.rating = softReset(u.rating)
+    }
+    this.db.seasons = { current: season, rows: {}, history: s.history }
+    this.changed()
+    return true
+  }
+  seasonCurrent(): string {
+    return this.db.seasons.current
+  }
+  seasonRow(userId: string): SeasonRow | null {
+    return this.db.seasons.rows[userId] ?? null
+  }
+  recordSeasonGame(userId: string, won: boolean, rating: number): void {
+    const row = this.db.seasons.rows[userId] ?? { games: 0, wins: 0, peak: rating }
+    this.db.seasons.rows[userId] = { games: row.games + 1, wins: row.wins + (won ? 1 : 0), peak: Math.max(row.peak, rating) }
+    this.changed()
+  }
+  /** This season's table: players with a game this season, by rating. */
+  seasonTable(limit: number): Array<{ user: User; row: SeasonRow }> {
+    return Object.entries(this.db.seasons.rows)
+      .map(([id, row]) => ({ user: this.db.users[id], row }))
+      .filter((x): x is { user: User; row: SeasonRow } => x.user !== undefined && x.row.games > 0)
+      .sort((a, b) => b.user.rating - a.user.rating)
+      .slice(0, limit)
+  }
+  seasonHistory(userId: string): SeasonResult[] {
+    return this.db.seasons.history[userId] ?? []
+  }
+
+  // ── Weekly tournament ─────────────────────────────────────────────────────
+  tournament(): TournamentState | null {
+    return this.db.tournament
+  }
+  putTournament(t: TournamentState): void {
+    this.db.tournament = t
+    this.changed()
+  }
+
+  // ── Clans & clan war ──────────────────────────────────────────────────────
+  clan(id: string): Clan | null {
+    return this.db.clans[id] ?? null
+  }
+  clans(): Clan[] {
+    return Object.values(this.db.clans)
+  }
+  clanOf(userId: string): Clan | null {
+    return Object.values(this.db.clans).find((c) => c.members.includes(userId)) ?? null
+  }
+  clanByTag(tag: string): Clan | null {
+    return Object.values(this.db.clans).find((c) => c.tag === tag) ?? null
+  }
+  putClan(clan: Clan): Clan {
+    this.db.clans[clan.id] = clan
+    this.changed()
+    return clan
+  }
+  dropClan(id: string): void {
+    delete this.db.clans[id]
+    delete this.db.clanWar.points[id]
+    this.changed()
+  }
+  /** This week's war table (a new week archives the last one first). */
+  clanWar(now: number): ClanWar {
+    const week = weekOf(now)
+    const w = this.db.clanWar
+    if (w.week !== week) {
+      this.db.clanWar = { week, points: {}, last: w.week && Object.keys(w.points).length > 0 ? { week: w.week, points: w.points } : w.last }
+      this.changed()
+    }
+    return this.db.clanWar
+  }
+  addWarPoints(clanId: string, points: number, now: number): void {
+    if (points <= 0) return
+    const w = this.clanWar(now)
+    w.points[clanId] = (w.points[clanId] ?? 0) + points
+    this.changed()
   }
 }

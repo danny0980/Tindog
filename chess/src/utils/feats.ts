@@ -4,6 +4,7 @@
 import type { AchievementDef, PlayerProfile } from '../types/profile'
 import type { VariantId, VariantResultReason } from '../variants/rules'
 import { quizReward } from '../data/classic/quiz'
+import { eloAfter } from '../modes/stats'
 import { grant } from './progression'
 
 export interface FeatOutcome {
@@ -77,4 +78,31 @@ export function recordQuiz(profile: PlayerProfile, correct: number, total: numbe
   const ids = [...(total > 0 && correct === total ? ['perfect-recall'] : []), ...(quizCorrect >= 50 ? ['historian'] : [])]
   const paid = { ...profile, coins: profile.coins + coins, totalCoinsEarned: profile.totalCoinsEarned + coins, feats: { ...profile.feats, quizCorrect } }
   return { ...grant(paid, ids, now()), coins }
+}
+
+/** A Card Chess or Battle Royale game finished (`place`: 1–4 in the Royale). */
+export function recordModeResult(profile: PlayerProfile, mode: 'cards' | 'royale', won: boolean, place: number | null = null): FeatOutcome {
+  const m = profile.modes
+  const modes =
+    mode === 'cards'
+      ? { ...m, cards: { games: m.cards.games + 1, wins: m.cards.wins + (won ? 1 : 0) } }
+      : { ...m, royale: { games: m.royale.games + 1, wins: m.royale.wins + (won ? 1 : 0), best: place === null ? m.royale.best : Math.min(m.royale.best ?? 4, place) } }
+  const ids = mode === 'cards' ? [...(won ? ['card-sharp'] : []), ...(modes.cards.wins >= 5 ? ['house-of-cards'] : [])] : won ? ['last-king-standing'] : []
+  return grant({ ...profile, modes }, ids, now())
+}
+
+/** A Vanishing Chess game: its own rating, against the level's strength. */
+export function recordVanish(profile: PlayerProfile, score: 0 | 0.5 | 1, opponentElo: number): FeatOutcome {
+  const v = profile.modes.vanish
+  const rating = eloAfter(v.rating, opponentElo, score)
+  const modes = { ...profile.modes, vanish: { rating, games: v.games + 1, wins: v.wins + (score === 1 ? 1 : 0), peak: Math.max(v.peak, rating) } }
+  return grant({ ...profile, modes }, score === 1 && opponentElo >= 1500 ? ['invisible-hand'] : [], now())
+}
+
+/** An escape room solved: the best time and stars are kept. */
+export function recordEscape(profile: PlayerProfile, roomId: string, ms: number, stars: number, totalRooms: number): FeatOutcome {
+  const prev = profile.modes.escape[roomId]
+  const escape = { ...profile.modes.escape, [roomId]: { bestMs: prev ? Math.min(prev.bestMs, ms) : ms, stars: Math.max(prev?.stars ?? 0, stars) } }
+  const ids = ['escape-artist', ...(Object.keys(escape).length >= totalRooms ? ['great-escape'] : [])]
+  return grant({ ...profile, modes: { ...profile.modes, escape } }, ids, now())
 }

@@ -1,6 +1,7 @@
 import { sanitizeMemory } from '../memory/memory'
 import { EMPTY_ARMY, sanitizeArmy } from '../army/army'
 import { sanitizeWar } from '../war/war'
+import { DEFAULT_MODES, sanitizeModes } from '../modes/stats'
 import { isTierId } from '../data/campaign/tiers'
 import { STARTING_ELO, STORAGE_KEYS } from '../constants/game'
 import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../constants/themes'
@@ -59,6 +60,7 @@ export function createDefaultProfile(): PlayerProfile {
     memory: {},
     army: { ...EMPTY_ARMY },
     war: null,
+    modes: structuredClone(DEFAULT_MODES),
   }
 }
 
@@ -265,6 +267,7 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     memory: sanitizeMemory(raw.memory),
     army: sanitizeArmy(raw.army),
     war: sanitizeWar(raw.war),
+    modes: sanitizeModes(raw.modes),
   }
 }
 

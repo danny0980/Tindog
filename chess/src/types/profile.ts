@@ -1,6 +1,7 @@
 import type { MemoryBook } from '../memory/memory'
 import type { Army } from '../army/army'
 import type { WarState } from '../war/war'
+import type { ModeStats } from '../modes/stats'
 import type { BoardThemeId, PieceSetId } from './theme'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from './chess'
 import type { VariantEvent } from '../engine/variant'
@@ -100,6 +101,8 @@ export interface PlayerProfile {
   army: Army
   /** The Historical World War in progress (null = not started). */
   war: WarState | null
+  /** Card Chess, Battle Royale, Vanishing Chess and Escape Room records. */
+  modes: ModeStats
 }
 
 export type AchievementIcon =
@@ -141,6 +144,7 @@ export type AchievementIcon =
   | 'cpu'
   | 'sparkles'
   | 'orbit'
+  | 'key'
 
 export interface AchievementDef {
   id: string

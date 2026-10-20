@@ -1,4 +1,4 @@
-import { ArrowLeft, Brain, Crown, Flag, Ghost, Globe2, Landmark, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Brain, Crown, EyeOff, Flag, Ghost, Globe2, KeyRound, Layers, Landmark, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
@@ -30,6 +30,10 @@ import { MuseumView } from '../components/history/MuseumView'
 import { QuizView } from '../components/history/QuizView'
 import { GhostView } from '../components/ghost/GhostView'
 import { WarView } from '../components/war/WarView'
+import { CardChessView } from '../components/cards/CardChessView'
+import { EscapeView } from '../components/escape/EscapeView'
+import { RoyaleView } from '../components/royale/RoyaleView'
+import { VanishView } from '../components/vanish/VanishView'
 import type { BattleMode } from '../war/war'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
@@ -66,6 +70,10 @@ const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: ty
   variants: { title: 'CHESS VARIANTS', subtitle: 'Chess960, King of the Hill and Three-Check against the computer', icon: Shuffle, slot: 'classic' },
   battles: { title: 'PLAY THE REAL BATTLE', subtitle: 'Thermopylae, Cannae and Waterloo as chess, with history’s own twists', icon: Flag, slot: 'classic' },
   museum: { title: 'TROPHY MUSEUM', subtitle: 'Your personal timeline of history, from 2300 BCE to today', icon: Landmark, slot: 'classic' },
+  royale: { title: 'BATTLE ROYALE', subtitle: 'Four armies, one cross-shaped board: the last king standing wins', icon: Crown, slot: 'classic' },
+  cards: { title: 'CARD CHESS', subtitle: 'Draft three tactical cards, then play them at the right moment', icon: Layers, slot: 'classic' },
+  vanish: { title: 'VANISHING CHESS', subtitle: 'Rated blindfold chess: pieces fade from view as the game goes on', icon: EyeOff, slot: 'classic' },
+  escape: { title: 'HISTORICAL ESCAPE ROOMS', subtitle: 'Four forced mates seal each room; every lock reveals a page of history', icon: KeyRound, slot: 'classic' },
   war: { title: 'HISTORICAL WORLD WAR', subtitle: 'Conquer 21 territories held by five empires, with an army of the legends you have beaten', icon: Globe2, slot: 'classic' },
   ghost: { title: 'GHOST OF YOURSELF', subtitle: 'An opponent built from your own games: your openings, your habits, your rating', icon: Ghost, slot: 'classic' },
   quiz: { title: 'HISTORY QUIZ', subtitle: 'Who is this? True facts about the people you have beaten', icon: Brain, slot: 'classic' },
@@ -192,6 +200,14 @@ export function LegendsView({ onChallenge, onChallengeClassic, onChallengeGhost,
       {screen === 'ghost' && <GhostView onPlay={onChallengeGhost} />}
 
       {screen === 'war' && <WarView onBattle={onChallengeWar} />}
+
+      {screen === 'cards' && <CardChessView />}
+
+      {screen === 'vanish' && <VanishView />}
+
+      {screen === 'escape' && <EscapeView />}
+
+      {screen === 'royale' && <RoyaleView />}
 
       {screen === 'freeplay' && <FreePlayPanel defeated={progress.defeated} selected={freeSelected} onSelect={setFreeSelected} onStart={onChallenge} />}
     </div>

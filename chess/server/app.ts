@@ -2,6 +2,7 @@
 // games, leaderboard) and the /ws WebSocket for ranked play. In production it
 // also serves the built app, so the cookie, the API and the socket share one
 // origin.
+import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { join } from 'node:path'
@@ -9,7 +10,10 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { WebSocketServer, type WebSocket } from 'ws'
 import { Auth, type GoogleVerifier, RateLimiter, SESSION_COOKIE, cleanDisplayName, normaliseEmail } from './auth'
 import type { Config } from './config'
+import { MAX_MEMBERS, cleanClanName, cleanTag } from './clans'
 import { Hub } from './hub'
+import { TIERS, seasonEnd, tierFor } from './seasons'
+import { TournamentManager } from './tournaments'
 import type { Mailer } from './mailer'
 import type { Store, User } from './store'
 
@@ -23,11 +27,14 @@ export interface AppDeps {
   log?: (line: string) => void
   /** Overrides for tests (fast grace periods, pairing). */
   hub?: { graceMs?: number; pairEveryMs?: number }
+  /** When the first weekly tournament starts (tests). */
+  tournamentStartsAt?: number
 }
 
 export interface Running {
   server: Server
   hub: Hub
+  tournaments: TournamentManager
   auth: Auth
   close: () => Promise<void>
 }
@@ -44,6 +51,8 @@ function readCookie(header: string | undefined, name: string): string | null {
   return null
 }
 
+const newClanId = (): string => `c${randomBytes(9).toString('hex')}`
+
 const publicUser = (u: User) => ({ id: u.id, name: u.name, email: u.email, google: u.googleSub !== null, rating: u.rating, games: u.games, wins: u.wins, losses: u.losses, draws: u.draws })
 
 export function createApp(deps: AppDeps): Running {
@@ -52,6 +61,17 @@ export function createApp(deps: AppDeps): Running {
   const log = deps.log ?? console.log
   const auth = new Auth(store, config.sessionDays, now)
   const hub = new Hub({ store, now, log, ...deps.hub })
+  const tournaments = new TournamentManager({
+    store,
+    now,
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    startGame: (players, pool, label, onResult) => hub.startGame(players, pool, label, onResult),
+    isAvailable: (id) => hub.isAvailable(id),
+    changed: () => hub.broadcast({ type: 'TOURNAMENT_CHANGED' }),
+    log,
+    ...(deps.tournamentStartsAt !== undefined ? { firstStartsAt: deps.tournamentStartsAt } : {}),
+  })
   const perEmail = new RateLimiter(5, 15 * 60_000, now)
   const perIp = new RateLimiter(30, 15 * 60_000, now)
   const allowedOrigin = config.publicUrl ? new URL(config.publicUrl).origin : null
@@ -94,7 +114,7 @@ export function createApp(deps: AppDeps): Running {
 
   // ── Info ──────────────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => void res.json({ ok: true, ...hub.stats() }))
-  app.get('/api/config', (_req, res) => void res.json({ google: config.googleClientId, email: emailEnabled, devLinks: config.smtpUrl === null }))
+  app.get('/api/config', (_req, res) => void res.json({ google: config.googleClientId, email: emailEnabled, devLinks: config.smtpUrl === null, dev: !config.production }))
 
   // ── Sign-in ───────────────────────────────────────────────────────────────
   app.post('/api/auth/email', async (req, res) => {
@@ -188,6 +208,121 @@ export function createApp(deps: AppDeps): Running {
 
   app.get('/api/leaderboard', (_req, res) => void res.json({ players: store.leaderboard(50).map((u) => ({ name: u.name, rating: u.rating, games: u.games })) }))
 
+  // ── Watch: live games ─────────────────────────────────────────────────────
+  app.get('/api/live', (_req, res) => void res.json({ games: hub.liveGames() }))
+
+  // ── Seasons ───────────────────────────────────────────────────────────────
+  app.get('/api/season', (req, res) => {
+    store.rollSeason(now())
+    const season = store.seasonCurrent()
+    const table = store.seasonTable(50).map(({ user, row }) => ({ name: user.name, rating: user.rating, tier: tierFor(user.rating).id, games: row.games, wins: row.wins }))
+    const user = signedIn(req)
+    const row = user ? store.seasonRow(user.id) : null
+    const rank = user && row ? store.seasonTable(10_000).findIndex((x) => x.user.id === user.id) + 1 : null
+    res.json({
+      season,
+      endsAt: seasonEnd(season),
+      tiers: TIERS.map((t) => ({ id: t.id, name: t.name, min: t.min })),
+      table,
+      me: user ? { rating: user.rating, tier: tierFor(user.rating).id, games: row?.games ?? 0, wins: row?.wins ?? 0, peak: row?.peak ?? user.rating, rank: rank || null } : null,
+      history: user ? store.seasonHistory(user.id) : [],
+    })
+  })
+
+  // ── Weekly tournament ─────────────────────────────────────────────────────
+  const pub = (id: string | null) => {
+    const u = id ? store.user(id) : null
+    return u ? { name: u.name, rating: u.rating } : null
+  }
+  app.get('/api/tournament', (req, res) => {
+    const t = tournaments.state
+    const user = signedIn(req)
+    res.json({
+      id: t.id,
+      name: t.name,
+      startsAt: t.startsAt,
+      pool: t.pool,
+      status: t.status,
+      entrants: t.entrants.map((e) => pub(e.id)).filter((p) => p !== null),
+      joined: user ? t.entrants.some((e) => e.id === user.id) : false,
+      rounds: t.rounds.map((r) => r.map((m) => ({ a: pub(m.a), b: pub(m.b), winner: m.winner === null ? null : m.winner === m.a ? 'a' : 'b', gameId: m.winner ? null : m.gameId }))),
+      champion: pub(t.champion),
+      previous: t.previous ? { champion: pub(t.previous.champion), players: t.previous.players, finishedAt: t.previous.finishedAt } : null,
+    })
+  })
+  app.post('/api/tournament/join', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const refused = tournaments.join(user.id, user.rating)
+    if (refused) return void res.status(409).json({ error: refused })
+    res.json({ ok: true })
+  })
+  app.post('/api/tournament/leave', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    tournaments.leave(user.id)
+    res.json({ ok: true })
+  })
+  // Development only: start the tournament now (to try it without waiting for Saturday).
+  app.post('/api/tournament/start', (req, res) => {
+    if (config.production) return void res.status(404).json({ error: 'Not found.' })
+    if (!requireUser(req, res)) return
+    tournaments.start()
+    res.json({ ok: true })
+  })
+
+  // ── Clans & the weekly clan war ───────────────────────────────────────────
+  app.get('/api/clans', (req, res) => {
+    const war = store.clanWar(now())
+    const user = signedIn(req)
+    const table = store
+      .clans()
+      .map((c) => ({ id: c.id, name: c.name, tag: c.tag, members: c.members.length, points: war.points[c.id] ?? 0 }))
+      .sort((a, b) => b.points - a.points || b.members - a.members || a.name.localeCompare(b.name))
+      .slice(0, 50)
+    const lastWinner = war.last ? Object.entries(war.last.points).sort((a, b) => b[1] - a[1])[0] : undefined
+    const lastClan = lastWinner ? store.clan(lastWinner[0]) : null
+    res.json({ week: war.week, table, last: war.last ? { week: war.last.week, winner: lastClan ? { name: lastClan.name, tag: lastClan.tag, points: lastWinner![1] } : null } : null, mine: user ? (store.clanOf(user.id)?.id ?? null) : null })
+  })
+  app.get('/api/clans/:id', (req, res) => {
+    const c = store.clan(String(req.params.id))
+    if (!c) return void res.status(404).json({ error: 'No such clan.' })
+    const war = store.clanWar(now())
+    res.json({ id: c.id, name: c.name, tag: c.tag, owner: pub(c.ownerId)?.name ?? '', points: war.points[c.id] ?? 0, members: c.members.map((m) => pub(m)).filter((p) => p !== null).sort((a, b) => b.rating - a.rating) })
+  })
+  app.post('/api/clans', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    if (store.clanOf(user.id)) return void res.status(409).json({ error: 'Leave your clan first.' })
+    const body = req.body as { name?: unknown; tag?: unknown } | undefined
+    const name = cleanClanName(body?.name)
+    const tag = cleanTag(body?.tag)
+    if (!name || !tag) return void res.status(400).json({ error: 'Names are 3–24 characters; tags 2–5 letters or digits.' })
+    if (store.clanByTag(tag) || store.clans().some((c) => c.name.toLowerCase() === name.toLowerCase())) return void res.status(409).json({ error: 'That clan name or tag is taken.' })
+    const clan = store.putClan({ id: newClanId(), name, tag, ownerId: user.id, members: [user.id], createdAt: now() })
+    res.json({ id: clan.id })
+  })
+  app.post('/api/clans/:id/join', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const c = store.clan(String(req.params.id))
+    if (!c) return void res.status(404).json({ error: 'No such clan.' })
+    if (store.clanOf(user.id)) return void res.status(409).json({ error: 'Leave your clan first.' })
+    if (c.members.length >= MAX_MEMBERS) return void res.status(409).json({ error: `That clan is full (${MAX_MEMBERS} members).` })
+    store.putClan({ ...c, members: [...c.members, user.id] })
+    res.json({ ok: true })
+  })
+  app.post('/api/clans/leave', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const c = store.clanOf(user.id)
+    if (!c) return void res.json({ ok: true })
+    const members = c.members.filter((m) => m !== user.id)
+    if (members.length === 0) store.dropClan(c.id)
+    else store.putClan({ ...c, members, ownerId: c.ownerId === user.id ? members[0]! : c.ownerId })
+    res.json({ ok: true })
+  })
+
   app.use('/api', (_req, res) => void res.status(404).json({ error: 'Not found.' }))
 
   // ── The built app (production) ────────────────────────────────────────────
@@ -246,12 +381,14 @@ export function createApp(deps: AppDeps): Running {
   return {
     server,
     hub,
+    tournaments,
     auth,
     close: () =>
       new Promise((resolve) => {
         clearInterval(heartbeat)
         clearInterval(sweep)
         hub.close()
+        tournaments.close()
         for (const ws of wss.clients) ws.terminate()
         wss.close()
         server.close(() => {

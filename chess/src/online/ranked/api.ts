@@ -20,6 +20,8 @@ export interface ServerConfig {
   email: boolean
   /** Development server without SMTP: sign-in links are printed in its console. */
   devLinks: boolean
+  /** A development server (e.g. the tournament can be started by hand). */
+  dev?: boolean
 }
 
 export interface RatedGame {
@@ -32,6 +34,67 @@ export interface RatedGame {
   ratingChange: number
   moves: number
   endedAt: number
+}
+
+export interface PlayerRow {
+  name: string
+  rating: number
+}
+
+export interface SeasonInfo {
+  season: string
+  endsAt: number
+  tiers: Array<{ id: string; name: string; min: number }>
+  table: Array<{ name: string; rating: number; tier: string; games: number; wins: number }>
+  me: { rating: number; tier: string; games: number; wins: number; peak: number; rank: number | null } | null
+  history: Array<{ season: string; rating: number; tier: string; rank: number; games: number }>
+}
+
+export interface TournamentInfo {
+  id: string
+  name: string
+  startsAt: number
+  pool: string
+  status: 'signup' | 'running' | 'done'
+  entrants: PlayerRow[]
+  joined: boolean
+  rounds: Array<Array<{ a: PlayerRow | null; b: PlayerRow | null; winner: 'a' | 'b' | null; gameId: string | null }>>
+  champion: PlayerRow | null
+  previous: { champion: PlayerRow | null; players: number; finishedAt: number } | null
+}
+
+export interface ClanRow {
+  id: string
+  name: string
+  tag: string
+  members: number
+  points: number
+}
+
+export interface ClansInfo {
+  week: string
+  table: ClanRow[]
+  last: { week: string; winner: { name: string; tag: string; points: number } | null } | null
+  mine: string | null
+}
+
+export interface ClanInfo {
+  id: string
+  name: string
+  tag: string
+  owner: string
+  points: number
+  members: PlayerRow[]
+}
+
+export interface LiveGameRow {
+  gameId: string
+  white: PlayerRow
+  black: PlayerRow
+  pool: string
+  moves: number
+  label: string | null
+  watchers: number
 }
 
 export class ApiError extends Error {
@@ -82,4 +145,16 @@ export const api = {
   putSave: (data: unknown) => call<{ updatedAt: number }>('/save', { method: 'PUT', body: { data } }),
   games: () => call<{ games: RatedGame[] }>('/games'),
   leaderboard: () => call<{ players: Array<{ name: string; rating: number; games: number }> }>('/leaderboard'),
+  season: () => call<SeasonInfo>('/season'),
+  tournament: () => call<TournamentInfo>('/tournament'),
+  joinTournament: () => call<{ ok: boolean }>('/tournament/join', { method: 'POST', body: {} }),
+  leaveTournament: () => call<{ ok: boolean }>('/tournament/leave', { method: 'POST', body: {} }),
+  /** Development servers only: start the tournament now. */
+  startTournament: () => call<{ ok: boolean }>('/tournament/start', { method: 'POST', body: {} }),
+  clans: () => call<ClansInfo>('/clans'),
+  clan: (id: string) => call<ClanInfo>(`/clans/${encodeURIComponent(id)}`),
+  createClan: (name: string, tag: string) => call<{ id: string }>('/clans', { method: 'POST', body: { name, tag } }),
+  joinClan: (id: string) => call<{ ok: boolean }>(`/clans/${encodeURIComponent(id)}/join`, { method: 'POST', body: {} }),
+  leaveClan: () => call<{ ok: boolean }>('/clans/leave', { method: 'POST', body: {} }),
+  live: () => call<{ games: LiveGameRow[] }>('/live'),
 }

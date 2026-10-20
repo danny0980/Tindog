@@ -11,6 +11,8 @@ interface BoardSquareProps {
   state?: PieceState | undefined
   /** The captured piece, drawn once more as it disintegrates. */
   ghost?: ReactNode
+  /** Vanishing Chess: how visible the piece is. */
+  opacity?: number | undefined
   children: ReactNode
 }
 
@@ -18,7 +20,7 @@ interface BoardSquareProps {
  * One board square with its VFX layers (status tile, trail, aura, check /
  * mate pulse, capture flash) drawn under the piece.
  */
-export function BoardSquare({ style, vfx, captureKey, state, ghost = null, children }: BoardSquareProps) {
+export function BoardSquare({ style, vfx, captureKey, state, ghost = null, opacity, children }: BoardSquareProps) {
   // Always the same element tree, so a piece landing here is never remounted (which would cut its move animation).
   return (
     <div className={`vfx-square ${vfx?.selected ? 'vfx-raised' : ''}`} style={style}>
@@ -28,7 +30,7 @@ export function BoardSquare({ style, vfx, captureKey, state, ghost = null, child
       {vfx?.check && <span className="vfx-layer vfx-check" data-vfx-check />}
       {vfx?.mate && <span className="vfx-layer vfx-mate" data-vfx-mate />}
       {vfx?.selected && <span className="vfx-layer vfx-aura" />}
-      <div className={`vfx-piece ${state ? `vfx-piece-${state}` : ''}`} data-piece-state={state}>
+      <div className={`vfx-piece ${state ? `vfx-piece-${state}` : ''}`} data-piece-state={state} data-opacity={opacity} style={opacity === undefined ? undefined : { opacity, transition: 'opacity 0.6s ease' }}>
         {children}
       </div>
       {captureKey !== null && <span key={captureKey} className="vfx-layer vfx-capture" data-vfx-capture />}

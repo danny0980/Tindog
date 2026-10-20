@@ -5,7 +5,7 @@
 // Framework-free; the socket is injected so tests can drive it.
 import { Chess } from 'chess.js'
 import type { Color, MoveInput, Square } from '../../types/chess'
-import { type ClientMessage, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, parseServerMessage } from './protocol'
+import { type ClientMessage, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, type SpectateSnapshot, parseServerMessage } from './protocol'
 
 /** The parts of the browser WebSocket API we use (the `ws` package matches it too). */
 export interface SocketLike {
@@ -36,6 +36,24 @@ export interface RankedGame {
   /** Set while the opponent is disconnected: when their grace period ends (local time). */
   opponentAwayUntil: number | null
   result: { winner: Color | null; reason: RankedReason; rating: { before: number; after: number } } | null
+  /** Tournament round, if it is one. */
+  label: string | null
+}
+
+/** A game you are watching. */
+export interface WatchGame {
+  gameId: string
+  white: PublicPlayer
+  black: PublicPlayer
+  pool: string
+  moves: string[]
+  fen: string
+  lastMove: { from: Square; to: Square } | null
+  clocks: { w: number; b: number }
+  clocksAt: number
+  running: Color | null
+  label: string | null
+  result: { winner: Color | null; reason: RankedReason } | null
 }
 
 export interface RankedView {
@@ -43,10 +61,12 @@ export interface RankedView {
   me: PublicPlayer | null
   searching: { pool: string; since: number; queued: number } | null
   game: RankedGame | null
+  /** The game you are watching (null = none; 'loading' while it is being fetched). */
+  watch: WatchGame | 'loading' | null
   error: string | null
 }
 
-export type RankedEvent = { kind: 'move'; byMe: boolean; game: RankedGame } | { kind: 'found'; game: RankedGame } | { kind: 'over'; game: RankedGame } | { kind: 'draw-offered' }
+export type RankedEvent = { kind: 'move'; byMe: boolean; game: RankedGame } | { kind: 'found'; game: RankedGame } | { kind: 'over'; game: RankedGame } | { kind: 'draw-offered' } | { kind: 'tournament' }
 
 export interface ManagerDeps {
   /** Opens the socket to /ws (cookies go along on their own in a browser). */
@@ -76,13 +96,15 @@ function replay(moves: readonly string[]): { fen: string; last: { from: Square; 
 }
 
 /** Live clock values at local time `now`. */
-export function clocksNow(game: RankedGame, now: number): { w: number; b: number } {
+export function clocksNow(game: { running: Color | null; result: unknown; clocks: { w: number; b: number }; clocksAt: number }, now: number): { w: number; b: number } {
   if (!game.running || game.result) return game.clocks
   return { ...game.clocks, [game.running]: Math.max(0, game.clocks[game.running] - (now - game.clocksAt)) }
 }
 
 export class RankedManager {
-  private view: RankedView = { phase: 'offline', me: null, searching: null, game: null, error: null }
+  private view: RankedView = { phase: 'offline', me: null, searching: null, game: null, watch: null, error: null }
+  /** The game to watch once connected. */
+  private wantWatch: string | null = null
   private readonly listeners = new Set<() => void>()
   private readonly events = new Set<(e: RankedEvent) => void>()
   private readonly deps: Required<ManagerDeps>
@@ -218,6 +240,19 @@ export class RankedManager {
     if (this.send({ type: 'ANSWER_DRAW', gameId: g.gameId, accept })) this.set({ game: { ...g, drawOffer: null } })
   }
 
+  /** Watches a live game (opens the connection if needed). */
+  watch(gameId: string): void {
+    this.wantWatch = gameId
+    this.set({ watch: 'loading', error: null })
+    if (!this.send({ type: 'SPECTATE', gameId })) this.connect()
+  }
+
+  stopWatching(): void {
+    this.wantWatch = null
+    this.send({ type: 'UNSPECTATE' })
+    this.set({ watch: null })
+  }
+
   /** Closes a finished game's screen. */
   dismissGame(): void {
     if (this.view.game?.result) this.set({ game: null, phase: this.socket ? 'idle' : 'offline' })
@@ -228,7 +263,13 @@ export class RankedManager {
   private fromSnapshot(s: GameSnapshot): RankedGame | null {
     const r = replay(s.moves)
     if (!r) return null
-    return { gameId: s.gameId, color: s.color, opponent: s.opponent, pool: s.pool, moves: s.moves, fen: r.fen, lastMove: r.last, clocks: s.clocks, clocksAt: this.deps.now(), running: s.running, drawOffer: s.drawOffer, opponentAwayUntil: null, result: null }
+    return { gameId: s.gameId, color: s.color, opponent: s.opponent, pool: s.pool, moves: s.moves, fen: r.fen, lastMove: r.last, clocks: s.clocks, clocksAt: this.deps.now(), running: s.running, drawOffer: s.drawOffer, opponentAwayUntil: null, result: null, label: s.label ?? null }
+  }
+
+  private fromSpectate(s: SpectateSnapshot): WatchGame | null {
+    const r = replay(s.moves)
+    if (!r) return null
+    return { gameId: s.gameId, white: s.white, black: s.black, pool: s.pool, moves: s.moves, fen: r.fen, lastMove: r.last, clocks: s.clocks, clocksAt: this.deps.now(), running: s.running, label: s.label, result: null }
   }
 
   /** The two copies disagree: reconnecting makes the server send the true game. */
@@ -247,6 +288,7 @@ export class RankedManager {
         this.set({ me: { name: msg.user.name, rating: msg.user.rating }, phase: g && !g.result ? 'playing' : this.wantPool ? 'searching' : 'idle', error: null })
         // We were queueing when the connection dropped: queue again.
         if (this.wantPool && !(g && !g.result)) this.send({ type: 'FIND_MATCH', pool: this.wantPool })
+        if (this.wantWatch) this.send({ type: 'SPECTATE', gameId: this.wantWatch })
         return
       case 'SEARCHING':
         this.set({ searching: { pool: msg.pool, since: this.view.searching?.since ?? this.deps.now(), queued: msg.queued }, phase: 'searching' })
@@ -303,9 +345,38 @@ export class RankedManager {
         return
       }
       case 'ERROR':
+        if (msg.code === 'no-game' && this.view.watch === 'loading') {
+          this.wantWatch = null
+          this.set({ watch: null, error: msg.message })
+          return
+        }
         this.set({ error: msg.message, ...(msg.code === 'in-game' ? {} : this.view.phase === 'searching' ? { searching: null, phase: 'idle' } : {}) })
         return
       case 'PONG':
+        return
+      case 'SPECTATE_START': {
+        if (this.wantWatch !== msg.game.gameId) return
+        const watch = this.fromSpectate(msg.game)
+        this.set({ watch: watch ?? null })
+        return
+      }
+      case 'SPECTATE_MOVE': {
+        const w = this.view.watch
+        if (!w || w === 'loading' || w.gameId !== msg.gameId || msg.ply !== w.moves.length) return
+        const next = replay([...w.moves, msg.uci])
+        if (!next) return
+        this.set({ watch: { ...w, moves: [...w.moves, msg.uci], fen: next.fen, lastMove: next.last, clocks: msg.clocks, clocksAt: this.deps.now(), running: w.moves.length % 2 === 0 ? 'b' : 'w' } })
+        return
+      }
+      case 'SPECTATE_OVER': {
+        const w = this.view.watch
+        if (!w || w === 'loading' || w.gameId !== msg.gameId) return
+        this.wantWatch = null
+        this.set({ watch: { ...w, clocks: clocksNow(w, this.deps.now()), running: null, result: { winner: msg.winner, reason: msg.reason } } })
+        return
+      }
+      case 'TOURNAMENT_CHANGED':
+        this.emit({ kind: 'tournament' })
         return
     }
   }

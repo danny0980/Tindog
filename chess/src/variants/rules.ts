@@ -6,7 +6,7 @@
 import { Chess, type Square } from 'chess.js'
 import type { Color, PieceSymbol } from '../types/chess'
 
-export type VariantId = 'chess960' | 'koth' | 'threecheck' | 'battle'
+export type VariantId = 'chess960' | 'koth' | 'threecheck' | 'battle' | 'vanish'
 
 export interface VariantInfo {
   id: VariantId
@@ -37,6 +37,12 @@ export const VARIANTS: Record<VariantId, VariantInfo> = {
     name: 'Historic battle',
     short: 'A real battle as a chess position, with its own objective and reinforcements.',
     rules: ['Each battle has its own objective (see the battle card).', 'Reinforcements arrive on the move history says they did.'],
+  },
+  vanish: {
+    id: 'vanish',
+    name: 'Vanishing Chess',
+    short: 'Pieces fade from view a few moves after they move.',
+    rules: ['Ordinary chess rules.', 'Every piece fades a few moves after it last moved, and the fade gets quicker as the game goes on. Three peeks per game show the whole board for a moment.'],
   },
   threecheck: {
     id: 'threecheck',

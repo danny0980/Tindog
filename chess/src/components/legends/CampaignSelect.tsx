@@ -1,4 +1,4 @@
-import { Brain, ChevronRight, Ghost, Globe2, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
+import { Brain, ChevronRight, Crown, EyeOff, Ghost, Globe2, KeyRound, Layers, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { LESSONS } from '../../openings/lessons'
 import { profileStore } from '../../stores/profileStore'
@@ -42,26 +42,22 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
   const battles = useStore(profileStore, (p) => new Set(p.feats.battlesWon.map((k) => k.split(':')[0])).size)
   const museum = useBeatenClassics().length
   const war = useStore(profileStore, (p) => p.war)
+  const escapes = useStore(profileStore, (p) => Object.keys(p.modes.escape).length)
+  const vanishRating = useStore(profileStore, (p) => p.modes.vanish.rating)
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <ClassicCard onOpen={() => onOpen('classic')} />
+      <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-amber-200 lg:col-span-3" data-section="history">
+        History · campaigns, battles &amp; the people you beat
+      </h2>
       <PathTile
-        path="variants"
-        onOpen={() => onOpen('variants')}
-        icon={<Shuffle className="size-6" />}
-        kicker="New rules"
-        title="Chess Variants"
-        text="Chess960, King of the Hill and Three-Check"
-        glow="from-sky-300 via-indigo-500 to-violet-700"
-      />
-      <PathTile
-        path="openings"
-        onOpen={() => onOpen('openings')}
-        icon={<GraduationCap className="size-6" />}
-        kicker={`Learn · ${done}/${LESSONS.length} lessons`}
-        title="Opening School"
-        text="The main openings, move by move, taught by the masters"
-        glow="from-emerald-300 via-teal-500 to-cyan-700"
+        path="war"
+        onOpen={() => onOpen('war')}
+        icon={<Globe2 className="size-6" />}
+        kicker={war ? `Campaign · ${war.owned.length}/21 territories` : 'Campaign · new'}
+        title="Historical World War"
+        text="Conquer the world with an army of beaten legends"
+        glow="from-sky-300 via-blue-600 to-slate-800"
       />
       <PathTile
         path="battles"
@@ -71,6 +67,15 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         title="Play the Real Battle"
         text="Thermopylae, Cannae and Waterloo, with history’s own twists"
         glow="from-amber-300 via-orange-500 to-red-700"
+      />
+      <PathTile
+        path="escape"
+        onOpen={() => onOpen('escape')}
+        icon={<KeyRound className="size-6" />}
+        kicker={`Puzzles · ${escapes}/5 rooms escaped`}
+        title="Historical Escape Rooms"
+        text="Four mate puzzles seal each room; every lock reveals history"
+        glow="from-lime-300 via-emerald-500 to-teal-800"
       />
       <PathTile
         path="museum"
@@ -91,13 +96,43 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         glow="from-fuchsia-300 via-purple-500 to-indigo-700"
       />
       <PathTile
-        path="war"
-        onOpen={() => onOpen('war')}
-        icon={<Globe2 className="size-6" />}
-        kicker={war ? `Campaign · ${war.owned.length}/21 territories` : 'Campaign · new'}
-        title="Historical World War"
-        text="Conquer the world with an army of beaten legends"
-        glow="from-sky-300 via-blue-600 to-slate-800"
+        path="openings"
+        onOpen={() => onOpen('openings')}
+        icon={<GraduationCap className="size-6" />}
+        kicker={`Learn · ${done}/${LESSONS.length} lessons`}
+        title="Opening School"
+        text="The main openings, move by move, taught by the masters"
+        glow="from-emerald-300 via-teal-500 to-cyan-700"
+      />
+      <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-sky-200 lg:col-span-3" data-section="modes">
+        New ways to play
+      </h2>
+      <PathTile
+        path="royale"
+        onOpen={() => onOpen('royale')}
+        icon={<Crown className="size-6" />}
+        kicker="4 players · free-for-all"
+        title="Battle Royale"
+        text="Four armies on a cross-shaped board; the last king standing wins"
+        glow="from-red-300 via-yellow-400 to-blue-600"
+      />
+      <PathTile
+        path="cards"
+        onOpen={() => onOpen('cards')}
+        icon={<Layers className="size-6" />}
+        kicker="Draft · 3 tactical cards"
+        title="Card Chess"
+        text="Jumping pawns, knight’s leaps, stone walls: play them at the right moment"
+        glow="from-pink-300 via-fuchsia-500 to-indigo-700"
+      />
+      <PathTile
+        path="vanish"
+        onOpen={() => onOpen('vanish')}
+        icon={<EyeOff className="size-6" />}
+        kicker={`Rated · ${vanishRating}`}
+        title="Vanishing Chess"
+        text="Pieces fade from view as the game goes on: play from memory"
+        glow="from-slate-200 via-indigo-400 to-slate-900"
       />
       <PathTile
         path="ghost"
@@ -107,6 +142,15 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         title="Ghost of Yourself"
         text="An opponent built from your own games and habits"
         glow="from-indigo-300 via-violet-500 to-slate-800"
+      />
+      <PathTile
+        path="variants"
+        onOpen={() => onOpen('variants')}
+        icon={<Shuffle className="size-6" />}
+        kicker="New rules"
+        title="Chess Variants"
+        text="Chess960, King of the Hill and Three-Check"
+        glow="from-sky-300 via-indigo-500 to-violet-700"
       />
       <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-violet-200 lg:col-span-3" data-section="fantasy">
         Fantasy campaign modes · spells, relics &amp; arena rules

@@ -41,7 +41,7 @@ export function chooseVariantMove(game: VariantGame, candidates: readonly Candid
     .filter((c): c is { move: VMove; cp: number } => c.move !== null)
 
   // 2. Never hand the opponent a variant win if anything else is possible.
-  const variantRules = game.variant !== 'chess960'
+  const variantRules = game.variant !== 'chess960' && game.variant !== 'vanish'
   let safe = variantRules ? scored.filter((c) => !givesAwayWin(game, c.move)) : scored
   if (safe.length === 0 && variantRules) {
     // All the engine's ideas lose at once: look at every legal move for one that doesn't.

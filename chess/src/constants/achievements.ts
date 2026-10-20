@@ -81,6 +81,12 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'first-conquest', title: 'First Conquest', description: 'Take a territory in the Historical World War.', icon: 'flag', reward: 100, tier: 'bronze' },
   { id: 'empire-breaker', title: 'Empire Breaker', description: 'Conquer every territory of one empire.', icon: 'crown', reward: 300, tier: 'gold' },
   { id: 'world-conqueror', title: 'Conqueror of the World', description: 'Win the Historical World War: hold all 21 territories.', icon: 'globe', reward: 1000, tier: 'platinum' },
+  { id: 'card-sharp', title: 'Card Sharp', description: 'Win a game of Card Chess.', icon: 'sparkles', reward: 75, tier: 'bronze' },
+  { id: 'house-of-cards', title: 'House of Cards', description: 'Win 5 games of Card Chess.', icon: 'gem', reward: 200, tier: 'silver' },
+  { id: 'last-king-standing', title: 'Last King Standing', description: 'Win a 4-player Battle Royale.', icon: 'crown', reward: 250, tier: 'gold' },
+  { id: 'invisible-hand', title: 'The Invisible Hand', description: 'Win a game of Vanishing Chess against Club strength or better.', icon: 'eye', reward: 150, tier: 'silver' },
+  { id: 'escape-artist', title: 'Escape Artist', description: 'Escape from a historical escape room.', icon: 'key', reward: 75, tier: 'bronze' },
+  { id: 'great-escape', title: 'The Great Escape', description: 'Escape from every escape room.', icon: 'key', reward: 300, tier: 'gold' },
   { id: 'rewrite-history', title: 'Rewrite History', description: 'Win a historic battle for the side that lost it in real life.', icon: 'scroll', reward: 250, tier: 'platinum' },
 ]
 

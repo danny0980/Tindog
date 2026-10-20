@@ -316,6 +316,11 @@ export function RankedGameView({ game }: { game: RankedGame }) {
         {bar(me, myName, view.me?.rating ?? 0, true)}
       </div>
       <aside className="flex flex-col gap-3">
+        {game.label && (
+          <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-xs font-semibold text-amber-100" data-ranked-label>
+            <Trophy className="mr-1 inline size-3.5" /> {game.label}
+          </div>
+        )}
         <div className={`glass flex items-center gap-2 rounded-2xl px-4 py-3 text-sm ${awayFor !== null && !game.result ? 'text-amber-200' : 'text-slate-200'}`} role="status" data-ranked-status>
           {awayFor !== null && !game.result ? <WifiOff className="size-4 shrink-0" /> : <Trophy className="size-4 shrink-0 text-sky-300" />}
           <span>{status}</span>

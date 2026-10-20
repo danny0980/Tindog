@@ -89,4 +89,4 @@ export interface AppSettings {
   grandRealm: GrandRealmId
 }
 
-export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament' | 'classic' | 'variants' | 'openings' | 'battles' | 'museum' | 'quiz' | 'ghost' | 'war'
+export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament' | 'classic' | 'variants' | 'openings' | 'battles' | 'museum' | 'quiz' | 'ghost' | 'war' | 'cards' | 'vanish' | 'escape' | 'royale'

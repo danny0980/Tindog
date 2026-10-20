@@ -1,10 +1,92 @@
-# ♞ Chess Arena: AAA Edition (v6.13 · Chronos Chess — World War)
+# ♞ Chess Arena: AAA Edition (v6.14 · Chronos Chess — Leagues & New Modes)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.14: leagues and new modes (Phase D)
+
+### Seasons, the weekly tournament, spectating and clans (Online → League panel)
+
+The Node game server does all of this; the new code is in `server/seasons.ts`, `server/tournaments.ts`, `server/bracket.ts`, `server/clans.ts` and the Hub.
+
+- **Monthly seasons.**
+  - Tiers come from your online rating: Bronze, Silver, Gold, Platinum, Diamond and Legend.
+  - There is a season table, your rank and peak, and your past seasons.
+  - When a new month begins, ratings move a quarter of the way back toward 1500, and each player's final standing is kept.
+- **The Weekly Knockout.**
+  - A 32-player bracket of rated 5+3 games every Saturday at 18:00 UTC.
+  - Sign-ups run during the week, and the bracket is seeded by rating, with byes for the top seeds.
+  - A player who isn't there when their game starts forfeits, and a draw sends the higher seed through.
+  - The bracket updates live (the server pings every client), you can watch any game in progress, and last week's champion is shown.
+  - Development servers have a *Start now* button for trying it out.
+- **Watch.**
+  - Every rated game in progress is listed, the strongest first, with how many are watching.
+  - The spectator view shows the board, both clocks and a live evaluation graph, computed by Stockfish on your own device so the server pays nothing.
+- **Clans and the clan war.**
+  - Found a clan (a name and a 2–5 letter tag) or join one, up to 30 members.
+  - Every rated win over another clan's player earns your clan 3 war points for the week (a draw 1, a win over a player without a clan 1).
+  - The weekly table is archived when a new ISO week begins, and last week's winner is shown.
+  - When the founder leaves, the clan passes on; when the last member leaves, it closes.
+
+### Battle Royale (Legends → *Battle Royale*)
+
+- **The game.** Four-player free-for-all on the cross-shaped 14 × 14 board: you (Red) against three computer armies.
+- **Its own rules engine** (`src/royale/royale.ts`):
+  - there is no check, so kings can be captured;
+  - a fallen army turns to grey rubble;
+  - captures score points (a king 20);
+  - pawns promote at the centre line.
+- **Winning.** The last king standing wins, or, after 100 rounds, the most points among the survivors.
+- **The computer players.** They take kings and big captures, promote, step out of danger and never leave their own king hanging, at Easy, Normal or Hard.
+- **Not included.** Castling, en passant and online play.
+
+### Card Chess (Legends → *Card Chess*)
+
+- **The draft.** Draft three cards from five before the game. The computer drafts from the same five, so you can see its hand.
+- **The six cards**, each played once:
+  - *Jumping Pawn*: a pawn moves two squares from any rank;
+  - *Knight's Leap*: a bishop or rook jumps like a knight;
+  - *Reinforcements*: drop a pawn on your second rank;
+  - *Royal Swap*: your king trades places with a piece next to it;
+  - *Stone Wall*: a rook can't be captured for 3 enemy moves (a free action);
+  - *Aegis*: your queen can't be captured for 2 enemy moves (a free action).
+- **Legality.** Card moves never leave your king in check, and wards follow the piece if it moves.
+- **The computer.** It raises a ward over a queen or rook that is about to fall, and plays a card when a quick search says it beats its best ordinary move.
+
+### Vanishing Chess (Legends → *Vanishing Chess*)
+
+- **The game.** Rated blindfold chess against the computer.
+- **Fading pieces.** Every piece, yours too, fades from view a few moves after it last moved: 10 moves at the start, falling to 3 as the game goes on.
+- **Peeks.** You get three peeks per game.
+- **Rating.** Vanishing Chess has its own rating, against Beginner, Club or Master strength.
+
+### Historical Escape Rooms (Legends → *Historical Escape Rooms*)
+
+- **The rooms.** Five rooms, opened one after another: the Tomb of the Boy King, the Workshop of Archimedes, the White Tower, the Studio of Leonardo and the Laboratory of Tesla.
+- **The locks.** Each room is sealed by four forced mates from the verified puzzle set (mates in 2, then mates in 3).
+- **Inscriptions.** Every lock you open reveals an inscription: a true fact about the room's character.
+- **Scoring.** Escapes are timed, and you earn up to three stars (hints cost a star).
+
+### Tests
+
+- `npm run test:league` (44 checks, on a real server) covers:
+  - brackets and seeding;
+  - a whole 13-player tournament with byes, a forfeit, a draw and a champion;
+  - spectating;
+  - seasons and soft resets;
+  - clan war points and weekly archives;
+  - every new route.
+- `npm run test:modes` (41 checks) covers:
+  - every card, with wards, pins and mates;
+  - the vanishing schedule, including castling and en passant;
+  - solving all five escape rooms;
+  - Battle Royale rules, eliminations and the computer players;
+  - the new records.
 
 ---
 

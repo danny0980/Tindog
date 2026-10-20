@@ -74,6 +74,8 @@ interface ChessBoardProps {
   terrain?: Terrain | null
   /** Piece animation time override (the cinematic camera's slow motion). */
   slowMo?: number | null
+  /** Vanishing Chess: how visible each square's piece is (0–1; squares not listed are fully visible). */
+  pieceOpacity?: Readonly<Record<string, number>> | null
   children?: ReactNode
 }
 
@@ -125,6 +127,7 @@ export function ChessBoard({
   pieceReactions = false,
   terrain = null,
   slowMo = null,
+  pieceOpacity = null,
   children,
 }: ChessBoardProps) {
   // Selection is tied to the position it was made in, so it clears itself whenever the FEN changes.
@@ -327,13 +330,14 @@ export function ChessBoard({
         style={squareStyles[square]}
         vfx={isSquare(square) ? vfx.get(square) : undefined}
         state={isSquare(square) ? states.get(square) : undefined}
+        opacity={pieceOpacity?.[square]}
         captureKey={capture?.square === square ? capture.id : null}
         ghost={capture?.square === square && capture.piece && !lowPower ? pieces[capture.piece]?.() : null}
       >
         {children}
       </BoardSquare>
     ),
-    [capture, lowPower, pieces, squareStyles, states, vfx],
+    [capture, lowPower, pieceOpacity, pieces, squareStyles, states, vfx],
   )
 
   const boardArrows = useMemo<Arrow[]>(

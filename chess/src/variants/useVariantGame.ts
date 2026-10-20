@@ -9,7 +9,7 @@ import { getBoardTheme } from '../constants/themes'
 import { useEngine } from '../hooks/useEngine'
 import { applyFeat } from '../stores/featActions'
 import { settingsStore } from '../stores/settingsStore'
-import { recordBattleResult, recordVariantResult } from '../utils/feats'
+import { recordBattleResult, recordVanish, recordVariantResult } from '../utils/feats'
 import type { Battle } from '../data/battles'
 import type { Color, MoveInput, Square } from '../types/chess'
 import { type Candidate, chooseVariantMove } from './ai'
@@ -17,10 +17,10 @@ import { type VMove, VariantGame, type VariantId, random960 } from './rules'
 
 export type VariantLevel = 'beginner' | 'club' | 'master'
 
-export const LEVELS: Record<VariantLevel, { name: string; depth: number; skill: number; tolerance: number; elo: string }> = {
-  beginner: { name: 'Beginner', depth: 3, skill: 2, tolerance: 150, elo: '~800' },
-  club: { name: 'Club', depth: 8, skill: 9, tolerance: 45, elo: '~1500' },
-  master: { name: 'Master', depth: 14, skill: 20, tolerance: 0, elo: '2200+' },
+export const LEVELS: Record<VariantLevel, { name: string; depth: number; skill: number; tolerance: number; elo: string; rating: number }> = {
+  beginner: { name: 'Beginner', depth: 3, skill: 2, tolerance: 150, elo: '~800', rating: 800 },
+  club: { name: 'Club', depth: 8, skill: 9, tolerance: 45, elo: '~1500', rating: 1500 },
+  master: { name: 'Master', depth: 14, skill: 20, tolerance: 0, elo: '2200+', rating: 2200 },
 }
 
 export interface VariantSetup {
@@ -66,8 +66,14 @@ export function useVariantGame(active: boolean) {
     if (r.winner === null) sfx.draw()
     else if (r.winner === me) sfx.victory()
     else sfx.defeat()
-    applyFeat((p) => (battle ? recordBattleResult(p, battle.id, me, r.winner === me) : recordVariantResult(p, game.variant, r.winner === me, r.reason)))
-  }, [battle])
+    applyFeat((p) =>
+      battle
+        ? recordBattleResult(p, battle.id, me, r.winner === me)
+        : game.variant === 'vanish'
+          ? recordVanish(p, r.winner === null ? 0.5 : r.winner === me ? 1 : 0, LEVELS[level].rating)
+          : recordVariantResult(p, game.variant, r.winner === me, r.reason),
+    )
+  }, [battle, level])
 
   const apply = useCallback(
     (game: VariantGame, move: VMove): boolean => {

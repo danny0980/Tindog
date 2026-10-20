@@ -2,7 +2,8 @@
 // rooms, clocks, disconnect grace periods and reconnects. Transport-agnostic
 // (a Conn is anything that can send text and close) and with time injected,
 // so whole games — flags and abandons included — run in tests.
-import { RANKED_POOLS, RANKED_PROTOCOL, type ClientMessage, type PublicPlayer, type ServerMessage, parseClientMessage, poolById } from '../src/online/ranked/protocol'
+import { RANKED_POOLS, RANKED_PROTOCOL, type ClientMessage, type GameSnapshot, type PublicPlayer, type ServerMessage, parseClientMessage, poolById } from '../src/online/ranked/protocol'
+import { warPoints } from './clans'
 import { newId } from './auth'
 import { GameRoom, type Result, type Side, eloChange } from './game'
 import { Matchmaker } from './matchmaker'
@@ -27,6 +28,21 @@ export interface HubDeps {
 
 /** Messages per second a connection may send before being disconnected. */
 const MAX_MSG_PER_SEC = 20
+/** Most people watching one game. */
+export const MAX_SPECTATORS = 200
+
+/** Who won a game started for someone else (the tournament): the winner's id, null for a draw. */
+export type GameResultHook = (winner: string | null, aborted: boolean) => void
+
+export interface LiveGame {
+  gameId: string
+  white: PublicPlayer
+  black: PublicPlayer
+  pool: string
+  moves: number
+  label: string | null
+  watchers: number
+}
 
 export class Hub {
   private readonly store: Store
@@ -46,6 +62,12 @@ export class Hub {
   private readonly missedResults = new Map<string, ServerMessage>()
   private pairTimer: unknown = null
   private closed = false
+  /** Tournament (or other) games: a label for the players, and who to tell the result. */
+  private readonly labels = new Map<string, string>()
+  private readonly hooks = new Map<string, GameResultHook>()
+  /** Watchers per game, and the game each watching connection follows. */
+  private readonly spectators = new Map<string, Set<Conn>>()
+  private readonly watching = new WeakMap<Conn, string>()
 
   constructor(deps: HubDeps) {
     this.store = deps.store
@@ -71,6 +93,27 @@ export class Hub {
   private send(userId: string, msg: ServerMessage): void {
     const text = JSON.stringify(msg)
     for (const c of this.conns.get(userId) ?? []) c.send(text)
+  }
+
+  private snap(game: GameRoom, side: 'w' | 'b', now: number): GameSnapshot {
+    const s = game.snapshot(side, this.player(game.players[side === 'w' ? 'b' : 'w']), now)
+    const label = this.labels.get(game.id)
+    return label ? { ...s, label } : s
+  }
+
+  /** Every connected user gets this (tournament pings). */
+  broadcast(msg: ServerMessage): void {
+    const text = JSON.stringify(msg)
+    for (const set of this.conns.values()) for (const c of set) c.send(text)
+  }
+
+  isOnline(userId: string): boolean {
+    return this.conns.has(userId)
+  }
+
+  /** Free to start a game now: connected and not already playing. */
+  isAvailable(userId: string): boolean {
+    return this.conns.has(userId) && !this.activeGame.has(userId)
   }
 
   private player(userId: string): PublicPlayer {
@@ -99,12 +142,13 @@ export class Hub {
     if (game) {
       const side = game.sideOf(user.id)!
       const opp = game.players[side === 'w' ? 'b' : 'w']
-      conn.send(JSON.stringify({ type: 'MATCH_FOUND', game: game.snapshot(side, this.player(opp), this.now()) } satisfies ServerMessage))
+      conn.send(JSON.stringify({ type: 'MATCH_FOUND', game: this.snap(game, side, this.now()) } satisfies ServerMessage))
       if (grace !== undefined) this.send(opp, { type: 'OPPONENT_RECONNECTED', gameId: game.id })
     }
   }
 
   disconnect(userId: string, conn: Conn): void {
+    this.unwatch(conn)
     const set = this.conns.get(userId)
     set?.delete(conn)
     if (set && set.size > 0) return
@@ -164,6 +208,28 @@ export class Hub {
       case 'CANCEL_MATCH':
         this.matchmaker.leave(userId)
         return
+      case 'SPECTATE': {
+        const game = this.games.get(msg.gameId)
+        if (!game) return this.error(conn, 'no-game', 'That game has finished.')
+        if (game.sideOf(userId)) return this.error(conn, 'own-game', 'You are playing this game.')
+        const set = this.spectators.get(game.id) ?? new Set<Conn>()
+        if (!set.has(conn) && set.size >= MAX_SPECTATORS) return this.error(conn, 'full', 'Too many people are watching this game.')
+        this.unwatch(conn)
+        set.add(conn)
+        this.spectators.set(game.id, set)
+        this.watching.set(conn, game.id)
+        const now = this.now()
+        conn.send(
+          JSON.stringify({
+            type: 'SPECTATE_START',
+            game: { gameId: game.id, white: this.player(game.players.w), black: this.player(game.players.b), pool: game.pool.id, moves: [...game.moves], clocks: game.clocksAt(now), running: game.result || game.moves.length === 0 ? null : game.moves.length % 2 === 0 ? 'w' : 'b', label: this.labels.get(game.id) ?? null },
+          } satisfies ServerMessage),
+        )
+        return
+      }
+      case 'UNSPECTATE':
+        this.unwatch(conn)
+        return
       case 'MAKE_MOVE': {
         const game = this.games.get(msg.gameId)
         const side = game?.sideOf(userId)
@@ -181,6 +247,7 @@ export class Hub {
         const opp = game.players[side === 'w' ? 'b' : 'w']
         this.send(userId, { type: 'MOVE_ACCEPTED', gameId: game.id, ply: msg.ply, clocks })
         this.send(opp, { type: 'OPPONENT_MOVE', gameId: game.id, ply: msg.ply, uci: msg.uci, clocks })
+        this.toWatchers(game.id, { type: 'SPECTATE_MOVE', gameId: game.id, ply: msg.ply, uci: msg.uci, clocks })
         if (game.result) this.finish(game, game.result)
         else this.schedule(game)
         return
@@ -221,22 +288,56 @@ export class Hub {
   /** Pairs the queue now (also runs on a timer, as waiting windows widen). */
   pairNow(): void {
     for (const [a, b] of this.matchmaker.pair(this.now())) {
-      const pool = poolById(a.pool)
-      if (!pool) continue
       // Colours are random.
       const aWhite = Math.random() < 0.5
-      const players = { w: aWhite ? a.userId : b.userId, b: aWhite ? b.userId : a.userId }
-      const game = new GameRoom(newId(), pool, players, this.now())
-      this.games.set(game.id, game)
-      this.activeGame.set(players.w, game.id)
-      this.activeGame.set(players.b, game.id)
-      for (const side of ['w', 'b'] as const) {
-        const opp = players[side === 'w' ? 'b' : 'w']
-        this.send(players[side], { type: 'MATCH_FOUND', game: game.snapshot(side, this.player(opp), this.now()) })
-      }
-      this.log(`match ${game.id}: ${players.w} (white) vs ${players.b} (black), ${pool.id}`)
-      this.schedule(game)
+      this.startGame({ w: aWhite ? a.userId : b.userId, b: aWhite ? b.userId : a.userId }, a.pool)
     }
+  }
+
+  /**
+   * Starts a rated game between two players (the queue, or the tournament).
+   * Returns the game id, or null if either can't play now.
+   */
+  startGame(players: { w: string; b: string }, poolId: string, label: string | null = null, onResult: GameResultHook | null = null): string | null {
+    const pool = poolById(poolId)
+    if (!pool || players.w === players.b || this.activeGame.has(players.w) || this.activeGame.has(players.b)) return null
+    this.matchmaker.leave(players.w)
+    this.matchmaker.leave(players.b)
+    const game = new GameRoom(newId(), pool, players, this.now())
+    this.games.set(game.id, game)
+    this.activeGame.set(players.w, game.id)
+    this.activeGame.set(players.b, game.id)
+    if (label) this.labels.set(game.id, label)
+    if (onResult) this.hooks.set(game.id, onResult)
+    for (const side of ['w', 'b'] as const) this.send(players[side], { type: 'MATCH_FOUND', game: this.snap(game, side, this.now()) })
+    this.log(`match ${game.id}: ${players.w} (white) vs ${players.b} (black), ${pool.id}${label ? ` · ${label}` : ''}`)
+    this.schedule(game)
+    return game.id
+  }
+
+  /** Games being played now, the strongest first (for the Watch list). */
+  liveGames(limit = 20): LiveGame[] {
+    return [...this.games.values()]
+      .filter((g) => !g.result)
+      .map((g) => ({ gameId: g.id, white: this.player(g.players.w), black: this.player(g.players.b), pool: g.pool.id, moves: g.moves.length, label: this.labels.get(g.id) ?? null, watchers: this.spectators.get(g.id)?.size ?? 0 }))
+      .sort((a, b) => b.white.rating + b.black.rating - (a.white.rating + a.black.rating))
+      .slice(0, limit)
+  }
+
+  private toWatchers(gameId: string, msg: ServerMessage): void {
+    const set = this.spectators.get(gameId)
+    if (!set) return
+    const text = JSON.stringify(msg)
+    for (const c of set) c.send(text)
+  }
+
+  private unwatch(conn: Conn): void {
+    const id = this.watching.get(conn)
+    if (!id) return
+    this.watching.delete(conn)
+    const set = this.spectators.get(id)
+    set?.delete(conn)
+    if (set && set.size === 0) this.spectators.delete(id)
   }
 
   /** Arms the game's next time event (abort or flag). */
@@ -276,7 +377,22 @@ export class Hub {
         this.store.putUser({ ...u, rating: Math.max(100, u.rating + change[side]), games: u.games + 1, wins: u.wins + (s === 1 ? 1 : 0), losses: u.losses + (s === 0 ? 1 : 0), draws: u.draws + (s === 0.5 ? 1 : 0) })
       }
       this.store.addGame({ id: game.id, pool: game.pool.id, white: game.players.w, black: game.players.b, winner: result.winner, reason: result.reason, moves: [...game.moves], ratingChange: change, endedAt: this.now() })
+      // The season table and the clan war.
+      const now = this.now()
+      this.store.rollSeason(now)
+      const clans = { w: this.store.clanOf(w.id)?.id ?? null, b: this.store.clanOf(b.id)?.id ?? null }
+      for (const side of ['w', 'b'] as const) {
+        const u = side === 'w' ? w : b
+        this.store.recordSeasonGame(u.id, score(side) === 1, Math.max(100, u.rating + change[side]))
+        const mine = clans[side]
+        if (mine) this.store.addWarPoints(mine, warPoints(mine, clans[side === 'w' ? 'b' : 'w'], score(side)), now)
+      }
     }
+    this.toWatchers(game.id, { type: 'SPECTATE_OVER', gameId: game.id, winner: result.winner, reason: result.reason })
+    this.spectators.delete(game.id)
+    this.labels.delete(game.id)
+    const hook = this.hooks.get(game.id)
+    this.hooks.delete(game.id)
     for (const side of ['w', 'b'] as const) {
       const id = game.players[side]
       const before = side === 'w' ? (w?.rating ?? 1200) : (b?.rating ?? 1200)
@@ -289,6 +405,7 @@ export class Hub {
       else this.missedResults.set(id, over)
     }
     this.log(`game ${game.id} over: ${result.winner ?? 'draw'} by ${result.reason}`)
+    hook?.(result.winner ? game.players[result.winner] : null, result.reason === 'aborted')
   }
 
   /** Live counts (for /api/health). */

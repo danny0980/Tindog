@@ -80,7 +80,13 @@ check('the map’s borders go both ways', TERRITORIES.every((t) => t.neighbors.e
 check('every territory can be reached from every other', (() => {
   const seen = new Set(['greece'])
   const queue = ['greece']
-  while (queue.length) for (const n of getTerritory(queue.shift()!)!.neighbors) if (!seen.has(n)) (seen.add(n), queue.push(n))
+  while (queue.length) {
+    for (const n of getTerritory(queue.shift()!)!.neighbors) {
+      if (seen.has(n)) continue
+      seen.add(n)
+      queue.push(n)
+    }
+  }
   return seen.size === TERRITORIES.length
 })())
 let war = startWar('greece', '2026-10-20')!

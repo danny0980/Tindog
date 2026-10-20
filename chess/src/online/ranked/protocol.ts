@@ -40,6 +40,20 @@ export interface GameSnapshot {
   /** Whose clock is running (null before White's first move, or when over). */
   running: 'w' | 'b' | null
   drawOffer: 'w' | 'b' | null
+  /** What the game is part of, e.g. "Weekly Knockout · Semi-final" (absent for ordinary ranked games). */
+  label?: string
+}
+
+/** A game you are watching. */
+export interface SpectateSnapshot {
+  gameId: string
+  white: PublicPlayer
+  black: PublicPlayer
+  pool: string
+  moves: string[]
+  clocks: { w: number; b: number }
+  running: 'w' | 'b' | null
+  label: string | null
 }
 
 // ── Client → server ─────────────────────────────────────────────────────────
@@ -51,6 +65,8 @@ export type ClientMessage =
   | { type: 'OFFER_DRAW'; gameId: string }
   | { type: 'ANSWER_DRAW'; gameId: string; accept: boolean }
   | { type: 'PING'; at: number }
+  | { type: 'SPECTATE'; gameId: string }
+  | { type: 'UNSPECTATE' }
 
 // ── Server → client ─────────────────────────────────────────────────────────
 export type ServerMessage =
@@ -67,6 +83,11 @@ export type ServerMessage =
   | { type: 'GAME_OVER'; gameId: string; winner: 'w' | 'b' | null; reason: RankedReason; rating: { before: number; after: number } }
   | { type: 'ERROR'; code: string; message: string }
   | { type: 'PONG'; at: number }
+  | { type: 'SPECTATE_START'; game: SpectateSnapshot }
+  | { type: 'SPECTATE_MOVE'; gameId: string; ply: number; uci: string; clocks: { w: number; b: number } }
+  | { type: 'SPECTATE_OVER'; gameId: string; winner: 'w' | 'b' | null; reason: RankedReason }
+  /** The weekly tournament changed (sign-ups, results): fetch /api/tournament again. */
+  | { type: 'TOURNAMENT_CHANGED' }
 
 const UCI = /^[a-h][1-8][a-h][1-8][qrbn]?$/
 const ID = /^[a-z0-9]{8,40}$/
@@ -111,6 +132,12 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const at = int(d.at, 0, Number.MAX_SAFE_INTEGER)
       return at === null ? null : { type: 'PING', at }
     }
+    case 'SPECTATE': {
+      const gameId = id(d.gameId)
+      return gameId ? { type: 'SPECTATE', gameId } : null
+    }
+    case 'UNSPECTATE':
+      return { type: 'UNSPECTATE' }
     default:
       return null
   }
@@ -136,8 +163,24 @@ function snapshot(v: unknown): GameSnapshot | null {
   const offer = v.drawOffer === null ? null : color(v.drawOffer)
   if (!gameId || !c || !opp || !cl || typeof v.pool !== 'string' || !poolById(v.pool)) return null
   if ((v.running !== null && !running) || (v.drawOffer !== null && !offer)) return null
-  if (!Array.isArray(v.moves) || v.moves.length > 1200 || !v.moves.every((m) => typeof m === 'string' && UCI.test(m))) return null
-  return { gameId, color: c, opponent: opp, pool: v.pool, moves: v.moves as string[], clocks: cl, running, drawOffer: offer }
+  if (!movesOk(v.moves)) return null
+  if (v.label !== undefined && (typeof v.label !== 'string' || v.label.length > 80)) return null
+  return { gameId, color: c, opponent: opp, pool: v.pool, moves: v.moves, clocks: cl, running, drawOffer: offer, ...(typeof v.label === 'string' ? { label: v.label } : {}) }
+}
+
+const movesOk = (v: unknown): v is string[] => Array.isArray(v) && v.length <= 1200 && v.every((m) => typeof m === 'string' && UCI.test(m))
+
+function spectateSnapshot(v: unknown): SpectateSnapshot | null {
+  if (!isRecord(v)) return null
+  const gameId = id(v.gameId)
+  const white = player(v.white)
+  const black = player(v.black)
+  const cl = clocks(v.clocks)
+  const running = v.running === null ? null : color(v.running)
+  if (!gameId || !white || !black || !cl || typeof v.pool !== 'string' || !poolById(v.pool) || !movesOk(v.moves)) return null
+  if (v.running !== null && !running) return null
+  if (v.label !== null && (typeof v.label !== 'string' || v.label.length > 80)) return null
+  return { gameId, white, black, pool: v.pool, moves: v.moves, clocks: cl, running, label: typeof v.label === 'string' ? v.label : null }
 }
 
 /** Parses a message from the server (validated too: a bad deploy shouldn't crash the app). */
@@ -209,6 +252,24 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const at = int(d.at, 0, Number.MAX_SAFE_INTEGER)
       return at === null ? null : { type: 'PONG', at }
     }
+    case 'SPECTATE_START': {
+      const game = spectateSnapshot(d.game)
+      return game ? { type: 'SPECTATE_START', game } : null
+    }
+    case 'SPECTATE_MOVE': {
+      const gameId = id(d.gameId)
+      const ply = int(d.ply, 0, 1200)
+      const cl = clocks(d.clocks)
+      return gameId && ply !== null && cl && typeof d.uci === 'string' && UCI.test(d.uci) ? { type: 'SPECTATE_MOVE', gameId, ply, uci: d.uci, clocks: cl } : null
+    }
+    case 'SPECTATE_OVER': {
+      const gameId = id(d.gameId)
+      const winner = d.winner === null ? null : color(d.winner)
+      const reason = REASONS.find((r) => r === d.reason)
+      return gameId && reason && (d.winner === null || winner) ? { type: 'SPECTATE_OVER', gameId, winner, reason } : null
+    }
+    case 'TOURNAMENT_CHANGED':
+      return { type: 'TOURNAMENT_CHANGED' }
     default:
       return null
   }

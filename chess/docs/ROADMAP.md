@@ -1,6 +1,12 @@
 # Overkill roadmap: execution plan
 
-Twenty features in four phases. Phase A has shipped (v6.11). Each later phase below says which modules it adds, what it reuses, how it is tested, and where the real risks are.
+Twenty features in four phases, all shipped:
+- **Phase A** in 6.11;
+- **Phase B** in 6.12;
+- **Phase C** in 6.13;
+- **Phase D** in 6.14.
+
+The plan below is kept as the design record. The status table at the end says what shipped and what was left out.
 
 Principles carried through every phase:
 - **Pure core, thin UI.** Decisions such as which shot, which move, which card or which bracket live in plain TypeScript under `src/<area>/` with unit tests. Components only draw and wire.
@@ -151,3 +157,18 @@ Principles carried through every phase:
 | 7 | D2 Card Chess | M | A `VariantGame` extension. |
 | 8 | D1 Seasons, spectating and tournaments | L | Server work, best done together with the storage upgrade. |
 | 9 | D2 Battle Royale | XL | A new rules engine and AI; its own milestone. |
+
+---
+
+## Status (6.14)
+
+| Item | Shipped | Left out (and why) |
+| --- | --- | --- |
+| Cinematic camera, battlefields, living pieces, highlight reels | 6.11 | — |
+| Ghost, engine brain, What-If, predictive coach | 6.12 | — |
+| World War, Custom Army, opponent memory, 3D hall | 6.13 | — |
+| Seasons, Weekly Knockout, spectating with eval graph, clans and clan war | 6.14 | Storage is still the JSON file: fine for a small community; move to SQLite before a large public launch. |
+| Battle Royale | 6.14 | Offline against three computer armies; online 4-seat rooms, castling and en passant are not included. |
+| Card Chess | 6.14 | Against the computer; not in online ranked (the server would need to referee card effects). |
+| Vanishing Chess | 6.14 | Rated against the computer with its own rating; no online pool yet. |
+| Escape Rooms | 6.14 | — |

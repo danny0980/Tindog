@@ -4,6 +4,8 @@ import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/index.css'
 import { startCharacterVoices } from './audio/voice'
+import { loadAccount } from './online/ranked/account'
+import { startCloudSync } from './online/ranked/cloudSync'
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Root element #root not found')
@@ -15,6 +17,9 @@ if (!container) throw new Error('Root element #root not found')
 // and throw the player out of the screen they were on.
 // Characters read their lines aloud (Settings → Audio → Character voices).
 startCharacterVoices()
+// Your account on the game server (also finishes a sign-in from an email link), and cloud saves.
+void loadAccount()
+startCloudSync()
 
 createRoot(container).render(
   <StrictMode>

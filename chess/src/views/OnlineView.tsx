@@ -10,6 +10,8 @@ import { getBoardTheme, getPieceSet } from '../constants/themes'
 import { useStore } from '../hooks/useStore'
 import { type MatchState, clocksAt, hasClock, replay, resultText, turnOf } from '../online/match'
 import { getOnlineSession, onlineName, onlineScreen, useOnlineSession } from '../online/onlineSession'
+import { useRanked } from '../online/ranked/rankedSession'
+import { AccountPanel, FindMatchPanel, RankedGameView } from '../components/online/Ranked'
 import { type ColorChoice, TIME_CONTROLS, parseRoomCode, trimName } from '../online/protocol'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
@@ -34,6 +36,7 @@ const inviteLink = (code: string): string => {
 export function OnlineView({ inviteCode, onInviteUsed }: { inviteCode: string | null; onInviteUsed: () => void }) {
   const view = useOnlineSession()
   const session = getOnlineSession()
+  const ranked = useRanked()
 
   useEffect(() => {
     onlineScreen.visible = true
@@ -49,6 +52,8 @@ export function OnlineView({ inviteCode, onInviteUsed }: { inviteCode: string | 
     onInviteUsed()
   }, [inviteCode, session, onInviteUsed])
 
+  // A ranked game (matched by the server) takes the screen while it runs, and until you leave its result.
+  if (ranked.game) return <RankedGameView game={ranked.game} />
   if (view.phase === 'playing' && view.match) return <OnlineGame match={view.match} opponent={view.opponent} link={view.link} />
   if (view.phase === 'opening' || view.phase === 'waiting') return <WaitingRoom code={view.code ?? ''} ready={view.phase === 'waiting'} onCancel={() => session.leave()} />
   if (view.phase === 'joining') return <Connecting code={view.code ?? ''} onCancel={() => session.leave()} />
@@ -74,10 +79,17 @@ function Lobby({ error }: { error: string | null }) {
             <Globe2 className="size-10" />
           </div>
           <div className="mt-4 text-[11px] font-bold uppercase tracking-[0.3em] text-sky-300">Online</div>
-          <h2 className="font-display text-3xl font-extrabold tracking-wider text-white sm:text-4xl">PLAY A FRIEND</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">Create a room and send the code, or enter a friend's code. Anywhere in the world, no account needed.</p>
+          <h2 className="font-display text-3xl font-extrabold tracking-wider text-white sm:text-4xl">PLAY ONLINE</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">Ranked matches against players around the world, or a private game with a friend.</p>
         </div>
       </section>
+
+      <AccountPanel />
+      <FindMatchPanel />
+
+      <h3 className="mt-2 flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400" data-online-friends>
+        <Users className="size-3.5" /> Play a friend · no account needed
+      </h3>
 
       {error && (
         <div className="rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-100" role="alert" data-online-error>

@@ -1,4 +1,4 @@
-# ♞ Chess Arena: AAA Edition (v6.8 · Chronos Chess — Learn & Play)
+# ♞ Chess Arena: AAA Edition (v6.9 · Chronos Chess — Ranked Online)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
@@ -7,6 +7,72 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 - Works offline once loaded, apart from the Google Fonts stylesheet.
 
 ---
+
+## What's new in 6.9: ranked online play, accounts and cloud saves
+
+The game now has its own server (`server/`) for ranked play against people around the world. Friend rooms with a code (6.7) still work without it, and so does everything else.
+
+### Run it locally
+```bash
+npm install
+npm run dev:all          # the app (Vite) + the game server, together
+# or in two terminals:   npm run server   and   npm run dev
+```
+- **Where things run.** Open the app as usual (e.g. http://localhost:5175). Vite forwards `/api` and `/ws` to the server on port 8787.
+- **Email sign-in.** With no SMTP configured, the sign-in link is printed in the server's terminal. Copy it into the browser.
+- **Your data.** Accounts, ratings, saves and games are kept in `server-data/db.json`, which git ignores.
+- **Settings.** Copy `server/.env.example` to `server/.env`.
+
+### Sign-in (Online tab)
+- **Google.** Create an OAuth client ("Web application") at console.cloud.google.com → APIs & Services → Credentials. Add your site and `http://localhost:5175` to *Authorized JavaScript origins*, then set `GOOGLE_CLIENT_ID` in `server/.env`. The button appears by itself. The server verifies every Google ID token with Google's library.
+- **Email magic links.**
+  - The link works once and expires after 15 minutes. Requests are rate-limited per address and per IP.
+  - Set `SMTP_URL` (and `MAIL_FROM`) to send real email. In production, email sign-in stays off until SMTP is set.
+- **Sessions.** A random 256-bit token in an httpOnly, SameSite=Lax cookie (Secure in production). The server stores only its SHA-256 hash.
+  - Changes must come from your own site (Origin check), and the WebSocket accepts only signed-in players from your site.
+  - Pages send `Referrer-Policy: no-referrer`, so a sign-in link can't leak.
+- **One account per email.** Signing in with Google joins the account that has the same *verified* email.
+
+### Ranked play
+- **Finding a match.** Choose 3+2, 5+3, 10+0 or 15+10 and press **Find match**. You're paired with the closest-rated player in the same time control; the rating window starts at ±100 and widens as you wait. Colours are random.
+- **The server is the referee.**
+  - It checks every `MAKE_MOVE` with chess.js and keeps the official clocks.
+  - It detects mate, every kind of draw, and flags.
+  - It aborts games where a player never makes a first move (unrated).
+  - It updates Elo: K = 40 for your first 20 games, then 24, then 16 above 2400.
+- **On your screen.** Your move appears at once and the server confirms it; the opponent gets an `OPPONENT_MOVE`. You can offer a draw, resign or abort, and see your rating change at the end.
+- **Disconnects.**
+  - If you drop, the app reconnects with backoff and resumes the game from the server's snapshot.
+  - Your opponent sees a countdown.
+  - After 60 s away the game is lost by abandonment, and if you come back later you're shown the result.
+- **Cleanup.** Finished rooms are removed. Rated games and the leaderboard are saved.
+- **Protocol** (`src/online/ranked/protocol.ts`, validated in both directions):
+  - from the app: `FIND_MATCH`, `CANCEL_MATCH`, `MAKE_MOVE`, `RESIGN`, `OFFER_DRAW`, `ANSWER_DRAW`;
+  - from the server: `HELLO`, `SEARCHING`, `MATCH_FOUND`, `MOVE_ACCEPTED` / `MOVE_REJECTED`, `OPPONENT_MOVE`, `DRAW_OFFERED`, `OPPONENT_DISCONNECTED` / `RECONNECTED`, `GAME_OVER`.
+
+### Cloud saves
+While you're signed in, your progress and settings are stored on the server and follow you to other devices. When you sign in on a device:
+- If the server has no save yet, the device's progress is uploaded.
+- If the device is fresh, the cloud save is restored.
+- If both have progress, the app asks which one to keep.
+
+After that, changes upload a few seconds after they happen.
+
+### Deploying
+- **Build and start.** Run `npm run build`, then start the server with `npm run server:prod`. Set `PUBLIC_URL`, plus `GOOGLE_CLIENT_ID` and/or `SMTP_URL`.
+- **One process.** The server serves the app, the API and the socket from one origin, behind any HTTPS host such as Render, Fly.io or a VPS.
+- **Data.** Mount a persistent disk for `DATA_FILE`. The JSON store suits a single server; `server/store.ts` is a small interface, so it can be swapped for Postgres when you outgrow it.
+
+### Tests
+- **`npm run test:server`, 67 checks.**
+  - Unit checks: the referee, matchmaking, Elo, sign-in and sessions.
+  - Against a **real server** with real WebSockets:
+    - forged requests and signed-out sockets are refused;
+    - two players are matched and play to mate;
+    - a reconnect resumes the game, and an abandonment ends it;
+    - cloud saves round-trip.
+  - The browser's `onlineManager` itself is driven against that server.
+- **In real browsers.** Email sign-in → Find match on desktop and phone → live moves → resign → rating change.
 
 ## What's new in 6.8: history lessons, character voices, variants and the Opening School
 

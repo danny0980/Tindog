@@ -31,5 +31,10 @@ export default defineConfig({
   },
   server: {
     host: true,
+    // The game server (npm run server): API and ranked-play socket, same origin as the app.
+    proxy: {
+      '/api': { target: 'http://localhost:8787', changeOrigin: false },
+      '/ws': { target: 'ws://localhost:8787', ws: true },
+    },
   },
 })

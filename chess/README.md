@@ -1,10 +1,60 @@
-# ♞ Chess Arena: AAA Edition (v6.12 · Chronos Chess — Mind Games)
+# ♞ Chess Arena: AAA Edition (v6.13 · Chronos Chess — World War)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.13: campaigns and armies (Phase C)
+
+### The Historical World War (Legends → *Historical World War*)
+
+- **The map.** 21 territories held by five empires, each defended by a Classic character, from Washington and Bolívar to Ramesses II and Tokugawa Ieyasu. The empires are the Powers of Revolution, the Northern Realms, the Mediterranean Empires, the Cradles of Civilisation and the Empires of the East.
+- **Conquest.** Choose a capital, then attack the territories on your borders. Every battle is a Classic Chess game, and a victory takes the territory and pays coins.
+- **The empires strike back.** After each battle they may besiege one of your provinces (never the capital), and they do so more often as the war goes on. Win a defence battle within two battles, or the province falls.
+- **Rewards.** Toppling a whole empire pays a bonus, and holding all 21 territories wins the war.
+- **Progress.** The war log, the map state and the result of each battle are saved, and the game-over card shows what happened on the map.
+- **Code.** The rules live in `src/war/war.ts` (pure and tested).
+
+### The Custom Army (*Your army* tab)
+
+- **Seats.** Draft characters you have beaten into five seats: King, Queen, Rook, Bishop and Knight.
+- **Traits.** Each character brings the trait of their playing style to every war battle, and the King's seat counts double. Traits stack up to a cap:
+  - Warlord, *Rally*: the enemy plays weaker;
+  - Fortifier, *Fortified lines*: a rated defeat costs at most a few Elo;
+  - Trickster, *Second chance*: free takebacks that keep the battle rated;
+  - Calculator, *Strategic insight*: the engine brain doesn't cost the rating;
+  - Gambiteer, *Spoils*: extra coins;
+  - Sniper, *Scouts*: the enemy's favourite opening is reported before the battle;
+  - Berserker, *Initiative*: you always take White;
+  - Maverick, *Surprise attack*: the enemy has no opening book.
+- **Fairness.** Traits never change the rules of chess.
+
+### Opponents who remember you
+
+- **The record.** Every character keeps a record of your games together: wins, losses, draws, the current streak, and the opening of your last game (`src/memory/memory.ts`).
+- **What they say.** Their greeting follows it, for example "Game 7 between us: 4 wins for you, 2 for me", "3 wins in a row against me. That ends today." or "You beat me last time with the Ruy Lopez". Their farewell keeps count.
+- **How they play.** After a run of your wins they play up to 160 Elo stronger; after a run of theirs, a little gentler.
+
+### The 3D Trophy Hall (Legends → *Trophy Museum* → *3D hall*)
+
+- **The hall.** A walkable WebGL gallery (three.js, its own lazy chunk) where every character you have beaten stands as a marble king statue on a plinth, with an engraved gold plaque.
+- **Portraits.** Each character's portrait hangs on the wall behind their statue.
+- **Glow.** A glow ring grows brighter with your wins over them.
+- **Controls.** Drag to look around, drag up and down or scroll to walk, and tap a statue for its plaque and the interview.
+- **Fallback.** Without WebGL, or in battery saver, the gallery view is shown instead.
+
+### Tests
+
+`npm run test:conquest` covers 47 checks:
+- memory streaks, lines, strength and limits;
+- the hall layout;
+- army drafting, stacking and caps;
+- the war map (two-way borders, connected), conquest, sieges, counter-attacks, empire falls and victory;
+- sanitising and profile round trips.
 
 ---
 

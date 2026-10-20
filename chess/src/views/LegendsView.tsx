@@ -1,4 +1,4 @@
-import { ArrowLeft, Brain, Crown, Flag, Ghost, Landmark, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Brain, Crown, Flag, Ghost, Globe2, Landmark, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
@@ -29,6 +29,8 @@ import { BattlesView } from '../components/battles/BattlesView'
 import { MuseumView } from '../components/history/MuseumView'
 import { QuizView } from '../components/history/QuizView'
 import { GhostView } from '../components/ghost/GhostView'
+import { WarView } from '../components/war/WarView'
+import type { BattleMode } from '../war/war'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
 const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
@@ -39,6 +41,7 @@ interface LegendsViewProps {
   onChallenge: (legendId: LegendId, options: ChallengeOptions) => void
   onChallengeClassic: (classicId: string, options: ChallengeClock) => void
   onChallengeGhost: (options: ChallengeClock) => void
+  onChallengeWar: (territoryId: string, mode: BattleMode, options: ChallengeClock) => void
   onChallengeBoss: (bossId: BossId, options: ChallengeClock, launch: BattleLaunch) => void
   onFightGauntlet: (boss: Boss) => void
   onFightTournament: (opponent: TournamentEntrant, round: number) => void
@@ -63,13 +66,14 @@ const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: ty
   variants: { title: 'CHESS VARIANTS', subtitle: 'Chess960, King of the Hill and Three-Check against the computer', icon: Shuffle, slot: 'classic' },
   battles: { title: 'PLAY THE REAL BATTLE', subtitle: 'Thermopylae, Cannae and Waterloo as chess, with history’s own twists', icon: Flag, slot: 'classic' },
   museum: { title: 'TROPHY MUSEUM', subtitle: 'Your personal timeline of history, from 2300 BCE to today', icon: Landmark, slot: 'classic' },
+  war: { title: 'HISTORICAL WORLD WAR', subtitle: 'Conquer 21 territories held by five empires, with an army of the legends you have beaten', icon: Globe2, slot: 'classic' },
   ghost: { title: 'GHOST OF YOURSELF', subtitle: 'An opponent built from your own games: your openings, your habits, your rating', icon: Ghost, slot: 'classic' },
   quiz: { title: 'HISTORY QUIZ', subtitle: 'Who is this? True facts about the people you have beaten', icon: Brain, slot: 'classic' },
   openings: { title: 'OPENING SCHOOL', subtitle: 'Learn the main openings move by move, taught by the masters', icon: GraduationCap, slot: 'classic' },
 }
 
 /** Chronos Chess hub: universe selector → campaign map + dossier, or free play. */
-export function LegendsView({ onChallenge, onChallengeClassic, onChallengeGhost, onChallengeBoss, onFightGauntlet, onFightTournament, onReturnToBoard }: LegendsViewProps) {
+export function LegendsView({ onChallenge, onChallengeClassic, onChallengeGhost, onChallengeWar, onChallengeBoss, onFightGauntlet, onFightTournament, onReturnToBoard }: LegendsViewProps) {
   const progress = useStore(profileStore, (p) => p.legends)
   const campaignProgress = useStore(profileStore, (p) => p.campaign)
   const screen = useStore(settingsStore, (s) => s.legendsScreen)
@@ -186,6 +190,8 @@ export function LegendsView({ onChallenge, onChallengeClassic, onChallengeGhost,
       {screen === 'quiz' && <QuizView />}
 
       {screen === 'ghost' && <GhostView onPlay={onChallengeGhost} />}
+
+      {screen === 'war' && <WarView onBattle={onChallengeWar} />}
 
       {screen === 'freeplay' && <FreePlayPanel defeated={progress.defeated} selected={freeSelected} onSelect={setFreeSelected} onStart={onChallenge} />}
     </div>

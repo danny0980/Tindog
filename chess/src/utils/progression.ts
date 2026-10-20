@@ -1,3 +1,4 @@
+import { remember } from '../memory/memory'
 import { ACHIEVEMENTS } from '../constants/achievements'
 import { DRAW_REWARD_FACTOR, LOSS_REWARD, MAX_ELO_HISTORY, MAX_MATCH_HISTORY, PUZZLE_ASSISTED_FACTOR, PUZZLE_REWARD, WIN_REWARD } from '../constants/economy'
 import { DIFFICULTY_CONFIGS, PIECE_VALUES } from '../constants/game'
@@ -60,6 +61,8 @@ export interface MatchInput {
   bossId?: BossId | null
   /** Classic Chess character, if any (a win adds them to the Trophy Museum). */
   classicId?: string | null
+  /** The opponent's persona key: the game goes into their memory of you. */
+  opponentKey?: string | null
   opponentElo?: number
   /** Firewall Core relic: the most Elo a rated defeat may cost. */
   eloLossCap?: number
@@ -182,6 +185,7 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
     coins: profile.coins + coins,
     totalCoinsEarned: profile.totalCoinsEarned + coins,
     matches: [record, ...profile.matches].slice(0, MAX_MATCH_HISTORY),
+    memory: input.opponentKey && outcome ? remember(profile.memory, input.opponentKey, outcome, input.opening, nowIso) : profile.memory,
     feats:
       outcome === 'win' && input.classicId && !profile.feats.classicBeaten.includes(input.classicId)
         ? { ...profile.feats, classicBeaten: [...profile.feats.classicBeaten, input.classicId] }

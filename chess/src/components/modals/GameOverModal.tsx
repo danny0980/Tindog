@@ -1,4 +1,4 @@
-import { Brain, Coins, Crown, Film, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Brain, Coins, Crown, Film, Globe2, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
@@ -33,9 +33,10 @@ interface GameOverModalProps {
   history?: { name: string; onInterview: () => void; onQuiz: () => void } | null
   /** Opens the automatic highlight reel. */
   onReel?: (() => void) | null
+  onOpenWar?: () => void
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null, onOpenWar }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -57,6 +58,11 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
           {summary.gauntlet ? (
             <Button variant="primary" className="w-full" onClick={onOpenGauntlet} icon={<InfinityIcon className="size-4" />}>
               {summary.gauntlet.ended ? 'Gauntlet results' : 'Continue the Gauntlet'}
+            </Button>
+          ) : null}
+          {summary.war && onOpenWar ? (
+            <Button variant="primary" className="w-full" onClick={onOpenWar} icon={<Globe2 className="size-4" />} data-gameover-war>
+              Back to the war map
             </Button>
           ) : null}
           {summary.arena && !summary.campaign ? (
@@ -174,6 +180,23 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               <span className="font-mono text-sm font-bold text-yellow-300">+{summary.legend.coins}</span>
             </div>
             {summary.legend.rewards.length > 0 && <div className="mt-1 text-xs text-slate-300">Unlocked: {summary.legend.rewards.join(' · ')}</div>}
+          </div>
+        )}
+
+        {summary.war && (
+          <div className="mt-3 w-full space-y-1 rounded-xl border border-sky-300/40 bg-sky-400/10 p-3 text-left" data-war-summary>
+            <div className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-sky-200">
+              <span className="flex items-center gap-1.5">
+                <Globe2 className="size-3.5" /> World War · {summary.war.territory}
+              </span>
+              {summary.war.coins > 0 && <span className="font-mono text-sm text-yellow-300">+{summary.war.coins}</span>}
+            </div>
+            {summary.war.events.map((e) => (
+              <p key={e} className="text-xs text-slate-200">
+                {e}
+              </p>
+            ))}
+            {summary.war.spoils > 0 && <p className="text-[11px] text-amber-200">Spoils of war: +{summary.war.spoils} coins</p>}
           </div>
         )}
 

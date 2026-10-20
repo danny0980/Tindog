@@ -11,6 +11,10 @@ import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, appl
 import { getLegend, strengthInfo } from '../data/legends'
 import { bossPersona, classicPersona, ghostPersona, legendPersona } from '../data/personas'
 import { fingerprint } from '../ghost/fingerprint'
+import { withMemory } from '../memory/memory'
+import type { ArmyEffects } from '../army/army'
+import { type BattleMode, getTerritory, resolveBattle } from '../war/war'
+import { rescaleProfile } from '../data/campaign/archetypes'
 import { POTIONS, RESTRICTIONS, WEATHER } from '../data/arena'
 import { displayTitle } from '../data/titles'
 import { gauntletStore } from '../stores/gauntletStore'
@@ -93,6 +97,14 @@ export interface BattleLaunch {
   bountyId?: string
   /** The boss's answer to your parley choice (spoken as the battle begins). */
   parleyReply?: { text: string; mood: TauntMood }
+  /** World War: the territory fought over, and what your army brings. */
+  war?: WarLaunch
+}
+
+export interface WarLaunch {
+  territoryId: string
+  mode: BattleMode
+  effects: ArmyEffects
 }
 
 /** Light / dark lighting of the arena, from the opponent's alignment. */
@@ -111,7 +123,7 @@ export interface KillCam {
 /** Player actions that cost no move (potions, traps, the altar). */
 export type PickMode = 'glue' | 'altar' | null
 
-const LAUNCH_DEFAULTS = { emp: false, freeUndos: 0, eventId: null, bountyId: null } as const
+const LAUNCH_DEFAULTS = { emp: false, freeUndos: 0, eventId: null, bountyId: null, war: null } as const
 
 /** A short holographic banner over the board (spell warnings, casts, tactics). */
 export interface SpellFlash {
@@ -161,6 +173,8 @@ export interface GameEndSummary {
   ironman: { wiped: boolean; lostBosses: number; factor: number } | null
   /** Ambush, bounty or tournament payout. */
   arena: { title: string; detail: string; coins: number; potion: PotionId | null; success: boolean } | null
+  /** World War battle: what happened on the map, and the spoils. */
+  war: { territory: string; events: string[]; coins: number; spoils: number } | null
 }
 
 const characterOf = (p: Persona): PlayerInfo['character'] => ({ key: p.key, name: p.name, portrait: p.portrait })
@@ -191,7 +205,8 @@ export function useGameController({ active }: { active: boolean }) {
   const [shieldUsed, setShieldUsed] = useState(false)
   // Spells & tactics: the battle's rules, and the effect state after every ply (index = ply).
   const [battle, setBattle] = useState<BattleSetup | null>(null)
-  const [launchExtras, setLaunchExtras] = useState<{ emp: boolean; freeUndos: number; eventId: string | null; bountyId: string | null }>(LAUNCH_DEFAULTS)
+  const [launchExtras, setLaunchExtras] = useState<{ emp: boolean; freeUndos: number; eventId: string | null; bountyId: string | null; war: WarLaunch | null }>(LAUNCH_DEFAULTS)
+  const war = launchExtras.war
   const [pickMode, setPickMode] = useState<PickMode>(null)
   const [killCam, setKillCam] = useState<KillCam | null>(null)
   /** Bumped when the opponent lands a severe check (screen shake). */
@@ -235,10 +250,12 @@ export function useGameController({ active }: { active: boolean }) {
   const ghost = useMemo(() => (wantsGhost ? ghostPersona(fingerprint(myMatches, myElo), myName) : null), [myElo, myMatches, myName, wantsGhost])
   const reviewBoss = useStore(rosterStore, () => (review?.bossId ? getCachedBoss(review.bossId) : null))
   const reviewLegend = review?.legendId ? getLegend(review.legendId) : null
-  const persona = useMemo<Persona | null>(
-    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, settings.classicAvatar) : ghost),
-    [boss, classic, gameSettings.legendStrength, ghost, legend, settings.classicAvatar],
-  )
+  // What the opponent remembers of you, as it stood when this game began.
+  const [memoryAtStart, setMemoryAtStart] = useState(() => profileStore.get().memory)
+  const persona = useMemo<Persona | null>(() => {
+    const base = boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, settings.classicAvatar) : ghost
+    return base ? withMemory(base, memoryAtStart[base.key]) : null
+  }, [boss, classic, gameSettings.legendStrength, ghost, legend, memoryAtStart, settings.classicAvatar])
   const reviewPersona = useMemo<Persona | null>(
     () => (reviewBoss ? bossPersona(reviewBoss) : reviewLegend ? legendPersona(reviewLegend, 'authentic') : null),
     [reviewBoss, reviewLegend],
@@ -270,8 +287,11 @@ export function useGameController({ active }: { active: boolean }) {
     if (overclocked) {
       profile = { ...profile, skillLevel: 20, depth: profile.depth + 4, moveTimeMs: Math.round(profile.moveTimeMs * 1.5), toleranceCp: Math.min(profile.toleranceCp, 15), noise: 0 }
     }
+    // World War: your army's Rally weakens the enemy; a Surprise attack catches it without its book.
+    if (war && persona && war.effects.rally > 0) profile = rescaleProfile(profile, Math.max(400, persona.elo - war.effects.rally))
+    if (war?.effects.surprise) profile = { ...profile, repertoire: { w: [], b: [] } }
     return profile
-  }, [battle, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona])
+  }, [battle, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona, war])
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
   const recordedGameRef = useRef<number | null>(null)
@@ -349,8 +369,10 @@ export function useGameController({ active }: { active: boolean }) {
         legendId: legend?.id ?? null,
         bossId: boss?.id ?? null,
         classicId: classic?.id ?? null,
+        opponentKey: persona?.key ?? null,
         ...(persona ? { opponentElo: persona.elo } : {}),
         ...(boss && battleRelics.includes('firewall-core') ? { eloLossCap: FIREWALL_ELO_CAP } : {}),
+        ...(war?.effects.eloLossCap ? { eloLossCap: war.effects.eloLossCap } : {}),
       }
       const out = applyMatch(profileStore.get(), matchInput)
       profileStore.set(out.profile)
@@ -477,6 +499,20 @@ export function useGameController({ active }: { active: boolean }) {
       }
       if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
       trackQuestEvents(matchQuestEvents(matchInput), 1400 + unlocked.length * 1100)
+      // World War: the map moves (conquest, sieges, counter-attacks) and your army's spoils are paid.
+      let warSummary: GameEndSummary['war'] = null
+      const warState = profileStore.get().war
+      if (war && outcome && warState) {
+        const r = resolveBattle(warState, war.territoryId, war.mode, outcome === 'win')
+        const spoils = outcome === 'win' ? Math.round(((out.coins + r.coins) * war.effects.spoils) / 100) : 0
+        const coins = r.coins + spoils
+        const ids = [...(outcome === 'win' && war.mode === 'attack' ? ['first-conquest'] : []), ...(r.factionFallen ? ['empire-breaker'] : []), ...(r.warWon ? ['world-conqueror'] : [])]
+        const p = profileStore.get()
+        const granted = grant({ ...p, war: r.state, coins: p.coins + coins, totalCoinsEarned: p.totalCoinsEarned + coins }, ids, new Date().toISOString())
+        profileStore.set(granted.profile)
+        unlocked = [...unlocked, ...granted.unlocked]
+        warSummary = { territory: getTerritory(war.territoryId)?.name ?? war.territoryId, events: r.events, coins, spoils }
+      }
       setSummary({
         result,
         outcome,
@@ -491,6 +527,7 @@ export function useGameController({ active }: { active: boolean }) {
         gauntlet: gauntletSummary,
         ironman: ironmanSummary,
         arena: arenaSummary,
+        war: warSummary,
       })
       setGameOverDismissed(false)
 
@@ -499,11 +536,11 @@ export function useGameController({ active }: { active: boolean }) {
       else if (!ai || outcome === 'win') sfx.victory()
       else sfx.defeat()
       if (ai ? outcome === 'win' : result.kind !== 'draw') setCelebration((c) => c + 1)
-      if (out.coins > 0 || legendSummary?.coins || campaignSummary?.coins || arenaSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
+      if (out.coins > 0 || legendSummary?.coins || campaignSummary?.coins || arenaSummary?.coins || warSummary?.coins) window.setTimeout(() => sfx.coins(), 900)
       if (ironmanSummary?.wiped) window.setTimeout(() => showToast('warning', 'Ironman run lost', `Permadeath: ${ironmanSummary.lostBosses} conquered bosses fall back into darkness.`, 6000), 1200)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, battle, battleRelics, boss, casual, classic, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl],
+    [aiColor, battle, battleRelics, boss, casual, classic, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl, war],
   )
 
   const handleFlag = useCallback(
@@ -847,9 +884,9 @@ export function useGameController({ active }: { active: boolean }) {
     setPickMode(null)
     turnStartRef.current = performance.now()
     bossEvalRef.current = null
-    if (isGauntletBattle) {
+    if (isGauntletBattle || (war && launchExtras.freeUndos > 0)) {
       setLaunchExtras((x) => ({ ...x, freeUndos: Math.max(0, x.freeUndos - 1) }))
-      showToast('info', 'Aegis', 'Your free takeback is spent.', 2400)
+      showToast('info', war ? 'Second chance' : 'Aegis', war ? 'Your army’s free takeback is spent; the battle stays rated.' : 'Your free takeback is spent.', 2400)
       return
     }
     if (isAiMode && !casual) {
@@ -861,7 +898,7 @@ export function useGameController({ active }: { active: boolean }) {
         showToast('info', 'Casual game', boss ? 'Takebacks make this battle unrated and cap it at one star.' : 'Takebacks make this game unrated.', 2800)
       }
     }
-  }, [boss, casual, clock, game, isAiMode, isGauntletBattle, playEngine, shieldReady, timeMachine, undoPlies])
+  }, [boss, casual, clock, game, isAiMode, isGauntletBattle, launchExtras.freeUndos, playEngine, shieldReady, timeMachine, undoPlies, war])
 
   /** Engine help mid-game (the brain, the What-If engine) makes a rated game casual, like a takeback. */
   const makeCasual = useCallback(
@@ -901,7 +938,9 @@ export function useGameController({ active }: { active: boolean }) {
       clock.reset(tc)
       const challengerBoss = next.mode === 'ai' && next.bossId ? getCachedBoss(next.bossId) : null
       const challengerClassic = next.mode === 'ai' && !next.bossId && !next.legendId && next.classicId ? getClassic(next.classicId) : null
-      const challenger = challengerBoss
+      const memory = profileStore.get().memory
+      setMemoryAtStart(memory)
+      const challengerBase = challengerBoss
         ? bossPersona(challengerBoss)
         : next.mode === 'ai' && next.legendId
           ? legendPersona(getLegend(next.legendId), next.legendStrength)
@@ -910,6 +949,14 @@ export function useGameController({ active }: { active: boolean }) {
             : next.mode === 'ai' && next.ghost
               ? ghostPersona(fingerprint(profileStore.get().matches, profileStore.get().elo), profileStore.get().name)
               : null
+      const challenger = challengerBase ? withMemory(challengerBase, memory[challengerBase.key]) : null
+      // World War: your army's briefing, and what the scouts found out.
+      if (launch?.war && challenger) {
+        const brief = launch.war.effects.briefing
+        if (brief.length > 0) window.setTimeout(() => showToast('info', 'Your army', brief.join(' · '), 6000), 2400)
+        const book = launch.war.effects.scout ? challenger.profile.repertoire?.[color === 'w' ? 'b' : 'w']?.[0] : undefined
+        if (book) window.setTimeout(() => showToast('info', 'Scouts report', `${challenger.name} favours ${book.split(' ').slice(0, 6).join(' ')}…`, 6000), 3600)
+      }
       const kind: BattleKind = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
       // Shrine blessings join the next campaign battle's tactics.
       let tactics: readonly TacticId[] = launch?.tactics ?? []
@@ -940,7 +987,7 @@ export function useGameController({ active }: { active: boolean }) {
       setBattle(setup)
       effectsLogRef.current = setup ? [createEffects(setup)] : []
       setEffectsLog(effectsLogRef.current)
-      setLaunchExtras({ emp: launch?.emp ?? false, freeUndos: launch?.freeUndos ?? 0, eventId: launch?.eventId ?? null, bountyId: launch?.bountyId ?? null })
+      setLaunchExtras({ emp: launch?.emp ?? false, freeUndos: launch?.freeUndos ?? launch?.war?.effects.takebacks ?? 0, eventId: launch?.eventId ?? null, bountyId: launch?.bountyId ?? null, war: launch?.war ?? null })
       setSpellFlash(null)
       setPickMode(null)
       setKillCam(null)
@@ -1240,6 +1287,8 @@ export function useGameController({ active }: { active: boolean }) {
     review,
     casual,
     makeCasual,
+    /** World War with a Calculator in your army: the engine brain doesn't cost the rating. */
+    warInsight: Boolean(war?.effects.insight),
     fen: displayFen,
     liveFen: game.fen,
     history: game.history,

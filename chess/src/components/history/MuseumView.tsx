@@ -1,5 +1,9 @@
 import { BookOpen, Landmark, Lock, Mic } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
+import { useStore } from '../../hooks/useStore'
+import { webglAvailable } from '../../museum/hallScene'
+import { settingsStore } from '../../stores/settingsStore'
+import { lazyWithRetry } from '../../utils/lazyWithRetry'
 import { loreFor } from '../../data/classic/lore'
 import { rivalsOf } from '../../data/classic/rivals'
 import { CLASSIC_ERAS, CLASSIC_ROSTER, type ClassicCharacter, getClassic } from '../../data/classic/roster'
@@ -10,6 +14,8 @@ import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { InterviewModal } from './InterviewPanel'
 import { useBeatenClassics } from './useBeaten'
+
+const TrophyHall3D = lazyWithRetry(() => import('./TrophyHall3D'), (m) => m.default)
 
 const WIDTH = 2600
 const LANE = 52
@@ -48,6 +54,10 @@ export function MuseumView() {
   const [open, setOpen] = useState<ClassicCharacter | null>(null)
   const [interview, setInterview] = useState<ClassicCharacter | null>(null)
   const pct = Math.round((beaten.length / CLASSIC_ROSTER.length) * 100)
+  const lowPower = useStore(settingsStore, (s) => s.batterySaver)
+  const [webgl] = useState(() => webglAvailable())
+  const [view, setView] = useState<'hall' | 'gallery'>(() => (lowPower || !webgl ? 'gallery' : 'hall'))
+  const showHall = view === 'hall' && webgl && beaten.length > 0
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5" data-museum>
@@ -95,8 +105,21 @@ export function MuseumView() {
         <h3 className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-200">
           <Landmark className="size-3.5" /> Hall of statues
         </h3>
+        {beaten.length > 0 && webgl && (
+          <div className="mb-3 inline-flex rounded-xl bg-white/[0.05] p-1" role="radiogroup" aria-label="Museum view">
+            {(['hall', 'gallery'] as const).map((v) => (
+              <button key={v} type="button" role="radio" aria-checked={view === v} onClick={() => setView(v)} data-museum-view={v} className={`rounded-lg px-3 py-1 text-xs font-semibold ${view === v ? 'bg-accent text-ink-950' : 'text-slate-300'}`}>
+                {v === 'hall' ? '3D hall' : 'Gallery'}
+              </button>
+            ))}
+          </div>
+        )}
         {beaten.length === 0 ? (
           <p className="glass rounded-3xl p-6 text-center text-sm text-slate-400">The hall is empty. Beat a Classic Chess opponent and their statue will stand here.</p>
+        ) : showHall ? (
+          <Suspense fallback={<div className="glass h-80 animate-pulse rounded-3xl" />}>
+            <TrophyHall3D beaten={beaten} onPick={setOpen} onFail={() => setView('gallery')} />
+          </Suspense>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5" style={{ perspective: '900px' }}>
             {beaten.map((c) => (

@@ -70,6 +70,7 @@ interface PlayViewProps {
   onOpenSettings: () => void
   /** Opens the Grand Campaign world map. */
   onOpenCampaign: () => void
+  onOpenWar: () => void
   /** Opens the Endless Gauntlet screen. */
   onOpenGauntlet: () => void
 }
@@ -100,7 +101,7 @@ const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 /** Plies between two coach warnings, so it never nags. */
 const COACH_GAP = 6
 
-export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet }: PlayViewProps) {
+export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet, onOpenWar }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -220,7 +221,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   // Engine brain on the main board, and the What-If sandbox. In a rated game in progress both need your OK (the game turns casual).
   const [brainOn, setBrainOn] = useState(false)
   const [whatIfOpen, setWhatIfOpen] = useState(false)
-  const engineLocked = game.isAiMode && game.status.kind === 'playing' && !game.review && !game.casual
+  const engineLocked = game.isAiMode && game.status.kind === 'playing' && !game.review && !game.casual && !game.warInsight
   const brainLive = brainOn && !engineLocked && active
   const brain = useBrain(game.fen, brainLive)
   const onPickup = useCallback(() => sfx.pickup(), [])
@@ -686,6 +687,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         moveCount={total}
         onNewGame={openNewGame}
         onRematch={() => game.startNewGame(game.gameSettings)}
+        onOpenWar={() => {
+          game.dismissGameOver()
+          onOpenWar()
+        }}
         onOpenCampaign={() => {
           game.dismissGameOver()
           onOpenCampaign()

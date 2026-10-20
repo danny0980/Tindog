@@ -1,3 +1,6 @@
+import { sanitizeMemory } from '../memory/memory'
+import { EMPTY_ARMY, sanitizeArmy } from '../army/army'
+import { sanitizeWar } from '../war/war'
 import { isTierId } from '../data/campaign/tiers'
 import { STARTING_ELO, STORAGE_KEYS } from '../constants/game'
 import { BOARD_THEMES, FREE_PIECE_SETS, FREE_THEMES, PIECE_SETS } from '../constants/themes'
@@ -53,6 +56,9 @@ export function createDefaultProfile(): PlayerProfile {
     tournament: null,
     tournamentsWon: 0,
     feats: { potionsDrunk: 0, eventsResolved: 0, bountiesCompleted: 0, sacrifices: 0, trapsSprung: 0, killCams: 0, wins960: 0, kothWins: 0, threeCheckWins: 0, onlineGames: 0, onlineWins: 0, lessonsDone: [], battlesWon: [], classicBeaten: [], interviewed: [], quizCorrect: 0 },
+    memory: {},
+    army: { ...EMPTY_ARMY },
+    war: null,
   }
 }
 
@@ -256,6 +262,9 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     tournament: sanitizeTournament(raw.tournament),
     tournamentsWon: num(raw.tournamentsWon, 0, 0),
     feats: sanitizeFeats(raw.feats),
+    memory: sanitizeMemory(raw.memory),
+    army: sanitizeArmy(raw.army),
+    war: sanitizeWar(raw.war),
   }
 }
 

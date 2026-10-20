@@ -1,4 +1,4 @@
-import { Brain, ChevronRight, Ghost, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
+import { Brain, ChevronRight, Ghost, Globe2, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { LESSONS } from '../../openings/lessons'
 import { profileStore } from '../../stores/profileStore'
@@ -41,6 +41,7 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
   const done = useStore(profileStore, (p) => p.feats.lessonsDone.length)
   const battles = useStore(profileStore, (p) => new Set(p.feats.battlesWon.map((k) => k.split(':')[0])).size)
   const museum = useBeatenClassics().length
+  const war = useStore(profileStore, (p) => p.war)
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <ClassicCard onOpen={() => onOpen('classic')} />
@@ -88,6 +89,15 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         title="History Quiz"
         text="Who is this? True facts about the people of Classic Chess"
         glow="from-fuchsia-300 via-purple-500 to-indigo-700"
+      />
+      <PathTile
+        path="war"
+        onOpen={() => onOpen('war')}
+        icon={<Globe2 className="size-6" />}
+        kicker={war ? `Campaign · ${war.owned.length}/21 territories` : 'Campaign · new'}
+        title="Historical World War"
+        text="Conquer the world with an army of beaten legends"
+        glow="from-sky-300 via-blue-600 to-slate-800"
       />
       <PathTile
         path="ghost"

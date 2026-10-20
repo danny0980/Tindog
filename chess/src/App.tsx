@@ -1,3 +1,5 @@
+import { armyEffects } from './army/army'
+import { type BattleMode, opponentFor } from './war/war'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppHeader } from './components/layout/AppHeader'
@@ -253,6 +255,37 @@ export default function App() {
     navigate('legends')
   }, [navigate])
 
+  const openWarMap = useCallback(() => {
+    updateSettings({ legendsScreen: 'war' })
+    navigate('legends')
+  }, [navigate])
+
+  /** World War: a Classic battle over a territory, with your army's traits in force. */
+  const challengeWar = useCallback(
+    (territoryId: string, mode: BattleMode, options: ChallengeClock) => {
+      const war = profileStore.get().war
+      const defender = war ? opponentFor(war, territoryId, mode) : null
+      if (!defender) return
+      const effects = armyEffects(profileStore.get().army)
+      game.startNewGame(
+        {
+          ...game.gameSettings,
+          mode: 'ai',
+          classicId: defender,
+          bossId: null,
+          legendId: null,
+          ghost: false,
+          legendStrength: 'authentic',
+          playerColor: effects.initiative ? 'w' : options.color,
+          timeControlId: options.timeControlId,
+        },
+        { kind: 'legend', tactics: [], war: { territoryId, mode, effects } },
+      )
+      navigate('play')
+    },
+    [game, navigate],
+  )
+
   const openCampaignMap = useCallback(() => {
     updateSettings({ legendsScreen: 'grand' })
     navigate('legends')
@@ -293,6 +326,7 @@ export default function App() {
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenCampaign={openCampaignMap}
             onOpenGauntlet={openGauntlet}
+            onOpenWar={openWarMap}
           />
           </ErrorBoundary>
         </div>
@@ -300,7 +334,7 @@ export default function App() {
         <Suspense fallback={<ViewFallback />}>
           {/* Browsers without view transitions get a gentle CSS entrance instead. */}
           <div key={view} className={`flex min-h-0 flex-1 flex-col ${view === 'play' ? 'hidden' : ''} ${supportsViewTransitions() ? '' : 'animate-view-in'}`}>
-          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onChallengeClassic={challengeClassic} onChallengeGhost={challengeGhost} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
+          {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onChallengeClassic={challengeClassic} onChallengeGhost={challengeGhost} onChallengeWar={challengeWar} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}

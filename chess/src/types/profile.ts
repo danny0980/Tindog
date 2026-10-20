@@ -1,3 +1,6 @@
+import type { MemoryBook } from '../memory/memory'
+import type { Army } from '../army/army'
+import type { WarState } from '../war/war'
 import type { BoardThemeId, PieceSetId } from './theme'
 import type { Color, Difficulty, GameMode, GameResult, Outcome, Personality } from './chess'
 import type { VariantEvent } from '../engine/variant'
@@ -91,6 +94,12 @@ export interface PlayerProfile {
   tournament: TournamentState | null
   tournamentsWon: number
   feats: FeatCounters
+  /** What each opponent remembers about your games together (by persona key). */
+  memory: MemoryBook
+  /** Your Custom Army: beaten Classic characters seated as King, Queen, Rook, Bishop and Knight. */
+  army: Army
+  /** The Historical World War in progress (null = not started). */
+  war: WarState | null
 }
 
 export type AchievementIcon =

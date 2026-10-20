@@ -10,7 +10,8 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { createApp } from '../server/app'
 import { backupName, backupNow } from '../server/backup'
-import { loadConfig } from '../server/config'
+import { startWatchdog } from '../server/watchdog'
+import { configWarnings, loadConfig } from '../server/config'
 import { type LegacyDb, SCHEMA_VERSION, Store, type User } from '../server/store'
 
 let failures = 0
@@ -167,9 +168,33 @@ const file = join(dir, 'chess.db')
   const prod = loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://chess.example.com/', SMTP_URL: 'smtp://x', DATABASE_FILE: '/var/lib/chess/chess.db' }, [])
   check('production: daily backups next to the database, one proxy trusted', prod.production && prod.backupDir === join('/var/lib/chess', 'backups') && prod.backupHours === 24 && prod.trustProxy === 1 && prod.publicUrl === 'https://chess.example.com')
   check('production needs PUBLIC_URL and a sign-in method', threw(() => loadConfig({ NODE_ENV: 'production' }, [])) && threw(() => loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com' }, [])))
-  check('PUBLIC_URL must be an origin', threw(() => loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com/app', SMTP_URL: 's' }, [])))
+  check('PUBLIC_URL must be an origin', threw(() => loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com/app', SMTP_URL: 'smtp://mail.example.com' }, [])))
   check('bad numbers fall back to defaults', loadConfig({ PORT: 'abc', SESSION_DAYS: '9999', BACKUP_KEEP: '0' }, []).port === 8787 && loadConfig({ SESSION_DAYS: '9999' }, []).sessionDays === 30)
-  check('backups can be switched off', loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com', SMTP_URL: 's', BACKUP_DIR: 'off' }, []).backupDir === null)
+  check('a malformed SMTP_URL stops the server at start-up', threw(() => loadConfig({ SMTP_URL: 'mail.example.com' }, [])) && !threw(() => loadConfig({ SMTP_URL: 'smtps://u:p@mail.example.com:465' }, [])))
+  const warn = configWarnings(loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'http://chess.example.com', SMTP_URL: 'smtp://mail.example.com', GOOGLE_CLIENT_ID: 'nonsense', BACKUP_DIR: 'off' }, []))
+  check('likely mistakes are warned about: plain http, a malformed Google id, localhost mail, no backups', warn.length === 4 && warn.some((w) => w.includes('http')) && warn.some((w) => w.includes('GOOGLE')) && warn.some((w) => w.includes('MAIL_FROM')) && warn.some((w) => w.includes('backups')))
+  check('a clean production setup has no warnings', configWarnings(loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://chess.example.com', SMTP_URL: 'smtp://mail.example.com', MAIL_FROM: 'Chess <hi@chess.example.com>', GOOGLE_CLIENT_ID: '1-abc.apps.googleusercontent.com' }, [])).length === 0)
+  check('backups can be switched off', loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com', SMTP_URL: 'smtp://mail.example.com', BACKUP_DIR: 'off' }, []).backupDir === null)
+}
+
+// ── The watchdog: a server that lost its database restarts itself ──────────
+{
+  const queue: Array<() => void> = []
+  const run = () => queue.shift()?.()
+  let answers = [true, false, false, true, false, false, false]
+  let dead: string | null = null
+  const stop = startWatchdog({ healthy: () => answers.shift() ?? false, onDead: (why) => (dead = why), setTimer: (fn) => queue.push(fn), clearTimer: () => {}, failures: 3 })
+  for (let i = 0; i < 6; i++) run()
+  check('two failed checks are tolerated (a recovery resets the count)', dead === null)
+  run()
+  check('three failed checks in a row: the process gives up so its supervisor restarts it', dead !== null && queue.length === 0)
+  stop()
+  answers = [false, false, false]
+  dead = null
+  const stop2 = startWatchdog({ healthy: () => answers.shift() ?? false, onDead: (why) => (dead = why), setTimer: (fn) => queue.push(fn), clearTimer: () => {}, failures: 3 })
+  stop2()
+  run()
+  check('a stopped watchdog does nothing', dead === null)
 }
 
 // ── The production HTTP layer ───────────────────────────────────────────────

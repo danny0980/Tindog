@@ -20,6 +20,7 @@ import { ChessClock } from '../game/ChessClock'
 import { RoyaleBoard } from '../royale/RoyaleBoard'
 import { ROYALE_COLOR, samePos } from '../royale/royaleTheme'
 import { Button } from '../ui/Button'
+import { PlayerName } from './Community'
 import { Modal } from '../ui/Modal'
 
 const SEATS = ['Red', 'Blue', 'Yellow', 'Green'] as const
@@ -161,7 +162,7 @@ export function OnlineModesPanel() {
             (info?.tables[table] ?? []).map((r, i) => (
               <li key={`${r.name}-${i}`} className="flex items-center gap-2">
                 <span className="w-6 text-right font-mono text-slate-500">{i + 1}</span>
-                <span className="flex-1 truncate text-white">{r.name}</span>
+                <PlayerName player={r} className="min-w-0 flex-1 text-white" />
                 <span className="font-mono text-slate-300">{r.rating}</span>
                 <span className="w-16 text-right text-[11px] text-slate-500">{r.games} games</span>
               </li>

@@ -31,7 +31,7 @@ export function AppHeader({ view, onNavigate, onOpenSettings, onOpenIntro }: App
         </div>
       </button>
 
-      <nav className="ml-4 hidden items-center gap-1 lg:flex" aria-label="Main">
+      <nav className="ml-2 hidden min-w-0 items-center gap-0.5 lg:flex xl:ml-4" aria-label="Main">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -40,7 +40,7 @@ export function AppHeader({ view, onNavigate, onOpenSettings, onOpenIntro }: App
             aria-current={view === id ? 'page' : undefined}
             aria-label={label}
             title={label}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition ${
               view === id ? 'bg-accent/15 text-white shadow-[inset_0_0_0_1px_var(--accent)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'
             }`}
           >

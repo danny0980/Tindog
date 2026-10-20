@@ -1,5 +1,6 @@
-import { CalendarClock, Crown, Eye, Loader2, LogOut, Medal, Plus, RefreshCw, Shield, Swords, Trophy, Tv, Users } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarClock, Crown, Eye, Globe2, Loader2, LogOut, Medal, Plus, RefreshCw, Shield, Swords, Trophy, Tv, Users } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useApi } from '../../hooks/useApi'
 import { useEngine } from '../../hooks/useEngine'
 import { useStore } from '../../hooks/useStore'
 import { scoreToCp } from '../../engine/scoring'
@@ -14,11 +15,13 @@ import { settingsStore } from '../../stores/settingsStore'
 import { ChessBoard } from '../board/ChessBoard'
 import { ChessClock } from '../game/ChessClock'
 import { Button } from '../ui/Button'
+import { CommunityTab, PlayerName } from './Community'
 
-type Tab = 'season' | 'tournament' | 'watch' | 'clans'
-const TABS: ReadonlyArray<{ id: Tab; label: string; icon: typeof Medal }> = [
+type Tab = 'community' | 'season' | 'tournament' | 'watch' | 'clans'
+const TABS: ReadonlyArray<{ id: Tab; label: string; short?: string; icon: typeof Medal }> = [
+  { id: 'community', label: 'Community', short: 'Stats', icon: Globe2 },
   { id: 'season', label: 'Season', icon: Medal },
-  { id: 'tournament', label: 'Tournament', icon: Trophy },
+  { id: 'tournament', label: 'Tournament', short: 'Cup', icon: Trophy },
   { id: 'watch', label: 'Watch', icon: Tv },
   { id: 'clans', label: 'Clans', icon: Shield },
 ]
@@ -33,40 +36,22 @@ const TIER_STYLE: Record<string, string> = {
 }
 const tierName = (id: string, tiers: SeasonInfo['tiers']): string => tiers.find((t) => t.id === id)?.name ?? id
 
-/** A small fetch hook: data, error, reload. It loads again whenever `key` changes. */
-function useApi<T>(load: () => Promise<T>, key = ''): { data: T | null; error: string | null; reload: () => void } {
-  const loadRef = useRef(load)
-  useEffect(() => {
-    loadRef.current = load
-  }, [load])
-  const [state, setState] = useState<{ data: T | null; error: string | null; n: number }>({ data: null, error: null, n: 0 })
-  const reload = useCallback(() => setState((s) => ({ ...s, n: s.n + 1 })), [])
-  useEffect(() => {
-    let alive = true
-    loadRef.current()
-      .then((data) => alive && setState((s) => ({ ...s, data, error: null })))
-      .catch((err: unknown) => alive && setState((s) => ({ ...s, error: err instanceof Error ? err.message : 'Could not load.' })))
-    return () => {
-      alive = false
-    }
-  }, [state.n, key])
-  return { data: state.data, error: state.error, reload }
-}
-
 /** Seasons, the weekly tournament, live games to watch, and clans. */
 export function LeaguePanel() {
-  const [tab, setTab] = useState<Tab>('season')
+  const [tab, setTab] = useState<Tab>('community')
   const account = useStore(accountStore, (a) => a)
   if (account.status === 'loading' || account.status === 'unavailable') return null
   return (
     <section className="glass space-y-3 rounded-3xl p-4" data-league>
-      <div className="grid grid-cols-4 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="League">
+      <div className="grid grid-cols-5 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="League">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} data-league-tab={t.id} className={`flex items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-semibold sm:text-xs ${tab === t.id ? 'bg-accent text-ink-950' : 'text-slate-300'}`}>
-            <t.icon className="size-3.5" /> {t.label}
+            <t.icon className="hidden size-3.5 shrink-0 sm:block" /> <span className="truncate sm:hidden">{t.short ?? t.label}</span>
+            <span className="hidden truncate sm:inline">{t.label}</span>
           </button>
         ))}
       </div>
+      {tab === 'community' && <CommunityTab />}
       {tab === 'season' && <SeasonTab />}
       {tab === 'tournament' && <TournamentTab signedIn={account.status === 'signed-in'} dev={account.config.dev === true} />}
       {tab === 'watch' && <WatchTab signedIn={account.status === 'signed-in'} />}
@@ -131,7 +116,7 @@ function SeasonTab() {
             <li key={`${r.name}-${i}`} className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-2 py-1 text-xs">
               <span className="w-5 font-mono text-slate-500">{i + 1}</span>
               <span className={`rounded bg-gradient-to-br px-1 text-[9px] font-bold ${TIER_STYLE[r.tier] ?? ''}`}>{tierName(r.tier, data.tiers)}</span>
-              <span className="min-w-0 flex-1 truncate text-slate-200">{r.name}</span>
+              <PlayerName player={r} className="min-w-0 flex-1 text-slate-200" />
               <span className="font-mono text-white">{r.rating}</span>
             </li>
           ))}
@@ -182,7 +167,7 @@ function TournamentTab({ signedIn, dev }: { signedIn: boolean; dev: boolean }) {
       </div>
       {data.previous?.champion && (
         <p className="flex items-center gap-1.5 text-xs text-amber-200">
-          <Crown className="size-3.5" /> Last champion: {data.previous.champion.name} ({data.previous.players} players)
+          <Crown className="size-3.5" /> Last champion: <PlayerName player={data.previous.champion} /> ({data.previous.players} players)
         </p>
       )}
       {data.status === 'signup' &&
@@ -234,8 +219,22 @@ function TournamentTab({ signedIn, dev }: { signedIn: boolean; dev: boolean }) {
       )}
       {data.champion && (
         <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-200">
-          <Crown className="size-4" /> Champion: {data.champion.name}
+          <Crown className="size-4" /> Champion: <PlayerName player={data.champion} />
         </p>
+      )}
+      {data.standings && data.standings.length > 0 && data.status !== 'signup' && (
+        <div className="space-y-1" data-tournament-standings>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Standings</h4>
+          <ol className="grid gap-1 sm:grid-cols-2">
+            {data.standings.map((st) => (
+              <li key={st.player.id ?? st.seed} className={`flex items-center gap-2 rounded-lg px-2 py-1 text-xs ${st.status === 'out' ? 'bg-white/[0.02] text-slate-500' : 'bg-white/[0.05] text-slate-200'}`}>
+                <span className="w-6 text-right font-mono text-[10px] text-slate-500">#{st.seed}</span>
+                <PlayerName player={st.player} className="min-w-0 flex-1" />
+                <span className={`text-[10px] ${st.status === 'champion' ? 'font-bold text-amber-300' : st.status === 'in' ? 'text-emerald-300' : ''}`}>{st.status === 'champion' ? 'Champion' : st.status === 'in' ? `In · ${st.round ?? ''}` : st.status === 'out' ? `Out · ${st.round ?? ''}` : 'Entered'}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </div>
   )
@@ -313,7 +312,12 @@ function ClansTab({ signedIn }: { signedIn: boolean }) {
             <span className="font-mono text-sky-200">{mine.data.points} pts</span>
           </div>
           <div className="mt-1 text-slate-300">
-            {mine.data.members.map((m) => `${m.name} (${m.rating})`).join(', ')}
+            {mine.data.members.map((m, i) => (
+              <span key={m.id ?? i}>
+                {i > 0 && ', '}
+                <PlayerName player={m} className="inline" /> ({m.rating})
+              </span>
+            ))}
           </div>
           <button type="button" className="mt-2 flex items-center gap-1 text-slate-400 hover:text-red-200" onClick={() => act(api.leaveClan)} data-clan-leave>
             <LogOut className="size-3.5" /> Leave clan

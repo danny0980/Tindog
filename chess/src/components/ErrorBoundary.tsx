@@ -2,6 +2,7 @@ import { CloudOff, RefreshCw, RotateCcw, TriangleAlert } from 'lucide-react'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { allowLazyRetry } from '../utils/lazyWithRetry'
 import { isChunkLoadError, isOnline } from '../utils/retry'
+import { reportError } from '../services/errorReport'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -42,6 +43,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`[ErrorBoundary:${this.props.scope ?? 'view'}]`, error, info.componentStack)
+    reportError(error, `boundary:${this.props.label ?? this.props.scope ?? 'view'}`)
     this.props.onError?.(error)
   }
 

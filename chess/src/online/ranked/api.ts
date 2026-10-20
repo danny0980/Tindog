@@ -37,6 +37,8 @@ export interface RatedGame {
 }
 
 export interface PlayerRow {
+  /** Opens their public profile (absent from older servers). */
+  id?: string
   name: string
   rating: number
 }
@@ -45,7 +47,7 @@ export interface SeasonInfo {
   season: string
   endsAt: number
   tiers: Array<{ id: string; name: string; min: number }>
-  table: Array<{ name: string; rating: number; tier: string; games: number; wins: number }>
+  table: Array<{ id?: string; name: string; rating: number; tier: string; games: number; wins: number }>
   me: { rating: number; tier: string; games: number; wins: number; peak: number; rank: number | null } | null
   history: Array<{ season: string; rating: number; tier: string; rank: number; games: number }>
 }
@@ -60,6 +62,8 @@ export interface TournamentInfo {
   joined: boolean
   rounds: Array<Array<{ a: PlayerRow | null; b: PlayerRow | null; winner: 'a' | 'b' | null; gameId: string | null }>>
   champion: PlayerRow | null
+  /** The live leaderboard: champion, then whoever got furthest. */
+  standings?: Array<{ player: PlayerRow; seed: number; round: string | null; status: 'champion' | 'in' | 'out' | 'entered' }>
   previous: { champion: PlayerRow | null; players: number; finishedAt: number } | null
 }
 
@@ -110,7 +114,34 @@ export interface ModeRatingRow {
 export interface ModesInfo {
   /** Your rating per mode (null when signed out). */
   mine: Record<RatedModeId, ModeRatingRow> | null
-  tables: Record<RatedModeId, Array<{ name: string; rating: number; games: number; wins: number }>>
+  tables: Record<RatedModeId, Array<{ id?: string; name: string; rating: number; games: number; wins: number }>>
+}
+
+/** The Community tab: the whole player base at a glance. */
+export interface CommunityInfo {
+  stats: { players: number; ratedPlayers: number; games: number; gamesToday: number; activeThisWeek: number; clans: number; weekByMode: { chess: number; vanish: number; cards: number; royale: number } }
+  live: { online: number; games: number; queued: number; modes: { cards: number; royale: number } }
+  season: { id: string | null; endsAt: number | null }
+  top: Record<'chess' | RatedModeId, Array<{ id: string; name: string; rating: number; games: number }>>
+  champions: Array<{ id: string; name: string; finishedAt: number | null; players: number; champion: PlayerRow | null }>
+  titles: Array<{ player: PlayerRow; titles: number }>
+  clans: Array<{ id: string; name: string; tag: string; members: number; points: number }>
+}
+
+/** A player's public profile. */
+export interface PlayerProfile {
+  id: string
+  name: string
+  memberSince: number
+  rating: number
+  tier: string
+  record: { games: number; wins: number; losses: number; draws: number }
+  modes: Record<RatedModeId, ModeRatingRow>
+  season: { row: { games: number; wins: number; peak: number } | null; rank: number | null; history: Array<{ season: string; rating: number; tier: string; rank: number; games: number }> }
+  clan: { id: string; name: string; tag: string } | null
+  titles: Array<{ id: string; finishedAt: number | null; players: number }>
+  recent: Array<{ kind: 'chess' | 'vanish' | 'cards' | 'royale'; pool: string; opponent: string; result: 'win' | 'loss' | 'draw' | 'aborted'; endedAt: number }>
+  online: boolean
 }
 
 export class ApiError extends Error {
@@ -204,6 +235,8 @@ export const api = {
   leaveClan: () => call<{ ok: boolean }>('/clans/leave', { method: 'POST', body: {} }),
   live: () => call<{ games: LiveGameRow[] }>('/live'),
   modes: () => call<ModesInfo>('/modes'),
+  community: () => call<CommunityInfo>('/community'),
+  player: (id: string) => call<PlayerProfile>(`/players/${encodeURIComponent(id)}`),
   history: (before?: number) => call<{ games: HistoryRow[]; next: number | null }>(`/history${before ? `?before=${before}` : ''}`),
   historyGame: (id: string) => call<HistoryGame>(`/history/${encodeURIComponent(id)}`),
   /** Everything the server holds about you, as JSON. */

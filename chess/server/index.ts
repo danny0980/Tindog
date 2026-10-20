@@ -9,13 +9,23 @@ import { config as loadDotenv } from 'dotenv'
 import { type GoogleVerifier, googleVerifier } from './auth'
 import { createApp } from './app'
 import { scheduleBackups } from './backup'
-import { loadConfig } from './config'
+import { configWarnings, loadConfig } from './config'
 import { createMailer } from './mailer'
 import { Store } from './store'
+import { startWatchdog } from './watchdog'
 
 loadDotenv({ path: 'server/.env', quiet: true })
 const config = loadConfig()
-const store = new Store(config.dataFile)
+for (const w of configWarnings(config)) console.warn(`  ⚠ ${w}`)
+let store: Store
+try {
+  store = new Store(config.dataFile)
+} catch (err) {
+  // Usually the volume isn't mounted, or isn't writable by this user.
+  console.error(`Could not open the database ${config.dataFile ?? '(memory)'}: ${err instanceof Error ? err.message : String(err)}`)
+  console.error('Check that its folder exists and is writable by the server (in Docker: the /data volume).')
+  process.exit(1)
+}
 if (config.legacyDataFile) {
   const imported = store.importLegacyFile(config.legacyDataFile)
   if (imported) console.log(`  imported ${config.legacyDataFile} into SQLite: ${imported.users} users, ${imported.games} games, ${imported.clans} clans (the old file is now ${config.legacyDataFile}.imported)`)
@@ -34,17 +44,34 @@ running.server.listen(config.port, config.host, () => {
 })
 
 let stopping = false
-const shutdown = (): void => {
+/** Closes cleanly (sockets, the database), then exits with `code`; the supervisor restarts a non-zero exit. */
+const shutdown = (code = 0): void => {
   if (stopping) return
   stopping = true
-  console.log('\nShutting down…')
+  console.log(code === 0 ? '\nShutting down…' : 'Restarting after a fatal error…')
   stopBackups()
+  stopWatchdog()
   // Don't hang forever on a stuck connection.
-  setTimeout(() => process.exit(1), 10_000).unref()
+  setTimeout(() => process.exit(code || 1), 10_000).unref()
   void running.close().then(() => {
-    store.close()
-    process.exit(0)
+    try {
+      store.close()
+    } catch {
+      // The database may be what failed; exiting is what matters now.
+    }
+    process.exit(code)
   })
 }
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+// The database stopped answering: exit, so Docker / systemd starts a fresh process.
+const stopWatchdog = config.production ? startWatchdog({ healthy: () => store.healthy(), onDead: (why) => (console.error(`watchdog: ${why}`), shutdown(1)), log: console.warn }) : () => {}
+// A bug that escapes every handler leaves the process in an unknown state: log it and restart.
+process.on('uncaughtException', (err) => {
+  console.error('fatal: uncaught exception', err)
+  shutdown(1)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('fatal: unhandled promise rejection', reason)
+  shutdown(1)
+})
+process.on('SIGINT', () => shutdown(0))
+process.on('SIGTERM', () => shutdown(0))

@@ -74,6 +74,18 @@ export interface RoyaleRecord {
   actions?: unknown[]
 }
 
+/** Community-wide counts for the Community tab. */
+export interface CommunityStats {
+  players: number
+  ratedPlayers: number
+  games: number
+  gamesToday: number
+  activeThisWeek: number
+  clans: number
+  /** Games finished in the last 7 days, per mode. */
+  weekByMode: { chess: number; vanish: number; cards: number; royale: number }
+}
+
 /** A game in progress, saved after every move so a restarted server can resume it. */
 export interface LiveRow {
   id: string
@@ -320,7 +332,7 @@ export class Store {
       leaderboard: db.prepare<[number], UserRow>('SELECT * FROM users WHERE games > 0 ORDER BY rating DESC LIMIT ?'),
       modeRating: db.prepare<[string, string], ModeRating>('SELECT rating, games, wins, losses, draws FROM mode_ratings WHERE user_id = ? AND mode = ?'),
       putModeRating: db.prepare('INSERT OR REPLACE INTO mode_ratings (user_id, mode, rating, games, wins, losses, draws) VALUES (@userId, @mode, @rating, @games, @wins, @losses, @draws)'),
-      modeTable: db.prepare<[string, number], ModeRating & { name: string }>('SELECT u.name, m.rating, m.games, m.wins, m.losses, m.draws FROM mode_ratings m JOIN users u ON u.id = m.user_id WHERE m.mode = ? AND m.games > 0 ORDER BY m.rating DESC LIMIT ?'),
+      modeTable: db.prepare<[string, number], ModeRating & { id: string; name: string }>('SELECT u.id, u.name, m.rating, m.games, m.wins, m.losses, m.draws FROM mode_ratings m JOIN users u ON u.id = m.user_id WHERE m.mode = ? AND m.games > 0 ORDER BY m.rating DESC LIMIT ?'),
       meta: db.prepare<[string], { value: string }>('SELECT value FROM meta WHERE key = ?'),
       putMeta: db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)'),
       seasonRow: db.prepare<[string], SeasonRow>('SELECT games, wins, peak FROM season_rows WHERE user_id = ?'),
@@ -559,6 +571,57 @@ export class Store {
     return this.q.liveAll.all(kind).map((r) => ({ id: r.id, kind, state: JSON.parse(r.state) as unknown, updatedAt: r.updated_at }))
   }
 
+  // ── Community ─────────────────────────────────────────────────────────────
+  /** Counts across the whole community (all from indexed or small tables). */
+  communityStats(now: number): CommunityStats {
+    const one = <T>(sql: string, ...args: Array<string | number>): T => this.db.prepare(sql).get(...args) as T
+    const day = now - 86_400_000
+    const week = now - 7 * 86_400_000
+    const byPool = this.db.prepare<[number], { pool: string; n: number }>('SELECT pool, COUNT(*) AS n FROM games WHERE ended_at > ? GROUP BY pool').all(week)
+    const weekByMode = { chess: 0, vanish: 0, cards: 0, royale: one<{ n: number }>('SELECT COUNT(*) AS n FROM royale_games WHERE ended_at > ?', week).n }
+    for (const r of byPool) weekByMode[r.pool.startsWith('vanish-') ? 'vanish' : r.pool.startsWith('cards-') ? 'cards' : 'chess'] += r.n
+    return {
+      players: one<{ n: number }>('SELECT COUNT(*) AS n FROM users').n,
+      ratedPlayers: one<{ n: number }>('SELECT COUNT(*) AS n FROM users u WHERE u.games > 0 OR EXISTS (SELECT 1 FROM mode_ratings m WHERE m.user_id = u.id AND m.games > 0)').n,
+      games: one<{ n: number }>('SELECT (SELECT COUNT(*) FROM games) + (SELECT COUNT(*) FROM royale_games) AS n').n,
+      gamesToday: one<{ n: number }>('SELECT (SELECT COUNT(*) FROM games WHERE ended_at > ?) + (SELECT COUNT(*) FROM royale_games WHERE ended_at > ?) AS n', day, day).n,
+      activeThisWeek: one<{ n: number }>(
+        `SELECT COUNT(DISTINCT p) AS n FROM (
+           SELECT white AS p FROM games WHERE ended_at > ? UNION SELECT black FROM games WHERE ended_at > ?
+           UNION SELECT j.value FROM royale_games r, json_each(r.seats) j WHERE r.ended_at > ? AND j.value IS NOT NULL)`,
+        week,
+        week,
+        week,
+      ).n,
+      clans: one<{ n: number }>('SELECT COUNT(*) AS n FROM clans').n,
+      weekByMode,
+    }
+  }
+
+  /** Finished weekly tournaments, newest first (from the tournaments table's history). */
+  pastTournaments(limit: number): TournamentState[] {
+    return this.db
+      .prepare<[number], { state: string }>("SELECT state FROM tournaments WHERE status = 'done' ORDER BY seq DESC LIMIT ?")
+      .all(limit)
+      .map((r) => JSON.parse(r.state) as TournamentState)
+  }
+
+  /** Tournament titles per player (who has won the Weekly Knockout most). */
+  titles(): Map<string, number> {
+    const out = new Map<string, number>()
+    for (const t of this.pastTournaments(100_000)) if (t.champion) out.set(t.champion, (out.get(t.champion) ?? 0) + 1)
+    return out
+  }
+
+  /** A player's rank in this season's table (1 = first), or null without a game this season. */
+  seasonRank(userId: string): number | null {
+    const row = this.seasonRow(userId)
+    const user = this.user(userId)
+    if (!row || row.games === 0 || !user) return null
+    const above = this.db.prepare<[number], { n: number }>('SELECT COUNT(*) AS n FROM season_rows s JOIN users u ON u.id = s.user_id WHERE s.games > 0 AND u.rating > ?').get(user.rating)
+    return (above?.n ?? 0) + 1
+  }
+
   // ── Your data: export and deletion ────────────────────────────────────────
   /** Everything stored about a user, for a download. */
   exportUser(userId: string): Record<string, unknown> | null {
@@ -606,7 +669,7 @@ export class Store {
   putModeRating(userId: string, mode: RatedMode, row: ModeRating): void {
     this.q.putModeRating.run({ userId, mode, ...row })
   }
-  modeLeaderboard(mode: RatedMode, limit: number): Array<ModeRating & { name: string }> {
+  modeLeaderboard(mode: RatedMode, limit: number): Array<ModeRating & { id: string; name: string }> {
     return this.q.modeTable.all(mode, limit)
   }
 

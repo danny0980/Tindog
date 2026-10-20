@@ -1,10 +1,63 @@
-# ♞ Chess Arena: AAA Edition (v6.16 · Chronos Chess — Hardened for Launch)
+# ♞ Chess Arena: AAA Edition (v6.17 · Chronos Chess — Release)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.17: release
+
+### The community (Online → League → *Community*, the first tab)
+
+- **The whole player base at a glance.**
+  - Players online now, games live, players active this week, players, games played and clans.
+  - This week's games split by mode (ranked, Vanishing, Card Chess, Battle Royale).
+- **Top players in every mode,** each with its own rating, under one switch.
+- **Hall of champions.** Every Weekly Knockout winner, newest first, and who has won most titles.
+- **The clan war** standings for this week.
+- **Live tournament standings.** The Tournament tab now ranks every entrant: the champion, then whoever got furthest, still in or knocked out, with their seed.
+- **Public player profiles.** Any player's name opens their profile from the community lists, the season table, the tournament, clan members and the mode tables. A profile shows:
+  - whether they are online, and their clan;
+  - their Weekly Knockout titles;
+  - their ratings in all four modes, their tier and their rank this season;
+  - their past seasons and their last 10 games.
+
+  Emails and Google ids are never shown.
+- **The server side.** New routes `GET /api/community` and `GET /api/players/:id`; every list now carries player ids so names can open profiles. A player's season rank is now counted by the database instead of loading the whole table.
+
+### Release infrastructure
+
+- **Stricter settings.**
+  - A malformed `SMTP_URL` stops the server at start-up.
+  - Likely mistakes are warned about: plain-http `PUBLIC_URL` in production, a Google client id of the wrong shape, `MAIL_FROM` at localhost, backups off.
+- **`npm run doctor`** checks a deployment before it goes live: settings, database, built app, backups, and with `--smtp` the mail login.
+- **Self-healing.**
+  - A watchdog exits the process if the database stops answering 3 times in a row.
+  - Uncaught errors are logged, then the server shuts down cleanly and exits with an error.
+  - In both cases Docker (`restart: unless-stopped`) or systemd (new `deploy/chronos-chess.service`) starts a fresh process, and open games come back after it (6.16).
+- **Docker Compose.**
+  - An explicit health check, and Caddy starts only once the game server is healthy.
+  - Caddy's config is kept in a volume, and HTTP/3 (UDP 443) is open.
+  - The server gets 15 seconds to stop cleanly. The file is validated with `docker compose config`.
+- **Crash reports.** Errors in players' browsers reach the server log, with no personal data and only a few per session.
+- **Header layout.** The header no longer spills past the window at 1280 px.
+
+### Already in place from 6.15–6.16
+
+The online special modes this release asked for were built in 6.15: Card Chess (secret draft, server-refereed cards), the Vanishing Chess ranked queues, and Battle Royale for four (computer armies after 20 seconds, the board turned to each player). 6.16 made them survive restarts. The Dockerfile, Caddy and the 35 MB runtime were also built in 6.15.
+
+### Tests
+
+- **`npm run test:community`, 20 checks.**
+  - Standings in every state of a knockout.
+  - Community stats on a real server: counts, this week by mode, the top players per mode, champions and titles, clan standings.
+  - Public profiles, with no private fields.
+  - Player ids in every list.
+  - Crash reports.
+- **`npm run test:storage`, 62 checks.** It now also covers the SMTP validation, the start-up warnings and the watchdog.
 
 ---
 

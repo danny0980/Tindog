@@ -73,3 +73,37 @@ export function roundName(matchesInRound: number): string {
   if (matchesInRound === 4) return 'Quarter-final'
   return `Round of ${matchesInRound * 2}`
 }
+
+/** One entrant's standing in the knockout: how far they got, and whether they are still in. */
+export interface Standing {
+  id: string
+  /** 1 = top seed. */
+  seed: number
+  /** The furthest round they reached ("Semi-final"), or null before the start. */
+  round: string | null
+  status: 'champion' | 'in' | 'out' | 'entered'
+}
+
+/**
+ * The live leaderboard of a knockout: the champion, then whoever got
+ * furthest (players still in before those knocked out in the same round),
+ * then by seed.
+ */
+export function tournamentStandings(t: { entrants: readonly Entrant[]; rounds: readonly BracketMatch[][]; champion: string | null }): Standing[] {
+  const seeds = bySeed(t.entrants)
+  return seeds
+    .map((e, i) => {
+      let reached = -1
+      let out = false
+      t.rounds.forEach((round, r) => {
+        const m = round.find((x) => x.a === e.id || x.b === e.id)
+        if (!m) return
+        reached = r
+        out = m.winner !== null && m.winner !== e.id
+      })
+      const status: Standing['status'] = t.champion === e.id ? 'champion' : reached < 0 ? 'entered' : out ? 'out' : 'in'
+      return { id: e.id, seed: i + 1, reached, round: reached >= 0 ? roundName(t.rounds[reached]!.length) : null, status }
+    })
+    .sort((a, b) => Number(b.status === 'champion') - Number(a.status === 'champion') || b.reached - a.reached || Number(a.status === 'out') - Number(b.status === 'out') || a.seed - b.seed)
+    .map(({ id, seed, round, status }) => ({ id, seed, round, status }))
+}

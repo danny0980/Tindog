@@ -20,7 +20,8 @@ DOMAIN=chess.example.com docker compose -f deploy/docker-compose.yml up -d --bui
 - **Where the data lives.** Both are in the `chess-data` volume, mounted at `/data`:
   - `/data/chess.db` is the database;
   - `/data/backups/` holds the daily backups.
-- **The image itself.** It runs as the unprivileged `node` user, on Node 22. Its runtime `node_modules` holds only the server's packages, about 35 MB. A `HEALTHCHECK` polls `/api/health`.
+- **The image itself.** It runs as the unprivileged `node` user, on Node 22 (`node:22-bookworm-slim`). Its `node_modules` holds only the server's packages, about 35 MB on top of the base image and the built app. A `HEALTHCHECK` polls `/api/health`.
+- **Restarts and readiness.** Both services restart on their own. Caddy waits for the game server's health check before serving, and the server gets 15 seconds to stop cleanly on a deploy.
 
 Without Compose:
 
@@ -41,6 +42,24 @@ NODE_ENV=production npm start
 - **What `npm start` runs.** It runs `node dist-server/index.mjs`, a single bundle of the server and the shared rules code. Only the `dependencies` in `package.json` are needed at runtime.
 - **Browser-only packages.** React, three.js, Stockfish and the rest are `devDependencies`, because they are compiled into `dist/` at build time.
 - **Running from source.** `npm run server:prod` runs the server from source with `tsx` instead, which needs the full install.
+- **Keeping it running.** Run the server under systemd so it restarts after a crash and at boot. `deploy/chronos-chess.service` is a ready unit: it restarts always, sandboxes the process, keeps the database in `/var/lib/chronos-chess`, and sends its log to `journalctl -u chronos-chess`.
+
+## Before going live: `npm run doctor`
+
+```bash
+npm run doctor                          # from source
+node dist-server/cli.mjs doctor --smtp  # in the image; --smtp also logs in to the mail server
+```
+
+It checks everything a deployment needs and exits non-zero if something is wrong:
+- the mode and public address;
+- that the database opens, and its schema version;
+- which sign-in methods are on;
+- that the built app is there;
+- backups;
+- with `--smtp`, that the mail server accepts the login.
+
+It also prints the warnings the server prints when it starts.
 
 ## Settings
 
@@ -59,7 +78,11 @@ Set these in `server/.env` or in the environment. Every setting is documented in
 | `PORT` / `HOST` | no | `8787` / `0.0.0.0` | Where the server listens. |
 | `SESSION_DAYS` | no | `30` | How long a sign-in lasts; a sign-in used in its second half is renewed for the full term. |
 
-The server refuses to start in production without `PUBLIC_URL` and at least one sign-in method.
+The server refuses to start in production without `PUBLIC_URL` and at least one sign-in method, or with an `SMTP_URL` that isn't `smtp://` or `smtps://`. It starts, but warns, when:
+- `PUBLIC_URL` is plain http (Secure cookies would be dropped);
+- the Google client id doesn't end in `.apps.googleusercontent.com`;
+- `MAIL_FROM` still says localhost;
+- backups are off.
 
 ## Security
 
@@ -134,6 +157,15 @@ node dist-server/cli.mjs import /data/db.json   # in the image
   - The Weekly Knockout gives players 3 minutes to reconnect before anyone forfeits.
   - So a deploy (stop, then start the new version) costs players a few seconds of reconnecting, not their games.
 - **Shutting down.** On `SIGTERM` the server stops taking connections, closes the sockets and checkpoints the database. After 10 seconds it exits regardless.
+- **Restarting itself.** Docker's `restart: unless-stopped` and systemd's `Restart=always` start a new process when the old one exits, and three things make it exit on purpose:
+  - **A dead database.** A watchdog checks the database every 30 seconds; after 3 failed checks in a row the process exits with an error.
+  - **Uncaught bugs.** An exception or a rejected promise that nothing handled is logged, the server shuts down cleanly, and it exits with an error.
+  - **Saved games.** Open games are saved on every move, so they come back after the restart.
+- **Docker health.** The image's `HEALTHCHECK` (and the one in `deploy/docker-compose.yml`) polls `/api/health`, and Caddy only starts once the game server reports healthy.
+- **Crash reports from browsers.** When a player's app hits an error, a short report reaches the server log as `client-error [where] message @ page vVERSION | browser`, followed by the stack trace.
+  - It covers errors caught by an error boundary and errors nothing else handled.
+  - It holds no personal data and is limited to a few reports per session and per address.
+  - Failed downloads are left out, as they recover on their own.
 
 ## The app without the server
 

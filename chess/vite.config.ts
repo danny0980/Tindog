@@ -1,6 +1,9 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
+
+const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -8,6 +11,8 @@ export default defineConfig({
   // Capacitor's native WebViews (capacitor://localhost, https://localhost).
   base: './',
   plugins: [react(), tailwindcss()],
+  // The app's version, for crash reports.
+  define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(version) },
   build: {
     target: 'es2022',
     outDir: 'dist',

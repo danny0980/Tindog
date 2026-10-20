@@ -16,6 +16,7 @@ import { LeaguePanel, SpectateView } from '../components/online/League'
 import { CardsOnlineView, OnlineModesPanel, RoyaleOnlineView } from '../components/online/OnlineModes'
 import { AccountDataPanel } from '../components/online/AccountData'
 import { HistoryView } from '../components/online/HistoryView'
+import { PlayerProfileHost } from '../components/online/Community'
 import { type ColorChoice, TIME_CONTROLS, parseRoomCode, trimName } from '../online/protocol'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
@@ -93,6 +94,7 @@ function Lobby({ error, onOpenHistory }: { error: string | null; onOpenHistory: 
         </div>
       </section>
 
+      <PlayerProfileHost />
       <AccountPanel />
       <AccountDataPanel onOpenHistory={onOpenHistory} />
       <FindMatchPanel />

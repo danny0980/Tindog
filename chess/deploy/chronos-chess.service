@@ -1,0 +1,33 @@
+# Chronos Chess as a systemd service (without Docker). Restarts after a crash and at boot.
+#
+#   sudo cp deploy/chronos-chess.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now chronos-chess
+#   journalctl -u chronos-chess -f          (the server's log)
+#
+# Assumes the app is checked out in /opt/chronos-chess, built with `npm ci && npm run build:all`,
+# and configured in /opt/chronos-chess/server/.env. Put Caddy or nginx in front for HTTPS.
+[Unit]
+Description=Chronos Chess game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chess
+WorkingDirectory=/opt/chronos-chess
+Environment=NODE_ENV=production
+Environment=DATABASE_FILE=/var/lib/chronos-chess/chess.db
+ExecStart=/usr/bin/node dist-server/index.mjs
+Restart=always
+RestartSec=3
+# Open games are saved on every move; 15 s is plenty to close sockets and checkpoint the database.
+TimeoutStopSec=15
+StateDirectory=chronos-chess
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/chronos-chess
+
+[Install]
+WantedBy=multi-user.target

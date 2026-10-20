@@ -43,6 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: readonly 
   if (production && !/^https?:\/\/[^/]+$/.test(publicUrl)) throw new Error('PUBLIC_URL must be an origin like https://chess.example.com (no path).')
   const smtpUrl = str(env.SMTP_URL)
   if (production && !smtpUrl && !str(env.GOOGLE_CLIENT_ID)) throw new Error('Set SMTP_URL (email sign-in) and/or GOOGLE_CLIENT_ID (Google sign-in) in production.')
+  if (smtpUrl && !validSmtpUrl(smtpUrl)) throw new Error('SMTP_URL must look like smtp://user:password@host:587 or smtps://user:password@host:465.')
   // DATA_FILE named the JSON file before 6.15: a .json value still works (it is imported into SQLite next to it).
   const dataEnv = str(env.DATABASE_FILE) ?? str(env.DATA_FILE)
   const memory = dataEnv === ':memory:'
@@ -66,4 +67,30 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: readonly 
     backupHours: int(env.BACKUP_HOURS, 24, 1, 24 * 30),
     backupKeep: int(env.BACKUP_KEEP, 7, 1, 365),
   }
+}
+
+/** smtp:// or smtps:// with a host (credentials and port optional). */
+export function validSmtpUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return (u.protocol === 'smtp:' || u.protocol === 'smtps:') && u.hostname.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Settings that work but are probably mistakes, worth a warning at start-up
+ * (and in `npm run db -- doctor`): plain http in production, a Google client
+ * id of the wrong shape, email that says it is from localhost.
+ */
+export function configWarnings(c: Config): string[] {
+  const out: string[] = []
+  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(c.publicUrl)
+  if (c.production && c.publicUrl.startsWith('http://') && !local) out.push('PUBLIC_URL is plain http: sign-in cookies are marked Secure, so browsers will drop them. Use https (Caddy does it for you).')
+  if (c.googleClientId && !c.googleClientId.endsWith('.apps.googleusercontent.com')) out.push('GOOGLE_CLIENT_ID doesn’t end in .apps.googleusercontent.com; Google sign-in will fail.')
+  if (c.production && c.smtpUrl && /localhost/.test(c.mailFrom)) out.push('MAIL_FROM still says localhost; set it to an address on your domain, or sign-in emails may be marked as spam.')
+  if (c.production && !c.dataFile) out.push('The database is in memory: everything is lost when the server stops. Set DATABASE_FILE.')
+  if (c.production && !c.backupDir) out.push('Automatic backups are off (BACKUP_DIR=off).')
+  return out
 }

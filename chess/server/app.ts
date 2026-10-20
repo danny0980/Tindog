@@ -14,6 +14,7 @@ import type { Config } from './config'
 import { MAX_MEMBERS, cleanClanName, cleanTag } from './clans'
 import { Hub } from './hub'
 import { TIERS, seasonEnd, tierFor } from './seasons'
+import { tournamentStandings } from './bracket'
 import { TournamentManager } from './tournaments'
 import type { Mailer } from './mailer'
 import { RATED_MODES, type RatedMode, type Store, type User } from './store'
@@ -57,6 +58,14 @@ function readCookie(header: string | undefined, name: string): string | null {
 const newClanId = (): string => `c${randomBytes(9).toString('hex')}`
 
 const SEAT_COLORS = ['Red', 'Blue', 'Yellow', 'Green'] as const
+
+/** Who else sat at a Battle Royale table: "2 players + 1 computer army". */
+function royaleOpponents(seats: ReadonlyArray<string | null>, me: string): string {
+  const people = seats.filter((s) => s !== null && s !== me).length
+  const bots = seats.filter((s) => s === null).length
+  const p = `${people} ${people === 1 ? 'player' : 'players'}`
+  return bots === 0 ? p : people === 0 ? `${bots} computer armies` : `${p} + ${bots} computer ${bots === 1 ? 'army' : 'armies'}`
+}
 const VERSION = process.env.APP_VERSION ?? process.env.npm_package_version ?? 'dev'
 
 /**
@@ -283,6 +292,19 @@ export function createApp(deps: AppDeps): Running {
     res.json({ games })
   })
 
+  // ── Crash reports from browsers (logged, a few per address) ───────────────
+  const perIpReports = new RateLimiter(20, 10 * 60_000, now)
+  app.post('/api/client-error', (req, res) => {
+    if (!perIpReports.take(`r:${req.ip}`)) return void res.status(429).json({ error: 'Too many reports.' })
+    const b = (req.body ?? {}) as Record<string, unknown>
+    // oxlint-disable-next-line no-control-regex -- stripping control characters keeps the log readable
+    const text = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]+/g, ' ').slice(0, max) : '')
+    const message = text(b.message, 500)
+    if (!message) return void res.status(400).json({ error: 'Nothing to report.' })
+    log(`client-error [${text(b.where, 60)}] ${message} @ ${text(b.url, 200)} v${text(b.version, 20)} | ${text(req.headers['user-agent'], 160)}${b.stack ? `\n  ${text(b.stack, 2000).replace(/ {4}at /g, '\n    at ')}` : ''}`)
+    res.status(204).end()
+  })
+
   // ── Online game history ───────────────────────────────────────────────────
   const name = (id: string | null) => (id ? (store.user(id)?.name ?? 'Deleted player') : null)
   const kindOf = (pool: string): 'chess' | 'vanish' | 'cards' => (pool.startsWith('vanish-') ? 'vanish' : pool.startsWith('cards-') ? 'cards' : 'chess')
@@ -348,12 +370,64 @@ export function createApp(deps: AppDeps): Running {
     res.json({ deleted: true })
   })
 
-  app.get('/api/leaderboard', (_req, res) => void res.json({ players: store.leaderboard(50).map((u) => ({ name: u.name, rating: u.rating, games: u.games })) }))
+  // ── Community: global stats, champions, top players, public profiles ─────
+  app.get('/api/community', (_req, res) => {
+    const war = store.clanWar(now())
+    const titles = [...store.titles().entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+    res.json({
+      stats: store.communityStats(now()),
+      live: hub.stats(),
+      season: { id: store.seasonCurrent() || null, endsAt: store.seasonCurrent() ? seasonEnd(store.seasonCurrent()) : null },
+      top: {
+        chess: store.leaderboard(10).map((u) => ({ id: u.id, name: u.name, rating: u.rating, games: u.games })),
+        ...Object.fromEntries(RATED_MODES.map((m) => [m, store.modeLeaderboard(m, 10).map((r) => ({ id: r.id, name: r.name, rating: r.rating, games: r.games }))])),
+      },
+      champions: store
+        .pastTournaments(10)
+        .filter((t) => t.champion)
+        .map((t) => ({ id: t.id, name: t.name, finishedAt: t.finishedAt, players: t.entrants.length, champion: pub(t.champion) })),
+      titles: titles.map(([id, n]) => ({ player: pub(id), titles: n })).filter((t) => t.player !== null),
+      clans: store
+        .clans()
+        .map((c) => ({ id: c.id, name: c.name, tag: c.tag, members: c.members.length, points: war.points[c.id] ?? 0 }))
+        .sort((a, b) => b.points - a.points || b.members - a.members)
+        .slice(0, 10),
+    })
+  })
+  app.get('/api/players/:id', (req, res) => {
+    const u = store.user(String(req.params.id))
+    if (!u) return void res.status(404).json({ error: 'No such player.' })
+    const clan = store.clanOf(u.id)
+    const recent = [...store.gamesPage(u.id, Number.MAX_SAFE_INTEGER, 10).map((g) => {
+      const side = g.white === u.id ? 'w' : 'b'
+      return { kind: kindOf(g.pool), pool: g.pool, opponent: name(side === 'w' ? g.black : g.white) ?? 'Player', result: g.reason === 'aborted' ? 'aborted' : g.winner === null ? 'draw' : g.winner === side ? 'win' : 'loss', endedAt: g.endedAt }
+    }), ...store.royalePage(u.id, Number.MAX_SAFE_INTEGER, 10).map((r) => {
+      const place = r.ranking.indexOf(r.seats.indexOf(u.id)) + 1
+      return { kind: 'royale' as const, pool: 'royale', opponent: royaleOpponents(r.seats, u.id), result: place === 1 ? 'win' : 'loss', endedAt: r.endedAt }
+    })].sort((a, b) => b.endedAt - a.endedAt).slice(0, 10)
+    const titleList = store.pastTournaments(100_000).filter((t) => t.champion === u.id).map((t) => ({ id: t.id, finishedAt: t.finishedAt, players: t.entrants.length }))
+    res.json({
+      id: u.id,
+      name: u.name,
+      memberSince: u.createdAt,
+      rating: u.rating,
+      tier: tierFor(u.rating).id,
+      record: { games: u.games, wins: u.wins, losses: u.losses, draws: u.draws },
+      modes: Object.fromEntries(RATED_MODES.map((m) => [m, store.modeRating(u.id, m)])),
+      season: { row: store.seasonRow(u.id), rank: store.seasonRank(u.id), history: store.seasonHistory(u.id).slice(0, 6) },
+      clan: clan ? { id: clan.id, name: clan.name, tag: clan.tag } : null,
+      titles: titleList,
+      recent,
+      online: hub.isOnline(u.id),
+    })
+  })
+
+  app.get('/api/leaderboard', (_req, res) => void res.json({ players: store.leaderboard(50).map((u) => ({ id: u.id, name: u.name, rating: u.rating, games: u.games })) }))
 
   // ── Online modes: your ratings and the tables ─────────────────────────────
   app.get('/api/modes', (req, res) => {
     const user = signedIn(req)
-    const table = (mode: RatedMode) => store.modeLeaderboard(mode, 20).map((r) => ({ name: r.name, rating: r.rating, games: r.games, wins: r.wins }))
+    const table = (mode: RatedMode) => store.modeLeaderboard(mode, 20).map((r) => ({ id: r.id, name: r.name, rating: r.rating, games: r.games, wins: r.wins }))
     res.json({
       mine: user ? Object.fromEntries(RATED_MODES.map((m) => [m, store.modeRating(user.id, m)])) : null,
       tables: Object.fromEntries(RATED_MODES.map((m) => [m, table(m)])),
@@ -367,10 +441,10 @@ export function createApp(deps: AppDeps): Running {
   app.get('/api/season', (req, res) => {
     store.rollSeason(now())
     const season = store.seasonCurrent()
-    const table = store.seasonTable(50).map(({ user, row }) => ({ name: user.name, rating: user.rating, tier: tierFor(user.rating).id, games: row.games, wins: row.wins }))
+    const table = store.seasonTable(50).map(({ user, row }) => ({ id: user.id, name: user.name, rating: user.rating, tier: tierFor(user.rating).id, games: row.games, wins: row.wins }))
     const user = signedIn(req)
     const row = user ? store.seasonRow(user.id) : null
-    const rank = user && row ? store.seasonTable(10_000).findIndex((x) => x.user.id === user.id) + 1 : null
+    const rank = user ? store.seasonRank(user.id) : null
     res.json({
       season,
       endsAt: seasonEnd(season),
@@ -384,7 +458,7 @@ export function createApp(deps: AppDeps): Running {
   // ── Weekly tournament ─────────────────────────────────────────────────────
   const pub = (id: string | null) => {
     const u = id ? store.user(id) : null
-    return u ? { name: u.name, rating: u.rating } : null
+    return u ? { id: u.id, name: u.name, rating: u.rating } : null
   }
   app.get('/api/tournament', (req, res) => {
     const t = tournaments.state
@@ -399,6 +473,7 @@ export function createApp(deps: AppDeps): Running {
       joined: user ? t.entrants.some((e) => e.id === user.id) : false,
       rounds: t.rounds.map((r) => r.map((m) => ({ a: pub(m.a), b: pub(m.b), winner: m.winner === null ? null : m.winner === m.a ? 'a' : 'b', gameId: m.winner ? null : m.gameId }))),
       champion: pub(t.champion),
+      standings: tournamentStandings(t).map((s) => ({ ...s, player: pub(s.id) })).filter((s) => s.player !== null),
       previous: t.previous ? { champion: pub(t.previous.champion), players: t.previous.players, finishedAt: t.previous.finishedAt } : null,
     })
   })

@@ -1,3 +1,5 @@
+import type { CinematicMode } from '../cinema/director'
+import type { BattlefieldSetting } from '../cinema/terrain'
 import type { TierId } from '../data/campaign/tiers'
 import type { GameSettings } from './chess'
 import type { GrandRealmId } from './campaign'
@@ -55,6 +57,12 @@ export interface AppSettings {
   focusVolume: number
   /** Arena lighting follows the opponent's alignment; severe checks shake the screen. */
   moodEffects: boolean
+  /** Cinematic camera on big moments: never, key moments (mates, promotions, queens falling) or every highlight. */
+  cinematicCamera: CinematicMode
+  /** The ground the board stands on: from the board theme ('auto'), none, or a chosen terrain. */
+  battlefield: BattlefieldSetting
+  /** Pieces react to the position (trembling king, shining knight, glowing pawn). */
+  pieceReactions: boolean
   // ── Haptics ──
   hapticsEnabled: boolean
   haptics: HapticSettings

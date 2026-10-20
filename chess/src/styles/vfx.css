@@ -348,3 +348,149 @@
     box-shadow: 0 0 0 2px #ef4444, 0 0 36px 0 #ef4444;
   }
 }
+
+/* ── Living pieces (src/cinema/pieceStates.ts) ─────────────────────────────── */
+.vfx-piece-tremble {
+  animation: piece-tremble 0.36s linear infinite;
+}
+.vfx-piece-tremble > * {
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.85));
+}
+.vfx-piece-fork > * {
+  animation: piece-shine 1.6s ease-in-out infinite;
+}
+.vfx-piece-charged > * {
+  animation: piece-charge 1.1s ease-in-out infinite;
+}
+.vfx-piece-warm > * {
+  filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.55));
+}
+@keyframes piece-tremble {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  20% {
+    transform: translate3d(-1.5%, 0.5%, 0) rotate(-1.6deg);
+  }
+  40% {
+    transform: translate3d(1.5%, -0.5%, 0) rotate(1.4deg);
+  }
+  60% {
+    transform: translate3d(-1%, 0, 0) rotate(-1deg);
+  }
+  80% {
+    transform: translate3d(1%, 0.5%, 0) rotate(0.8deg);
+  }
+}
+@keyframes piece-shine {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 3px rgba(125, 211, 252, 0.5)) brightness(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(125, 211, 252, 1)) drop-shadow(0 0 22px rgba(56, 189, 248, 0.6)) brightness(1.18);
+  }
+}
+@keyframes piece-charge {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.7)) brightness(1.05);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(251, 191, 36, 1)) drop-shadow(0 -6px 18px rgba(249, 115, 22, 0.7)) brightness(1.25);
+  }
+}
+
+/* A captured piece crumbles where it stood. */
+.vfx-disintegrate {
+  z-index: 2;
+  animation: piece-disintegrate 0.75s cubic-bezier(0.3, 0, 0.6, 1) forwards;
+  -webkit-mask-image: radial-gradient(circle at 50% 60%, #000 30%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 60%, #000 30%, transparent 72%);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+@keyframes piece-disintegrate {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0) brightness(1.4);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+  60% {
+    opacity: 0.7;
+    filter: blur(1.5px) brightness(1.8) saturate(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18) translateY(-14%);
+    filter: blur(4px) brightness(2) saturate(0);
+    -webkit-mask-size: 30% 30%;
+    mask-size: 30% 30%;
+  }
+}
+
+.board-surface[data-vfx='static'] .vfx-piece,
+.board-surface[data-vfx='static'] .vfx-piece > * {
+  animation: none !important;
+}
+.board-surface[data-vfx='static'] .vfx-disintegrate {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vfx-piece,
+  .vfx-piece > * {
+    animation: none !important;
+  }
+  .vfx-disintegrate {
+    display: none;
+  }
+}
+
+/* ── Cinematic camera (src/components/cinema/CinemaStage.tsx) ──────────────── */
+.cine-dof {
+  -webkit-backdrop-filter: blur(3px) saturate(1.1);
+  backdrop-filter: blur(3px) saturate(1.1);
+  -webkit-mask-image: radial-gradient(circle at var(--fx) var(--fy), transparent 0 16%, rgba(0, 0, 0, 0.55) 30%, #000 52%);
+  mask-image: radial-gradient(circle at var(--fx) var(--fy), transparent 0 16%, rgba(0, 0, 0, 0.55) 30%, #000 52%);
+  background: radial-gradient(circle at var(--fx) var(--fy), transparent 18%, rgba(2, 6, 23, 0.45) 70%);
+  animation: cine-fade var(--cine-ms) ease-in-out both;
+}
+.cine-bar {
+  background: #000;
+  height: 0;
+  animation: cine-bar var(--cine-ms) cubic-bezier(0.3, 0, 0.3, 1) both;
+}
+.cine-caption {
+  animation: cine-fade var(--cine-ms) ease-in-out both;
+  text-shadow: 0 0 12px rgba(251, 191, 36, 0.7);
+}
+@keyframes cine-bar {
+  0%,
+  100% {
+    height: 0;
+  }
+  22%,
+  80% {
+    height: 9%;
+  }
+}
+@keyframes cine-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  78% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cine-dof,
+  .cine-bar,
+  .cine-caption {
+    display: none;
+  }
+}

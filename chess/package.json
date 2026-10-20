@@ -1,7 +1,7 @@
 {
   "name": "chess-arena",
   "private": true,
-  "version": "6.10.0",
+  "version": "6.11.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-stockfish.mjs",
@@ -16,7 +16,7 @@
     "lint": "oxlint",
     "validate:data": "node scripts/validate-data.mjs",
     "generate:puzzles": "node scripts/generate-puzzles.mjs 120",
-    "check": "npm run typecheck && npm run lint && npm run validate:data && npm run test:legends && npm run test:campaign && npm run test:resilience && npm run test:roguelike && npm run test:ultimate && npm run test:cinematic && npm run test:lastgrain && npm run test:online && npm run test:lore && npm run test:variants && npm run test:openings && npm run test:server && npm run test:assets && npm run test:vfx && npm run test:expansion && npm run test:classic && npm run test:history",
+    "check": "npm run typecheck && npm run lint && npm run validate:data && npm run test:legends && npm run test:campaign && npm run test:resilience && npm run test:roguelike && npm run test:ultimate && npm run test:cinematic && npm run test:lastgrain && npm run test:online && npm run test:lore && npm run test:variants && npm run test:openings && npm run test:server && npm run test:assets && npm run test:vfx && npm run test:expansion && npm run test:classic && npm run test:history && npm run test:cinema",
     "preview": "vite preview",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run cap:sync && cap open android",
@@ -41,7 +41,8 @@
     "test:vfx": "node scripts/run-ts-test.mjs tests/vfx.test.ts",
     "test:expansion": "node scripts/run-ts-test.mjs tests/expansion.test.ts",
     "test:classic": "node scripts/run-ts-test.mjs tests/classic.test.ts",
-    "test:history": "node scripts/run-ts-test.mjs tests/history.test.ts"
+    "test:history": "node scripts/run-ts-test.mjs tests/history.test.ts",
+    "test:cinema": "node scripts/run-ts-test.mjs tests/cinema.test.ts"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.3",

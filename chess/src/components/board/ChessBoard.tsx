@@ -14,6 +14,27 @@ import { BoardSquare } from './BoardSquare'
 import { boardVfx, captureSquare, type TileKind } from './boardVfx'
 import { useParticleLayer } from '../fx/useParticleLayer'
 import { squareCenter } from '../../utils/boardGeometry'
+import { type PieceState, pieceStates } from '../../cinema/pieceStates'
+import type { Terrain } from '../../cinema/terrain'
+
+/** The piece on `square` in a FEN, as a piece code ("wQ"), or null. */
+function pieceCodeAt(fen: string, square: Square): string | null {
+  const rows = (fen.split(' ')[0] ?? '').split('/')
+  const row = rows[8 - Number(square[1])]
+  if (!row) return null
+  let file = 0
+  const target = 'abcdefgh'.indexOf(square[0] ?? 'a')
+  for (const ch of row) {
+    if (/\d/.test(ch)) file += Number(ch)
+    else {
+      if (file === target) return `${ch === ch.toUpperCase() ? 'w' : 'b'}${ch.toUpperCase()}`
+      file += 1
+    }
+  }
+  return null
+}
+
+const NO_STATES: ReadonlyMap<Square, PieceState> = new Map()
 
 export interface BoardArrow {
   from: string
@@ -47,6 +68,12 @@ interface ChessBoardProps {
   picker?: BoardPicker | null
   /** Rule-bending moves currently available to the player (Knight's Boot, Vanguard Charge). */
   specialTargets?: ReadonlyArray<{ from: Square; to: Square; kind: string }>
+  /** Pieces react to the position (trembling king, shining knight, glowing pawn). */
+  pieceReactions?: boolean
+  /** The battlefield: captured pieces break up into its particles (sand, snow, spray…). */
+  terrain?: Terrain | null
+  /** Piece animation time override (the cinematic camera's slow motion). */
+  slowMo?: number | null
   children?: ReactNode
 }
 
@@ -95,6 +122,9 @@ export function ChessBoard({
   arena = null,
   picker = null,
   specialTargets,
+  pieceReactions = false,
+  terrain = null,
+  slowMo = null,
   children,
 }: ChessBoardProps) {
   // Selection is tied to the position it was made in, so it clears itself whenever the FEN changes.
@@ -262,15 +292,24 @@ export function ChessBoard({
       }),
     [arena, inCheck, lastMove, mate, position, selected],
   )
-  const [capture, setCapture] = useState<{ id: number; square: Square } | null>(null)
+  const [capture, setCapture] = useState<{ id: number; square: Square; piece: string | null } | null>(null)
+  const states = useMemo(() => (pieceReactions && !lowPower ? pieceStates(fen) : NO_STATES), [fen, lowPower, pieceReactions])
+  const terrainRef = useRef(terrain)
+  useEffect(() => {
+    terrainRef.current = terrain
+  }, [terrain])
   const prevFenRef = useRef<string | null>(null)
   const reducedMotion = useMemo(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const { canvasRef: sparkCanvasRef, burst: burstSparks } = useParticleLayer(160, lowPower || reducedMotion)
   useEffect(() => {
-    const square = captureSquare(prevFenRef.current, fen, lastMove)
+    const prev = prevFenRef.current
+    const square = captureSquare(prev, fen, lastMove)
     prevFenRef.current = fen
-    if (!square) return
-    setCapture((c) => ({ id: (c?.id ?? 0) + 1, square }))
+    if (!square || !prev) return
+    // The victim (en passant: a pawn of the side that just lost one).
+    const victim = pieceCodeAt(prev, square) ?? `${(fen.split(' ')[1] ?? 'w') === 'w' ? 'w' : 'b'}P`
+    setCapture((c) => ({ id: (c?.id ?? 0) + 1, square, piece: victim }))
+    const shatter = terrainRef.current?.shatter
     const at = squareCenter(square, orientation)
     burstSparks((system, size) => {
       const cell = size.w / 8
@@ -278,15 +317,23 @@ export function ChessBoard({
       const y = (at.y / 100) * size.h
       system.emit('shard', 16, { x, y, spread: cell * 2.4, life: 0.7, size: cell * 0.06, vy: -cell * 1.5 })
       system.emit('spark', 22, { x, y, spread: cell * 3, life: 0.5, size: cell * 0.035 })
+      // The piece crumbles into the battlefield's own particles.
+      if (shatter) system.emit(shatter, 34, { x, y: y - cell * 0.1, spread: cell * 1.6, life: 1.1, size: cell * 0.045, vy: -cell * 0.6 })
     })
   }, [burstSparks, fen, lastMove, orientation])
   const squareRenderer = useCallback(
     ({ square, children }: { square: string; children?: ReactNode }) => (
-      <BoardSquare style={squareStyles[square]} vfx={isSquare(square) ? vfx.get(square) : undefined} captureKey={capture?.square === square ? capture.id : null}>
+      <BoardSquare
+        style={squareStyles[square]}
+        vfx={isSquare(square) ? vfx.get(square) : undefined}
+        state={isSquare(square) ? states.get(square) : undefined}
+        captureKey={capture?.square === square ? capture.id : null}
+        ghost={capture?.square === square && capture.piece && !lowPower ? pieces[capture.piece]?.() : null}
+      >
         {children}
       </BoardSquare>
     ),
-    [capture, squareStyles, vfx],
+    [capture, lowPower, pieces, squareStyles, states, vfx],
   )
 
   const boardArrows = useMemo<Arrow[]>(
@@ -307,7 +354,7 @@ export function ChessBoard({
       showNotation: showCoordinates,
       allowDragging: movableColor !== null && !picker,
       allowDrawingArrows: true,
-      animationDurationInMs: lowPower ? 0 : 200,
+      animationDurationInMs: lowPower ? 0 : (slowMo ?? 200),
       showAnimations: !lowPower,
       dragActivationDistance: 4,
       canDragPiece: ({ square }: PieceHandlerArgs) => !picker && isSquare(square) && canMoveFrom(square),
@@ -340,6 +387,7 @@ export function ChessBoard({
       picker,
       pieces,
       showCoordinates,
+      slowMo,
       squareStyles,
       squareRenderer,
       boardSkin,

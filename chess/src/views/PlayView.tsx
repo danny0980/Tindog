@@ -15,7 +15,12 @@ import { EvalBar } from '../components/board/EvalBar'
 import { CampaignBattleStrip } from '../components/campaign/CampaignBattleStrip'
 import { SpellHud } from '../components/campaign/SpellHud'
 import { ArenaBar } from '../components/roguelike/ArenaBar'
-import { KillCamStage } from '../components/roguelike/KillCam'
+import { Battlefield } from '../components/cinema/Battlefield'
+import { HighlightReelModal } from '../components/cinema/HighlightReelModal'
+import { solidOf } from '../cinema/reelRenderer'
+import { CinemaStage } from '../components/cinema/CinemaStage'
+import { shotsFor } from '../cinema/director'
+import { terrainFor } from '../cinema/terrain'
 import { MoodBackdrop } from '../components/roguelike/MoodBackdrop'
 import { WeatherOverlay } from '../components/roguelike/WeatherOverlay'
 import { SpellParticles } from '../components/fx/SpellParticles'
@@ -92,6 +97,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const [guideOpen, setGuideOpen] = useState(false)
   const [interviewing, setInterviewing] = useState<ClassicCharacter | null>(null)
   const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null)
+  const [reelOpen, setReelOpen] = useState(false)
   const beatenClassics = useBeatenClassics()
   // Game key whose time-travel intro has already played.
   const [warpFor, setWarpFor] = useState<string | null>(null)
@@ -117,6 +123,18 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
     playFx(boardFxRef.current, 'quake')
     playFx(boardLensRef.current, 'chroma')
   }, [game.severeCheck, moodFx])
+  // Cinematic camera: a shot for the move just played (each plays once), with slow motion while it runs.
+  const reducedMotion = useMemo(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const cinemaMode = settings.batterySaver || reducedMotion ? 'off' : settings.cinematicCamera
+  const shots = useMemo(() => shotsFor(game.history, cinemaMode), [cinemaMode, game.history])
+  const [playedShots, setPlayedShots] = useState<readonly string[]>([])
+  const candidate = active && timeMachine.isLive && !game.review && total > 0 ? (shots[total - 1] ?? null) : null
+  const shotKey = candidate ? `${game.gameKey}|${candidate.id}` : null
+  const shot = candidate && shotKey && !playedShots.includes(shotKey) ? candidate : null
+  const onShotDone = useCallback(() => {
+    if (shotKey) setPlayedShots((p) => (p.includes(shotKey) ? p : [...p.slice(-40), shotKey]))
+  }, [shotKey])
+  const terrain = useMemo(() => terrainFor(settings.battlefield, game.theme.id), [game.theme.id, settings.battlefield])
   const mateCam = game.killCam?.id ?? null
   useEffect(() => {
     if (moodFx && mateCam !== null) playFx(boardLensRef.current, 'chroma')
@@ -230,6 +248,11 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   }, [game.lastMove, game.result, timeMachine.isLive])
 
   const analysisMoves = game.analysis.status === 'done' ? game.analysis.analysis.moves : null
+  const reelLook = useMemo(
+    () => ({ light: solidOf(game.theme.lightSquare.background, '#ecd3a8'), dark: solidOf(game.theme.darkSquare.background, '#a8744a'), accent: game.theme.accent }),
+    [game.theme],
+  )
+  const reelClasses = useMemo(() => (analysisMoves ?? []).map((m) => m.classification), [analysisMoves])
   const currentMoveAnalysis = analysisMoves?.[timeMachine.displayPly - 1] ?? null
   const arrows = game.bestMoveArrow && !fog ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
 
@@ -257,7 +280,8 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
     <div ref={boardFxRef} className="flex items-stretch gap-2">
       {showEval && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
       <div ref={boardLensRef} className="min-w-0 flex-1">
-        <KillCamStage cam={game.killCam} orientation={game.orientation}>
+        <Battlefield terrain={terrain} lowPower={settings.batterySaver}>
+        <CinemaStage shot={shot} orientation={game.orientation} mateCaption={game.killCam?.caption ?? null} youWon={game.killCam?.youWon ?? true} onDone={onShotDone}>
         <ChessBoard
           id="play-board"
           fen={game.fen}
@@ -275,15 +299,19 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           arena={game.arena}
           picker={game.picker}
           specialTargets={game.specialTargets}
+          pieceReactions={settings.pieceReactions}
+          terrain={terrain}
+          slowMo={shot?.slowMo ?? null}
         >
           {game.effects && game.battle && !game.review && <WeatherOverlay weather={game.effects.weather} lowPower={settings.batterySaver} />}
           <SpellParticles fx={game.boardFx} orientation={game.orientation} frozen={game.arena?.frozen ?? NO_SQUARES} lowPower={settings.batterySaver} />
-          {hologram && !settings.batterySaver && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
+          {hologram && !settings.batterySaver && candidate?.kind !== 'mate' && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
           {game.spellFlash && !settings.batterySaver && timeMachine.isLive && (
             <BoardHologram key={`spell-${game.spellFlash.id}`} text={game.spellFlash.text} tone={game.spellFlash.tone} />
           )}
         </ChessBoard>
-        </KillCamStage>
+        </CinemaStage>
+        </Battlefield>
       </div>
     </div>
   )
@@ -553,6 +581,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         opponent={game.persona ? { spec: game.persona.portrait, label: game.persona.name } : null}
         lesson={classicLesson}
         history={classicHistory}
+        onReel={() => {
+          game.dismissGameOver()
+          setReelOpen(true)
+        }}
         isAiMode={game.isAiMode}
         moveCount={total}
         onNewGame={openNewGame}
@@ -569,6 +601,23 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         onAnalyze={game.requestAnalysis}
         onShare={() => void share()}
       />
+      {reelOpen && (
+        <HighlightReelModal
+          open
+          onClose={() => setReelOpen(false)}
+          history={game.history}
+          classes={reelClasses}
+          info={{
+            white: game.players.w.name,
+            black: game.players.b.name,
+            result: game.result ? (game.result.kind === 'draw' ? '½–½' : game.result.winner === 'w' ? '1–0' : '0–1') : '',
+            finalFen: game.fen,
+            orientation: game.orientation,
+          }}
+          look={reelLook}
+          pieceSet={pieceSet}
+        />
+      )}
       <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
       <Modal open={quiz !== null} title="History quiz" onClose={() => setQuiz(null)}>
         {quiz && <QuizPanel questions={quiz} onDone={() => undefined} />}

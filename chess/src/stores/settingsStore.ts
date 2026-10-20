@@ -1,3 +1,4 @@
+import { TERRAIN_IDS } from '../cinema/terrain'
 import { isClassicId } from '../data/classic/roster'
 import { isTierId } from '../data/campaign/tiers'
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
@@ -51,6 +52,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   focusTrack: 'off',
   focusVolume: 0.5,
   moodEffects: true,
+  cinematicCamera: 'key',
+  battlefield: 'auto',
+  pieceReactions: true,
   hapticsEnabled: true,
   haptics: DEFAULT_HAPTICS,
   oneHanded: false,
@@ -123,6 +127,9 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     focusTrack: oneOf(s.focusTrack, ['off', 'rain', 'fireplace', 'cosmic'], d.focusTrack),
     focusVolume: num(s.focusVolume, d.focusVolume, 0, 1),
     moodEffects: bool(s.moodEffects, d.moodEffects),
+    cinematicCamera: oneOf(s.cinematicCamera, ['off', 'key', 'all'], d.cinematicCamera),
+    battlefield: oneOf(s.battlefield, ['auto', 'off', ...TERRAIN_IDS], d.battlefield),
+    pieceReactions: bool(s.pieceReactions, d.pieceReactions),
     uiSoundsEnabled: bool(s.uiSoundsEnabled, d.uiSoundsEnabled),
     uiVolume: num(s.uiVolume, d.uiVolume, 0, 1),
     soundMaterial: oneOf(s.soundMaterial, SOUND_MATERIALS, d.soundMaterial),

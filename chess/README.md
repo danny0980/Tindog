@@ -1,10 +1,52 @@
-# ♞ Chess Arena: AAA Edition (v6.10 · Chronos Chess — Living History)
+# ♞ Chess Arena: AAA Edition (v6.11 · Chronos Chess — Cinematic Board)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.11: the cinematic board (Phase A of the overkill roadmap)
+
+The full 20-feature plan, with modules, tests and risks for Phases B–D, is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+### Live cinematic camera (Settings → Display → Cinematics)
+
+- **When it fires.** Big moments get a camera shot: checkmate, promotions, and a queen falling (*Key moments*, the default). *Every highlight* adds other winning captures and checks.
+- **What a shot does:**
+  - pushes in with a 3D tilt and roll, keeping the action in frame;
+  - slows the pieces down;
+  - blurs everything except the focus (depth of field);
+  - drops letterbox bars with a caption;
+  - snaps back to the board.
+- **Never in the way.** The camera rests at least 3 plies between ordinary shots, a tap on the board cuts a shot short, and it is off in battery saver and with reduced motion.
+- **Code.** The director (`src/cinema/director.ts`) is pure and unit-tested. `CinemaStage` plays the shots and replaces the old 2D kill-cam.
+
+### Living battlefields and living pieces
+
+- **Terrains.** The board stands on a terrain: Egyptian sand, Russian snow, pirate sea, old forest, burning field or starfield. Its particles drift across the board. *Match the board* picks the terrain from the board theme, and you can also choose one or turn it off.
+- **Captures.** A captured piece dissolves where it stood and breaks into the terrain's particles (sand, frost, spray, embers…).
+- **Living pieces.** A king in check trembles, a knight forking two big pieces shines, and a pawn one or two steps from promotion glows. The rules live in `src/cinema/pieceStates.ts`. You can switch this off in Settings.
+
+### Automatic highlight reels
+
+- **Making the reel.** At the end of a game, **Highlight reel** picks up to five moments and turns them into a film of 30 seconds or less: a title card, each move in slow motion with a caption, then the final position. Moments are:
+  - mates;
+  - sacrifices;
+  - big captures;
+  - promotions;
+  - *Brilliant* moves, once the game has been analysed.
+- **How it is drawn.** The film is drawn on a canvas with the board's own pieces and colours.
+- **Saving and sharing.** **Save video** records it in real time and downloads it: MP4 where the browser can write it, WebM otherwise. **Share** is offered where the device supports sharing files.
+
+### Tests
+
+`npm run test:cinema` covers 45 checks:
+- **Camera:** the shot choice and cooldown, and framing on every square (the focus always clears the letterbox).
+- **Board:** piece states, terrains, particle drift and the new settings.
+- **Reels:** highlight picking (the Opera Game's mate and Morphy's sacrifices) and the reel's timeline.
 
 ---
 

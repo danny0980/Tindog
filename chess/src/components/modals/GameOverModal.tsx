@@ -1,4 +1,4 @@
-import { Brain, Coins, Crown, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Brain, Coins, Crown, Film, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
@@ -31,9 +31,11 @@ interface GameOverModalProps {
   lesson?: { name: string; fact: string } | null
   /** After beating a Classic character: interview them, or take a quick history quiz. */
   history?: { name: string; onInterview: () => void; onQuiz: () => void } | null
+  /** Opens the automatic highlight reel. */
+  onReel?: (() => void) | null
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -82,9 +84,16 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               </Button>
             </div>
           ) : null}
-          <Button variant={summary.campaign || summary.gauntlet || summary.arena ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
-            Analyze game
-          </Button>
+          <div className={onReel ? 'grid grid-cols-2 gap-2' : ''}>
+            <Button variant={summary.campaign || summary.gauntlet || summary.arena ? 'secondary' : 'primary'} className="w-full" onClick={onAnalyze} icon={<Microscope className="size-4" />}>
+              Analyze game
+            </Button>
+            {onReel && (
+              <Button className="w-full" onClick={onReel} icon={<Film className="size-4" />} data-gameover-reel>
+                Highlight reel
+              </Button>
+            )}
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <Button size="sm" onClick={onReview} icon={<Eye className="size-4" />}>
               Board

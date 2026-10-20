@@ -1,5 +1,6 @@
 import {
   Clapperboard,
+  Crown,
   BatteryLow,
   BatteryMedium,
   Gauge,
@@ -22,6 +23,9 @@ import { settingsStore, updateSettings } from '../../stores/settingsStore'
 import { showToast } from '../../stores/toastStore'
 import { openIntro } from '../../stores/introStore'
 import { AudioPanel } from '../settings/AudioPanel'
+import { TERRAINS, TERRAIN_IDS } from '../../cinema/terrain'
+import type { BattlefieldSetting } from '../../cinema/terrain'
+import type { CinematicMode } from '../../cinema/director'
 import { HapticsPanel } from '../settings/HapticsPanel'
 import { Section } from '../settings/Section'
 import { ArtPackPicker } from '../settings/ArtPackPicker'
@@ -44,6 +48,18 @@ const TABS: ReadonlyArray<{ id: Tab; label: string; icon: typeof Volume2 }> = [
   { id: 'display', label: 'Display', icon: Palette },
   { id: 'audio', label: 'Audio', icon: Volume2 },
   { id: 'haptics', label: 'Haptics', icon: Vibrate },
+]
+
+const CAMERA_MODES: ReadonlyArray<{ id: CinematicMode; label: string }> = [
+  { id: 'off', label: 'Off' },
+  { id: 'key', label: 'Key moments' },
+  { id: 'all', label: 'Every highlight' },
+]
+
+const BATTLEFIELDS: ReadonlyArray<{ id: BattlefieldSetting; label: string }> = [
+  { id: 'auto', label: 'Match the board' },
+  { id: 'off', label: 'None' },
+  ...TERRAIN_IDS.map((id) => ({ id, label: TERRAINS[id].name })),
 ]
 
 export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps) {
@@ -195,6 +211,50 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
               <button type="button" onClick={onOpenShop} className="mt-2 text-xs font-semibold text-accent hover:underline">
                 Unlock more in the shop →
               </button>
+            </Section>
+            <Section title="Cinematics">
+              <div className="mb-1 text-sm font-medium text-slate-100">Cinematic camera</div>
+              <p className="mb-2 text-xs text-slate-500">The camera pushes in on big moments in slow motion, then snaps back. Tap the board to cut it short.</p>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Cinematic camera">
+                {CAMERA_MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={settings.cinematicCamera === m.id}
+                    data-camera-mode={m.id}
+                    onClick={() => updateSettings({ cinematicCamera: m.id })}
+                    className={`min-h-12 rounded-xl border p-2 text-xs font-semibold transition sm:text-sm ${settings.cinematicCamera === m.id ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 mb-1 text-sm font-medium text-slate-100">Battlefield</div>
+              <p className="mb-2 text-xs text-slate-500">The ground under the board. Captured pieces crumble into it.</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Battlefield">
+                {BATTLEFIELDS.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={settings.battlefield === b.id}
+                    data-battlefield-choice={b.id}
+                    onClick={() => updateSettings({ battlefield: b.id })}
+                    className={`min-h-11 rounded-xl border p-2 text-xs font-semibold transition ${settings.battlefield === b.id ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              <Toggle
+                label="Living pieces"
+                description="A king in check trembles, a forking knight shines, a pawn near promotion glows"
+                icon={<Crown className="size-5" />}
+                checked={settings.pieceReactions}
+                onChange={(v) => updateSettings({ pieceReactions: v })}
+              />
+              {settings.batterySaver && <p className="text-xs text-amber-200/80">Battery saver is on: the camera and battlefield particles are paused.</p>}
             </Section>
             <Section title="Board">
               <Toggle label="Advantage bar" description="Live Stockfish evaluation" icon={<Gauge className="size-5" />} checked={settings.showEvalBar} onChange={(v) => updateSettings({ showEvalBar: v })} />

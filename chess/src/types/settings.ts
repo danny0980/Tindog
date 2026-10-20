@@ -1,4 +1,5 @@
 import type { CinematicMode } from '../cinema/director'
+import type { CoachMode } from '../coach/patterns'
 import type { BattlefieldSetting } from '../cinema/terrain'
 import type { TierId } from '../data/campaign/tiers'
 import type { GameSettings } from './chess'
@@ -63,6 +64,8 @@ export interface AppSettings {
   battlefield: BattlefieldSetting
   /** Pieces react to the position (trembling king, shining knight, glowing pawn). */
   pieceReactions: boolean
+  /** Predictive coach: warn before a move that walks into a trap — only ones that have cost you before ('mine'), any, or never. */
+  coachWarnings: CoachMode
   // ── Haptics ──
   hapticsEnabled: boolean
   haptics: HapticSettings
@@ -86,4 +89,4 @@ export interface AppSettings {
   grandRealm: GrandRealmId
 }
 
-export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament' | 'classic' | 'variants' | 'openings' | 'battles' | 'museum' | 'quiz'
+export type LegendsScreen = 'select' | CampaignId | 'freeplay' | 'grand' | 'gauntlet' | 'tournament' | 'classic' | 'variants' | 'openings' | 'battles' | 'museum' | 'quiz' | 'ghost'

@@ -26,6 +26,7 @@ import { AudioPanel } from '../settings/AudioPanel'
 import { TERRAINS, TERRAIN_IDS } from '../../cinema/terrain'
 import type { BattlefieldSetting } from '../../cinema/terrain'
 import type { CinematicMode } from '../../cinema/director'
+import type { CoachMode } from '../../coach/patterns'
 import { HapticsPanel } from '../settings/HapticsPanel'
 import { Section } from '../settings/Section'
 import { ArtPackPicker } from '../settings/ArtPackPicker'
@@ -54,6 +55,12 @@ const CAMERA_MODES: ReadonlyArray<{ id: CinematicMode; label: string }> = [
   { id: 'off', label: 'Off' },
   { id: 'key', label: 'Key moments' },
   { id: 'all', label: 'Every highlight' },
+]
+
+const COACH_MODES: ReadonlyArray<{ id: CoachMode; label: string }> = [
+  { id: 'off', label: 'Off' },
+  { id: 'mine', label: 'My usual traps' },
+  { id: 'all', label: 'Every trap' },
 ]
 
 const BATTLEFIELDS: ReadonlyArray<{ id: BattlefieldSetting; label: string }> = [
@@ -255,6 +262,24 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                 onChange={(v) => updateSettings({ pieceReactions: v })}
               />
               {settings.batterySaver && <p className="text-xs text-amber-200/80">Battery saver is on: the camera and battlefield particles are paused.</p>}
+            </Section>
+            <Section title="Predictive coach">
+              <p className="mb-2 text-xs text-slate-500">Before a move that walks into a hanging piece, a mate in one or a knight fork, the coach stops you once and asks.</p>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Predictive coach">
+                {COACH_MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={settings.coachWarnings === m.id}
+                    data-coach-mode={m.id}
+                    onClick={() => updateSettings({ coachWarnings: m.id })}
+                    className={`min-h-12 rounded-xl border p-2 text-xs font-semibold transition sm:text-sm ${settings.coachWarnings === m.id ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </Section>
             <Section title="Board">
               <Toggle label="Advantage bar" description="Live Stockfish evaluation" icon={<Gauge className="size-5" />} checked={settings.showEvalBar} onChange={(v) => updateSettings({ showEvalBar: v })} />

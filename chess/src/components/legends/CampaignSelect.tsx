@@ -1,4 +1,4 @@
-import { Brain, ChevronRight, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
+import { Brain, ChevronRight, Ghost, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { LESSONS } from '../../openings/lessons'
 import { profileStore } from '../../stores/profileStore'
@@ -88,6 +88,15 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         title="History Quiz"
         text="Who is this? True facts about the people of Classic Chess"
         glow="from-fuchsia-300 via-purple-500 to-indigo-700"
+      />
+      <PathTile
+        path="ghost"
+        onOpen={() => onOpen('ghost')}
+        icon={<Ghost className="size-6" />}
+        kicker="AI · your mirror"
+        title="Ghost of Yourself"
+        text="An opponent built from your own games and habits"
+        glow="from-indigo-300 via-violet-500 to-slate-800"
       />
       <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-violet-200 lg:col-span-3" data-section="fantasy">
         Fantasy campaign modes · spells, relics &amp; arena rules

@@ -44,6 +44,8 @@ export interface GameSettings {
   bossId: BossId | null
   /** Classic Chess opponent (AI mode): pure chess, no spells. Below boss and legend in precedence. */
   classicId: string | null
+  /** Ghost of Yourself: the AI plays your own openings and style (AI mode, below Classic). */
+  ghost: boolean
 }
 
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient'

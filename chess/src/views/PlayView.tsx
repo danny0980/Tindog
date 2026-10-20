@@ -1,4 +1,4 @@
-import { Download, History, Share2, X } from 'lucide-react'
+import { BrainCircuit, Download, GitBranch, GraduationCap, History, Share2, X } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
@@ -16,6 +16,11 @@ import { CampaignBattleStrip } from '../components/campaign/CampaignBattleStrip'
 import { SpellHud } from '../components/campaign/SpellHud'
 import { ArenaBar } from '../components/roguelike/ArenaBar'
 import { Battlefield } from '../components/cinema/Battlefield'
+import { BrainPanel } from '../components/brain/BrainPanel'
+import { WhatIfModal } from '../components/whatif/WhatIfModal'
+import { brainArrows } from '../brain/brain'
+import { useBrain } from '../brain/useBrain'
+import { type CoachProfile, type Warning, coachProfile, detect, historyNote, warningsFor } from '../coach/patterns'
 import { HighlightReelModal } from '../components/cinema/HighlightReelModal'
 import { solidOf } from '../cinema/reelRenderer'
 import { CinemaStage } from '../components/cinema/CinemaStage'
@@ -88,6 +93,12 @@ function buildShareSummary(game: GameController): string {
 const NO_SQUARES: readonly Square[] = []
 
 const SWIPE_LABELS: Record<SwipeDirection, string> = { left: 'Undo', right: 'Board flipped', up: 'Moves', down: 'Menu' }
+
+/** Coach profiles by match list (the list is replaced, never mutated, when a game is saved). */
+const coachCache = new WeakMap<object, CoachProfile>()
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+/** Plies between two coach warnings, so it never nags. */
+const COACH_GAP = 6
 
 export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
@@ -171,7 +182,47 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
     [game, onNewGameOpenChange],
   )
 
-  const onMove = useCallback((move: MoveInput) => game.applyMove(move) !== null, [game])
+  // Predictive coach: learns which traps cost you in your saved games (off the main thread of rendering).
+  const savedMatches = useStore(profileStore, (p) => p.matches)
+  const [coachProf, setCoachProf] = useState<CoachProfile | null>(null)
+  useEffect(() => {
+    if (settings.coachWarnings === 'off') return
+    const t = window.setTimeout(() => {
+      let prof = coachCache.get(savedMatches)
+      if (!prof) {
+        prof = coachProfile(savedMatches)
+        coachCache.set(savedMatches, prof)
+      }
+      setCoachProf(prof)
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [savedMatches, settings.coachWarnings])
+  const [coachWarning, setCoachWarning] = useState<{ fen: string; move: MoveInput; warnings: Warning[] } | null>(null)
+  const [lastWarnPly, setLastWarnPly] = useState(-COACH_GAP)
+  const onMove = useCallback(
+    (move: MoveInput) => {
+      const mode = settings.coachWarnings
+      if (mode !== 'off' && coachProf && timeMachine.isLive && !game.review && total - lastWarnPly >= COACH_GAP) {
+        const found = warningsFor(detect(game.fen, move), coachProf, mode)
+        if (found.length > 0) {
+          setCoachWarning({ fen: game.fen, move, warnings: found })
+          setLastWarnPly(total)
+          return false
+        }
+      }
+      setCoachWarning(null)
+      return game.applyMove(move) !== null
+    },
+    [coachProf, game, lastWarnPly, settings.coachWarnings, timeMachine.isLive, total],
+  )
+  const coachShown = coachWarning && coachWarning.fen === game.fen ? coachWarning : null
+
+  // Engine brain on the main board, and the What-If sandbox. In a rated game in progress both need your OK (the game turns casual).
+  const [brainOn, setBrainOn] = useState(false)
+  const [whatIfOpen, setWhatIfOpen] = useState(false)
+  const engineLocked = game.isAiMode && game.status.kind === 'playing' && !game.review && !game.casual
+  const brainLive = brainOn && !engineLocked && active
+  const brain = useBrain(game.fen, brainLive)
   const onPickup = useCallback(() => sfx.pickup(), [])
 
   const share = useCallback(async () => {
@@ -254,7 +305,8 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   )
   const reelClasses = useMemo(() => (analysisMoves ?? []).map((m) => m.classification), [analysisMoves])
   const currentMoveAnalysis = analysisMoves?.[timeMachine.displayPly - 1] ?? null
-  const arrows = game.bestMoveArrow && !fog ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
+  const hintArrows = game.bestMoveArrow && !fog ? [{ ...game.bestMoveArrow, color: 'rgba(132, 204, 22, 0.85)' }] : []
+  const arrows = brainLive ? [...hintArrows, ...brainArrows(brain.state)] : hintArrows
 
   const renderPlayer = (color: Color, hideClock = false) => {
     const character = game.players[color].character
@@ -306,6 +358,30 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           {game.effects && game.battle && !game.review && <WeatherOverlay weather={game.effects.weather} lowPower={settings.batterySaver} />}
           <SpellParticles fx={game.boardFx} orientation={game.orientation} frozen={game.arena?.frozen ?? NO_SQUARES} lowPower={settings.batterySaver} />
           {hologram && !settings.batterySaver && candidate?.kind !== 'mate' && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
+          {coachShown && (
+            <div className="absolute inset-x-2 bottom-2 z-40 rounded-2xl border border-amber-300/50 bg-ink-950/90 p-3 text-sm text-amber-50 shadow-2xl backdrop-blur" role="alert" data-coach-warning={coachShown.warnings[0]?.pattern}>
+              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
+                <GraduationCap className="size-3.5" /> Coach
+              </div>
+              <p>{coachShown.warnings[0]?.text}</p>
+              {coachProf && coachShown.warnings[0] && historyNote(coachShown.warnings[0], coachProf) && <p className="mt-0.5 text-xs text-amber-100/80">{historyNote(coachShown.warnings[0], coachProf)}</p>}
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Button size="sm" variant="primary" onClick={() => setCoachWarning(null)} data-coach-rethink>
+                  Rethink
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setCoachWarning(null)
+                    game.applyMove(coachShown.move)
+                  }}
+                  data-coach-play
+                >
+                  Play it anyway
+                </Button>
+              </div>
+            </div>
+          )}
           {game.spellFlash && !settings.batterySaver && timeMachine.isLive && (
             <BoardHologram key={`spell-${game.spellFlash.id}`} text={game.spellFlash.text} tone={game.spellFlash.tone} />
           )}
@@ -351,6 +427,27 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const reviewTools = (defaultOpen: boolean): ReactNode => (
     <>
       <TimeMachine machine={timeMachine} total={total} />
+      <div className="glass space-y-2 rounded-2xl p-3" data-mind-tools>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            size="sm"
+            variant={brainOn ? 'primary' : 'secondary'}
+            onClick={() => {
+              if (!brainOn && engineLocked) game.makeCasual('The engine brain')
+              setBrainOn(!brainOn)
+            }}
+            icon={<BrainCircuit className="size-4" />}
+            data-brain-toggle
+          >
+            {brainOn ? 'Hide brain' : 'Engine brain'}
+          </Button>
+          <Button size="sm" onClick={() => setWhatIfOpen(true)} icon={<GitBranch className="size-4" />} data-whatif-open>
+            What if…?
+          </Button>
+        </div>
+        {!brainOn && engineLocked && <p className="text-[11px] text-slate-500">Rated game in progress: the engine brain makes it unrated.</p>}
+        {brainLive && <BrainPanel state={brain.state} status={brain.status} />}
+      </div>
       <AnalysisPanel
         state={game.analysis}
         available={game.analysisAvailable}
@@ -618,6 +715,19 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           pieceSet={pieceSet}
         />
       )}
+      <WhatIfModal
+        open={whatIfOpen}
+        onClose={() => setWhatIfOpen(false)}
+        history={game.history}
+        startFen={game.history[0]?.before ?? START_FEN}
+        rootPly={timeMachine.displayPly}
+        orientation={game.orientation}
+        theme={game.theme}
+        pieceSet={pieceSet}
+        lowPower={settings.batterySaver}
+        engineLocked={engineLocked}
+        onUnlockEngine={() => game.makeCasual('Engine help in the What-If sandbox')}
+      />
       <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
       <Modal open={quiz !== null} title="History quiz" onClose={() => setQuiz(null)}>
         {quiz && <QuizPanel questions={quiz} onDone={() => undefined} />}

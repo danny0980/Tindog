@@ -35,7 +35,7 @@ export function NewGameModal({ open, initialSettings, onStart, onClose }: NewGam
 
 function NewGameForm({ initialSettings, onStart }: Pick<NewGameModalProps, 'initialSettings' | 'onStart'>) {
   // Campaign bosses are launched from the world map; a new game from here never continues one.
-  const [draft, setDraft] = useState<GameSettings>(() => ({ ...initialSettings, bossId: null, classicId: null }))
+  const [draft, setDraft] = useState<GameSettings>(() => ({ ...initialSettings, bossId: null, classicId: null, ghost: false }))
   const defeated = useStore(profileStore, (p) => p.legends.defeated)
   const unlockedLegends = LEGENDS.filter((l) => defeated[l.id])
   const update = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => setDraft((prev) => ({ ...prev, [key]: value }))

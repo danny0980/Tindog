@@ -1,10 +1,56 @@
-# ♞ Chess Arena: AAA Edition (v6.11 · Chronos Chess — Cinematic Board)
+# ♞ Chess Arena: AAA Edition (v6.12 · Chronos Chess — Mind Games)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.12: mind games (Phase B)
+
+### Ghost of Yourself (Legends → *Ghost of Yourself*)
+
+- **What it is.** An opponent built from your own saved games (`src/ghost/fingerprint.ts`).
+- **How it plays:**
+  - your most-played lines, per colour, become its opening book;
+  - your habits (captures, checks, pawn play, early queen moves, when and where you castle, your accuracy) pick the playing style it copies;
+  - it plays at your rating.
+- **Your style card.** The screen shows the fingerprint as bars, plus your top openings.
+- **Always current.** It relearns before every game, so as your play changes, so does your ghost.
+
+### Engine brain (*Engine brain* under the board)
+
+- **What it shows.** A dedicated Stockfish streams its search as it deepens:
+  - the depth so far, out of 22;
+  - the top three plans in SAN, with scores;
+  - board arrows: the best plan brightest, the alternatives fainter the further they trail.
+- **Dropped plans.** When a deeper search drops a plan, it flashes in red ("Bc4 dropped at depth 14").
+- **Rated games.** In a rated game in progress, turning it on makes the game unrated, the same as a takeback.
+
+### What if…? (next to *Engine brain*)
+
+- **The split screen.** The real game is on the left, and you can step through what actually happened. A sandbox forked from the same move is on the right.
+- **Branches.** Try other moves and keep up to six branches. Stepping back and playing a different move rewrites the rest of that line.
+- **Engine help.** Switch on the engine brain to see what it thinks of your idea. It needs the same OK as above during a rated game.
+
+### The predictive coach (Settings → Display → Predictive coach)
+
+- **What it catches.** Before a move that walks into a trap, the coach stops you once, with *Rethink* or *Play it anyway*. The traps are:
+  - leaving a piece hanging;
+  - allowing a mate in one or a back-rank mate;
+  - allowing a knight fork.
+- **"My usual traps"** (the default) only warns about traps that have actually cost you at least twice. The coach finds those by replaying your saved games and checking the opponent's very next move. Each warning says how often it happened ("you have lost to a hanging piece 4 times").
+- **Never nags.** At most one warning every 6 plies.
+
+### Tests
+
+`npm run test:mind` covers 40 checks:
+- the ghost's book, stats, style and persona;
+- brain folding, discarded plans, arrows and scores;
+- coach detectors and history mining;
+- the What-If branch model.
 
 ---
 

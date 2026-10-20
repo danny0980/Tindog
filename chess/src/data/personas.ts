@@ -12,6 +12,7 @@ import { ARCHETYPE_TONE, LEGEND_TONE } from './taunts'
 import { ARCHETYPES, buildProfile } from './campaign/archetypes'
 import { BOOKS } from './campaign/books'
 import { type ClassicCharacter, getClassicEra } from './classic/roster'
+import type { Fingerprint } from '../ghost/fingerprint'
 
 /** Closest Quick Play difficulty bucket for a rating (coins and stats). */
 export function difficultyForElo(elo: number): Difficulty {
@@ -64,8 +65,8 @@ export function bossPersona(boss: Boss): Persona {
  * A Classic Chess opponent: pure chess. Strength comes from the shared Elo curve
  * (shallow search, blunder guard early on), style from the archetype and the
  * opening book; no spells — Classic games never get a battle setup at all.
+ * Facing their historical rival (your avatar), they speak to that rivalry.
  */
-/** A Classic character as an opponent; facing their historical rival (your avatar), they speak to that rivalry. */
 export function classicPersona(c: ClassicCharacter, facing: string | null = null): Persona {
   const era = getClassicEra(c.era)
   const archetype = ARCHETYPES[c.archetype]
@@ -94,5 +95,35 @@ export function classicPersona(c: ClassicCharacter, facing: string | null = null
     settingName: era.name,
     spells: [],
     tone: ARCHETYPE_TONE[c.archetype],
+  }
+}
+
+/**
+ * Ghost of Yourself: you, as an opponent. It opens with your own lines, plays
+ * in the style your habits match, at your rating.
+ */
+export function ghostPersona(f: Fingerprint, playerName: string): Persona {
+  const archetype = ARCHETYPES[f.archetype]
+  const name = `Ghost of ${playerName || 'You'}`
+  return {
+    key: 'ghost',
+    name,
+    title: `Your own style · ${archetype.name}`,
+    elo: f.elo,
+    difficulty: difficultyForElo(f.elo),
+    profile: buildProfile(f.archetype, f.elo, f.repertoire),
+    quotes: {
+      ...archetype.lines,
+      intro: ['I know every opening you play. I learned them from you.', 'Let us see if you can beat your own habits.'],
+      legendWins: ['Beaten by yourself. Those were your mistakes, not mine.', 'Same habits, same result. Change something.'],
+      legendLoses: ['You played better than you used to. Good.', 'You beat your old self. That is called progress.'],
+    },
+    portrait: { icon: 'ghost', from: '#a5b4fc', to: '#1e1b4b', monogram: (playerName[0] ?? 'Y').toUpperCase() },
+    themeId: 'oled-black',
+    pieceSetId: 'moonsilver',
+    arrivalCaption: 'Your mirror',
+    settingName: 'The Hall of Mirrors',
+    spells: [],
+    tone: ARCHETYPE_TONE[f.archetype],
   }
 }

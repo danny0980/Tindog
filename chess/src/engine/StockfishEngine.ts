@@ -143,7 +143,9 @@ export class StockfishEngine {
     const collector: LineListener = (line) => {
       if (!line.startsWith('info')) return
       const parsed = parseInfoLine(line)
-      if (parsed) lines.set(parsed.multipv, parsed)
+      if (!parsed) return
+      lines.set(parsed.multipv, parsed)
+      options.onInfo?.([...lines.values()].sort((a, b) => a.multipv - b.multipv))
     }
     this.listeners.add(collector)
 

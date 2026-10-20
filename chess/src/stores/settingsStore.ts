@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cinematicCamera: 'key',
   battlefield: 'auto',
   pieceReactions: true,
+  coachWarnings: 'mine',
   hapticsEnabled: true,
   haptics: DEFAULT_HAPTICS,
   oneHanded: false,
@@ -90,6 +91,7 @@ function sanitizeGame(raw: unknown): GameSettings {
     // fresh session always starts outside a campaign battle.
     bossId: null,
     classicId: null,
+    ghost: false,
   }
 }
 
@@ -130,6 +132,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     cinematicCamera: oneOf(s.cinematicCamera, ['off', 'key', 'all'], d.cinematicCamera),
     battlefield: oneOf(s.battlefield, ['auto', 'off', ...TERRAIN_IDS], d.battlefield),
     pieceReactions: bool(s.pieceReactions, d.pieceReactions),
+    coachWarnings: oneOf(s.coachWarnings, ['off', 'mine', 'all'], d.coachWarnings),
     uiSoundsEnabled: bool(s.uiSoundsEnabled, d.uiSoundsEnabled),
     uiVolume: num(s.uiVolume, d.uiVolume, 0, 1),
     soundMaterial: oneOf(s.soundMaterial, SOUND_MATERIALS, d.soundMaterial),
@@ -145,7 +148,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     showLegalMoves: bool(s.showLegalMoves, d.showLegalMoves),
     showCoordinates: bool(s.showCoordinates, d.showCoordinates),
     game: sanitizeGame(s.game),
-    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament', 'classic', 'variants', 'openings', 'battles', 'museum', 'quiz'], d.legendsScreen),
+    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament', 'classic', 'variants', 'openings', 'battles', 'museum', 'quiz', 'ghost'], d.legendsScreen),
     grandRealm: oneOf(s.grandRealm, GRAND_REALM_IDS, d.grandRealm),
   }
 }

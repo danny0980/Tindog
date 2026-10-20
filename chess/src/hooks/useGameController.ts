@@ -9,7 +9,8 @@ import { getCachedBoss, loadRealmRoster, rosterStore } from '../data/campaign/lo
 import { realmOfBoss } from '../data/campaign/realms'
 import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, applyRelicsToProfile } from '../data/campaign/relics'
 import { getLegend, strengthInfo } from '../data/legends'
-import { bossPersona, classicPersona, legendPersona } from '../data/personas'
+import { bossPersona, classicPersona, ghostPersona, legendPersona } from '../data/personas'
+import { fingerprint } from '../ghost/fingerprint'
 import { POTIONS, RESTRICTIONS, WEATHER } from '../data/arena'
 import { displayTitle } from '../data/titles'
 import { gauntletStore } from '../stores/gauntletStore'
@@ -226,11 +227,17 @@ export function useGameController({ active }: { active: boolean }) {
   const boss = useStore(rosterStore, () => (isAiMode && gameSettings.bossId ? getCachedBoss(gameSettings.bossId) : null))
   const legend = isAiMode && !gameSettings.bossId && gameSettings.legendId ? getLegend(gameSettings.legendId) : null
   const classic = isAiMode && !gameSettings.bossId && !gameSettings.legendId && gameSettings.classicId ? getClassic(gameSettings.classicId) : null
+  // Ghost of Yourself: built from your saved games when the game starts (a new game picks up new habits).
+  const wantsGhost = isAiMode && !gameSettings.bossId && !gameSettings.legendId && !gameSettings.classicId && gameSettings.ghost
+  const myMatches = useStore(profileStore, (p) => p.matches)
+  const myElo = useStore(profileStore, (p) => p.elo)
+  const myName = useStore(profileStore, (p) => p.name)
+  const ghost = useMemo(() => (wantsGhost ? ghostPersona(fingerprint(myMatches, myElo), myName) : null), [myElo, myMatches, myName, wantsGhost])
   const reviewBoss = useStore(rosterStore, () => (review?.bossId ? getCachedBoss(review.bossId) : null))
   const reviewLegend = review?.legendId ? getLegend(review.legendId) : null
   const persona = useMemo<Persona | null>(
-    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, settings.classicAvatar) : null),
-    [boss, classic, gameSettings.legendStrength, legend, settings.classicAvatar],
+    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, settings.classicAvatar) : ghost),
+    [boss, classic, gameSettings.legendStrength, ghost, legend, settings.classicAvatar],
   )
   const reviewPersona = useMemo<Persona | null>(
     () => (reviewBoss ? bossPersona(reviewBoss) : reviewLegend ? legendPersona(reviewLegend, 'authentic') : null),
@@ -856,6 +863,16 @@ export function useGameController({ active }: { active: boolean }) {
     }
   }, [boss, casual, clock, game, isAiMode, isGauntletBattle, playEngine, shieldReady, timeMachine, undoPlies])
 
+  /** Engine help mid-game (the brain, the What-If engine) makes a rated game casual, like a takeback. */
+  const makeCasual = useCallback(
+    (why: string) => {
+      if (!isAiMode || casual || !isPlaying) return
+      setCasual(true)
+      showToast('info', 'Casual game', `${why} makes this game unrated.`, 2800)
+    },
+    [casual, isAiMode, isPlaying],
+  )
+
   const resign = useCallback(() => {
     if (!isPlaying) return
     const loser = isAiMode ? humanColor : game.turn
@@ -890,7 +907,9 @@ export function useGameController({ active }: { active: boolean }) {
           ? legendPersona(getLegend(next.legendId), next.legendStrength)
           : challengerClassic
             ? classicPersona(challengerClassic, settingsStore.get().classicAvatar)
-            : null
+            : next.mode === 'ai' && next.ghost
+              ? ghostPersona(fingerprint(profileStore.get().matches, profileStore.get().elo), profileStore.get().name)
+              : null
       const kind: BattleKind = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
       // Shrine blessings join the next campaign battle's tactics.
       let tactics: readonly TacticId[] = launch?.tactics ?? []
@@ -1220,6 +1239,7 @@ export function useGameController({ active }: { active: boolean }) {
     isAiMode,
     review,
     casual,
+    makeCasual,
     fen: displayFen,
     liveFen: game.fen,
     history: game.history,

@@ -18,6 +18,8 @@ export interface SearchOptions {
   searchMoves?: readonly string[]
   /** Chess960 rules: Shredder-FEN castling in, king-takes-rook castles out. */
   chess960?: boolean
+  /** Streams the search as it deepens: every MultiPV line seen so far (deepest per slot). */
+  onInfo?: (lines: readonly EngineLine[]) => void
 }
 
 export interface SearchResult {
@@ -41,7 +43,7 @@ export interface DifficultyConfig {
   elo: number
 }
 
-export type EngineRole = 'play' | 'analysis' | 'variant'
+export type EngineRole = 'play' | 'analysis' | 'variant' | 'brain'
 
 export type EngineStatus = 'idle' | 'loading' | 'ready' | 'error'
 

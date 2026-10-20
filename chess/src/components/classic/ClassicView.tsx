@@ -12,6 +12,7 @@ import type { ColorChoice } from '../../types/chess'
 import { CAMPAIGN_TIME_CONTROLS, type ChallengeClock } from '../campaign/battleOptions'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
+import { Segmented } from '../ui/Segmented'
 
 const LEVEL: Record<ReturnType<typeof difficultyForElo>, { label: string; tone: string }> = {
   beginner: { label: 'Gentle', tone: 'text-emerald-300' },
@@ -167,28 +168,6 @@ function Dossier({ c, beaten }: { c: ClassicCharacter; beaten: boolean }) {
         <dt className="text-slate-500">Rules</dt>
         <dd className="text-slate-200">Classic chess only — no spells, tactics or arena effects</dd>
       </dl>
-    </div>
-  )
-}
-
-function Segmented({ label, options, value, onChange }: { label: string; options: ReadonlyArray<{ id: string; label: string }>; value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
-      <div className="grid gap-1 rounded-xl bg-white/[0.05] p-1" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }} role="radiogroup" aria-label={label}>
-        {options.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={value === o.id}
-            onClick={() => onChange(o.id)}
-            className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition ${value === o.id ? 'bg-accent text-ink-950' : 'text-slate-300 hover:bg-white/5'}`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
     </div>
   )
 }

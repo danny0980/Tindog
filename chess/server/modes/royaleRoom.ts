@@ -9,6 +9,14 @@ import { applyRoyaleAction, playerSeat, seatPlayer } from '../../src/online/rank
 
 export const BOT_LEVEL: RoyaleLevel = 'normal'
 
+/** A Battle Royale table as saved to the database. */
+export interface RoyaleRoomState {
+  id: string
+  seats: Array<string | null>
+  actions: RoyaleAction[]
+  savedAt: number
+}
+
 export class RoyaleRoom {
   readonly id: string
   /** User id per seat (red, blue, yellow, green); null = a computer army. */
@@ -101,6 +109,21 @@ export class RoyaleRoom {
   /** Finishing order, as seats. */
   ranking(): number[] {
     return (this.game.result?.ranking ?? []).map((p: PlayerId) => playerSeat(p))
+  }
+
+  toState(now: number): RoyaleRoomState {
+    return { id: this.id, seats: [...this.seats], actions: [...this.actions], savedAt: now }
+  }
+
+  /** Rebuilds a saved table from its log; the player to move gets a fresh move timer, and strikes start over. */
+  static restore(s: RoyaleRoomState, now: number, random: () => number = Math.random): RoyaleRoom | null {
+    if (s.seats.length !== 4) return null
+    const room = new RoyaleRoom(s.id, s.seats, now, random)
+    for (const a of s.actions) {
+      if (!applyRoyaleAction(room.game, a)) return null
+      room.actions.push(a)
+    }
+    return room
   }
 
   snapshot(seat: number, seats: RoyaleSeat[], now: number): RoyaleSnapshot {

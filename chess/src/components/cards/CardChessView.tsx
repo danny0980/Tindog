@@ -10,6 +10,7 @@ import { settingsStore } from '../../stores/settingsStore'
 import type { Color, MoveInput, Square } from '../../types/chess'
 import { LEVELS, type VariantLevel } from '../../variants/useVariantGame'
 import { ChessBoard } from '../board/ChessBoard'
+import { EngineNotice } from '../game/EngineNotice'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { Segmented } from '../ui/Segmented'
@@ -101,7 +102,7 @@ export function CardChessView() {
   const result = game.result
   const showResult = result !== null && seenResult !== cg.version
   const resultText = result ? (result.winner === null ? `Draw (${result.reason})` : result.winner === me ? `You win (${result.reason})` : `You lose (${result.reason})`) : ''
-  const status = result ? resultText : cg.thinking ? 'The computer is thinking…' : activeCard ? `${CARDS[activeCard].name}: ${kind === 'ward' ? 'tap the piece to protect' : kind === 'drop' ? 'tap a square on your second rank' : 'move a piece to a glowing square'}` : game.inCheck ? 'Check! Your move' : 'Your move'
+  const status = result ? resultText : cg.waitingForEngine ? 'Waiting for the engine…' : cg.thinking ? 'The computer is thinking…' : activeCard ? `${CARDS[activeCard].name}: ${kind === 'ward' ? 'tap the piece to protect' : kind === 'drop' ? 'tap a square on your second rank' : 'move a piece to a glowing square'}` : game.inCheck ? 'Check! Your move' : 'Your move'
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start" data-cards="playing">
@@ -131,6 +132,7 @@ export function CardChessView() {
         />
       </div>
       <aside className="flex flex-col gap-3">
+        {!result && <EngineNotice status={cg.engineStatus} error={cg.engineError} onRetry={cg.retryEngine} />}
         <div className="glass rounded-2xl px-4 py-3 text-sm text-white" role="status" data-cards-status>
           {status}
         </div>

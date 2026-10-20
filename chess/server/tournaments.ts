@@ -28,6 +28,10 @@ export interface TournamentDeps {
   /** Starts a rated game; null when a player can't play now. */
   startGame: (players: { w: string; b: string }, pool: string, label: string, onResult: GameResultHook) => string | null
   isAvailable: (userId: string) => boolean
+  /** After a restart: reconnects a round's game that the server resumed to its result (false if it isn't running). */
+  attachResult?: (gameId: string, onResult: GameResultHook) => boolean
+  /** After a restart, how long players get to reconnect before a missing one forfeits. */
+  resumeGraceMs?: number
   /** Something changed (tell the clients). */
   changed: () => void
   log?: (line: string) => void
@@ -41,18 +45,54 @@ const MAX_TIMER = 2 ** 31 - 1
 export class TournamentManager {
   private readonly d: TournamentDeps
   private timer: unknown = null
+  /** After a restart: until then, players who aren't back yet are waited for, not forfeited. */
+  private resumeUntil = 0
+  private resumeTimer: unknown = null
 
   constructor(deps: TournamentDeps) {
     this.d = deps
     const t = deps.store.tournament()
     if (!t || t.status === 'done') this.open(deps.firstStartsAt ?? nextSaturday(deps.now()))
-    else if (t.status === 'running') {
-      // After a restart, games that were in progress are played again.
-      const round = t.rounds[t.rounds.length - 1] ?? []
-      for (const m of round) if (!m.winner) m.gameId = null
-      deps.store.putTournament(t)
+    else if (t.status === 'running') this.resumeAfterRestart(t)
+    else this.arm()
+  }
+
+  /**
+   * The server restarted mid-tournament. Games it resumed are followed to
+   * their result; the others are played again once both players are back.
+   * Nobody is forfeited until the grace period is over (it used to forfeit
+   * everyone at once, since no one had reconnected yet).
+   */
+  private resumeAfterRestart(t: TournamentState): void {
+    const roundIndex = t.rounds.length - 1
+    const round = t.rounds[roundIndex] ?? []
+    round.forEach((m, i) => {
+      if (m.winner || !m.gameId || !m.a || !m.b) return
+      if (!this.d.attachResult?.(m.gameId, this.hookFor(t, roundIndex, i, m.a, m.b))) m.gameId = null
+    })
+    this.d.store.putTournament(t)
+    this.resumeUntil = this.d.now() + (this.d.resumeGraceMs ?? 3 * 60_000)
+    this.resumeTimer = this.d.setTimer(() => {
+      this.resumeTimer = null
+      this.resumeUntil = 0
       this.play()
-    } else this.arm()
+    }, this.resumeUntil - this.d.now())
+    this.play()
+  }
+
+  /** A player connected: during the post-restart grace, their game may be able to start now. */
+  playerConnected(): void {
+    if (this.resumeUntil > 0 && this.state.status === 'running') this.play()
+  }
+
+  /** Who goes through when a game is drawn or aborted: the higher seed. */
+  private higherSeed(t: TournamentState, a: string, b: string): string {
+    const seeds = bySeed(t.entrants)
+    return seeds.findIndex((e) => e.id === a) <= seeds.findIndex((e) => e.id === b) ? a : b
+  }
+
+  private hookFor(t: TournamentState, roundIndex: number, matchIndex: number, a: string, b: string): GameResultHook {
+    return (winner, aborted) => this.result(roundIndex, matchIndex, aborted || winner === null ? this.higherSeed(t, a, b) : winner)
   }
 
   get state(): TournamentState {
@@ -120,23 +160,24 @@ export class TournamentManager {
     const rounds = t.rounds.map((r) => r.map((m) => ({ ...m })))
     const round = rounds[rounds.length - 1]!
     const label = `${t.name} · ${roundName(round.length)}`
-    // Seeds, not sign-up order: a draw or forfeit sends the higher-rated seed through.
-    const seeds = bySeed(t.entrants)
-    const seedOf = (id: string): number => seeds.findIndex((e) => e.id === id)
+    // Just after a restart, players who aren't back yet are waited for.
+    const waiting = this.resumeUntil > this.d.now()
     round.forEach((m, i) => {
       if (m.winner || m.gameId || !m.a || !m.b) return
       const aHere = this.d.isAvailable(m.a)
       const bHere = this.d.isAvailable(m.b)
       if (!aHere || !bHere) {
-        // Forfeit: whoever is there goes through (the higher seed if neither is).
-        m.winner = aHere ? m.a : bHere ? m.b : seedOf(m.a) <= seedOf(m.b) ? m.a : m.b
+        if (waiting) return
+        // Forfeit: whoever is there goes through (the higher seed if neither is: seeds, not sign-up order).
+        m.winner = aHere ? m.a : bHere ? m.b : this.higherSeed(t, m.a, m.b)
         return
       }
       const players = (rounds.length + i) % 2 === 0 ? { w: m.a, b: m.b } : { w: m.b, b: m.a }
-      const a = m.a
-      const b = m.b
-      m.gameId = this.d.startGame(players, t.pool, label, (winner, aborted) => this.result(rounds.length - 1, i, aborted || winner === null ? (seedOf(a) <= seedOf(b) ? a : b) : winner))
-      if (!m.gameId) m.winner = seedOf(a) <= seedOf(b) ? a : b
+      m.gameId = this.d.startGame(players, t.pool, label, this.hookFor(t, rounds.length - 1, i, m.a, m.b))
+      if (!m.gameId) {
+        if (waiting) return
+        m.winner = this.higherSeed(t, m.a, m.b)
+      }
     })
     this.save({ ...t, rounds })
     this.advance()
@@ -173,7 +214,9 @@ export class TournamentManager {
   /** Stops the schedule (server shutdown). */
   close(): void {
     if (this.timer !== null) this.d.clearTimer(this.timer)
+    if (this.resumeTimer !== null) this.d.clearTimer(this.resumeTimer)
     this.timer = null
+    this.resumeTimer = null
   }
 }
 

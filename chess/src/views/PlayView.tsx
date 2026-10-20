@@ -1,6 +1,8 @@
 import { BrainCircuit, Download, GitBranch, GraduationCap, History, Share2, X } from 'lucide-react'
 import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
+import { importWithRetry } from '../utils/retry'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
 import { MoveInsightCard } from '../components/analysis/MoveInsightCard'
@@ -421,7 +423,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         },
         onQuiz: () => {
           game.dismissGameOver()
-          void import('../data/classic/quiz').then((m) => setQuiz(m.postGameQuiz(beatenClassic, beatenClassics, total * 31 + beatenClassics.length)))
+          // The quiz loads on demand (with retries); offline, say so instead of doing nothing.
+          importWithRetry(() => import('../data/classic/quiz'))
+            .then((m) => setQuiz(m.postGameQuiz(beatenClassic, beatenClassics, total * 31 + beatenClassics.length)))
+            .catch(() => showToast('warning', 'Couldn’t load the quiz', 'Check your connection and try again.'))
         },
       }
     : null
@@ -568,6 +573,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
                 aiThinking={game.aiThinking}
                 engineStatus={game.engineStatus}
                 engineError={game.engineError}
+                onRetryEngine={game.retryEngine}
                 isAiMode={game.isAiMode}
                 isLive={timeMachine.isLive}
                 isReview={game.review !== null}
@@ -737,13 +743,27 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         onUnlockEngine={() => game.makeCasual('Engine help in the What-If sandbox')}
       />
       {interviewing && (
-        <Suspense fallback={null}>
-          <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
-        </Suspense>
+        // A failed download closes the interview with a note, instead of breaking the screen.
+        <ErrorBoundary label="the interview" onError={() => (setInterviewing(null), showToast('warning', 'Couldn’t open the interview', 'Check your connection and try again.'))}>
+          <Suspense fallback={null}>
+            <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
+          </Suspense>
+        </ErrorBoundary>
       )}
       <Modal open={quiz !== null} title="History quiz" onClose={() => setQuiz(null)}>
-        <Suspense fallback={null}>{quiz && <QuizPanel questions={quiz} onDone={() => undefined} />}</Suspense>
+        <ErrorBoundary label="the quiz" resetKey={quiz === null ? 0 : 1}>
+          <Suspense fallback={<LoadingLine text="Loading the quiz…" />}>{quiz && <QuizPanel questions={quiz} />}</Suspense>
+        </ErrorBoundary>
       </Modal>
     </>
+  )
+}
+
+/** A one-line "loading" placeholder (for parts that download on demand). */
+function LoadingLine({ text }: { text: string }) {
+  return (
+    <p className="flex items-center gap-2 py-4 text-sm text-slate-300" role="status">
+      <span className="size-4 animate-spin rounded-full border-2 border-white/20 border-t-white/70" aria-hidden="true" /> {text}
+    </p>
   )
 }

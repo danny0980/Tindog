@@ -16,7 +16,8 @@ const KIND_LABEL: Record<QuizQuestion['kind'], string> = {
 }
 
 /** Steps through a history quiz; pays out once, when the last answer is given. */
-export function QuizPanel({ questions, onDone }: { questions: readonly QuizQuestion[]; onDone: (correct: number) => void }) {
+/** A history quiz; `onDone` (optional) hears the score once the last question is answered (the score screen stays up). */
+export function QuizPanel({ questions, onDone }: { questions: readonly QuizQuestion[]; onDone?: (correct: number) => void }) {
   const [index, setIndex] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [correct, setCorrect] = useState(0)
@@ -48,7 +49,7 @@ export function QuizPanel({ questions, onDone }: { questions: readonly QuizQuest
     }
     if (out.unlocked.length > 0) playAchievement()
     out.unlocked.forEach((a) => showToast('achievement', a.title, `${a.description} · +${a.reward} coins`, 5000))
-    onDone(correct)
+    onDone?.(correct)
   }
 
   if (questions.length === 0) return <p className="text-sm text-slate-400">No questions available.</p>

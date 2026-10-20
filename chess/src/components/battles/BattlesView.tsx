@@ -14,6 +14,7 @@ import type { BattleObjective } from '../../variants/rules'
 import { variantResultText } from '../../variants/rules'
 import { LEVELS, type VariantLevel, useVariantGame } from '../../variants/useVariantGame'
 import { ChessBoard } from '../board/ChessBoard'
+import { EngineNotice } from '../game/EngineNotice'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
@@ -168,7 +169,7 @@ export function BattlesView() {
   const showResult = result !== null && seenResult !== v.version
   const lines = battle.lines[me === 'w' ? 'b' : 'w']
   const said = result ? (result.winner === me ? lines.defeat : result.winner === null ? lines.intro : lines.victory) : lines.intro
-  const status = result ? variantResultText(result, me) : v.thinking ? `${opp.name} is moving…` : game.inCheck ? 'Check! Your move' : 'Your move'
+  const status = result ? variantResultText(result, me) : v.waitingForEngine ? 'Waiting for the engine…' : v.thinking ? `${opp.name} is moving…` : game.inCheck ? 'Check! Your move' : 'Your move'
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start" data-battles="playing" data-battle-game={battle.id}>
@@ -194,6 +195,7 @@ export function BattlesView() {
         />
       </div>
       <aside className="flex flex-col gap-3">
+        {!result && <EngineNotice status={v.engineStatus} error={v.engineError} onRetry={v.retryEngine} />}
         <div className="glass rounded-2xl px-4 py-3">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-200">
             {battle.name} · {battle.date}

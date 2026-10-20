@@ -57,7 +57,7 @@ Set these in `server/.env` or in the environment. Every setting is documented in
 | `BACKUP_HOURS` / `BACKUP_KEEP` | no | `24` / `7` | How often to back up, and how many backups to keep. |
 | `TRUST_PROXY` | no | `1` in production | How many proxies sit in front, so rate limits see the real client IP. Use `0` when nothing is in front. |
 | `PORT` / `HOST` | no | `8787` / `0.0.0.0` | Where the server listens. |
-| `SESSION_DAYS` | no | `30` | How long a sign-in lasts. |
+| `SESSION_DAYS` | no | `30` | How long a sign-in lasts; a sign-in used in its second half is renewed for the full term. |
 
 The server refuses to start in production without `PUBLIC_URL` and at least one sign-in method.
 
@@ -87,7 +87,7 @@ Other protections:
 
 The database is **SQLite** through `better-sqlite3`, set up as follows:
 - **WAL journal, foreign keys on.** Every change is durable when the call returns. Multi-step changes (a rated result, a season rollover, a clan war archive) are single transactions.
-- **One tracked schema version.** A database written by a newer server is refused rather than damaged.
+- **A tracked schema version.** Version 2 since 6.16 adds replay data and saved games in progress. Older databases are upgraded in place on start, and a database written by a newer server is refused rather than damaged.
 - **Constraints.** One account per email and per Google id, one clan per tag, and one clan per player.
 
 ### Upgrading from 6.14 (the JSON file)
@@ -124,9 +124,15 @@ node dist-server/cli.mjs import /data/db.json   # in the image
 
 ## Health and scaling
 
+- **Players' data.** Players can download everything stored about them (`GET /api/me/export`) and delete their account (`DELETE /api/me`, from the Online screen).
 - **Health check.** `GET /api/health` answers `200` with the version, the uptime, the database status, and live counts: people online, games, queues, Card Chess and Battle Royale rooms. It answers `503` if the database stops answering.
 - **One process.** Games, queues and clocks live in memory. SQLite handles thousands of rated games a minute on one machine.
-- **Restarts.** A restart ends the games in progress: players are told when they reconnect, and the weekly tournament replays its open round.
+- **Restarts and deploys.** Games in progress survive a restart.
+  - Each one is saved after every move and comes back when the server starts again.
+  - The clock to move stays stopped until that player reconnects.
+  - Anyone not back within 2 minutes loses; if neither player returns, the game is aborted.
+  - The Weekly Knockout gives players 3 minutes to reconnect before anyone forfeits.
+  - So a deploy (stop, then start the new version) costs players a few seconds of reconnecting, not their games.
 - **Shutting down.** On `SIGTERM` the server stops taking connections, closes the sockets and checkpoints the database. After 10 seconds it exits regardless.
 
 ## The app without the server

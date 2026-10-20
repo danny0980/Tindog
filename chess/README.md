@@ -1,10 +1,68 @@
-# ♞ Chess Arena: AAA Edition (v6.15 · Chronos Chess — Production & Online Modes)
+# ♞ Chess Arena: AAA Edition (v6.16 · Chronos Chess — Hardened for Launch)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.16: hardened for launch
+
+### Server restarts no longer cost anyone a game
+
+- **Games come back after a restart.** Every online game is saved to SQLite after each move (`live_games`): ranked, Vanishing, Card Chess and Battle Royale. When the server starts again it brings them all back (`Hub.restoreLive`).
+- **No clock runs while the server is down.** A restored game waits for the player to move, and their clock (or the first-move timer) starts only when they reconnect. Opponents see the usual "away" countdown.
+- **Players who don't come back.** Anyone not back within 2 minutes loses by abandonment. If neither player returns, the game is aborted (unrated). In Battle Royale the move timer covers absent players.
+- **The Weekly Knockout survives a restart.**
+  - It used to forfeit every match the instant the server started, before anyone had reconnected, and crown a champion at once.
+  - Now games that came back are followed to their result, and the rest start as soon as both players are back.
+  - Nobody forfeits during a 3-minute grace period.
+- **The app never strands a game.**
+  - The server now tells the app which game it is in (`HELLO.active`). A game the server no longer has is closed as "cancelled (unrated)", with a note.
+  - Results that arrive after a page reload appear as a "While you were away" message instead of being dropped.
+
+### Engine crashes recover by themselves
+
+- **Crashes are detected.** A Stockfish worker that crashes, or fails to start within 20 seconds, now fails its search instead of freezing the computer on "thinking".
+- **Automatic restart.** The pool replaces the dead worker, and the app restarts it on its own (3 tries, backing off). After that, a clear message with a **Retry** button appears.
+- **Every mode says what the engine is doing.** Play, Variants, Card Chess, Vanishing, the historic battles and Time Rush all say so. Time Rush can't be started without an engine; its clock is already paused on the computer's turn.
+- **Switching away mid-thought.** If you leave the app while the computer is thinking, it now thinks again when you come back, instead of playing a half-finished move.
+
+### Sign-in and cloud saves
+
+- **Sliding sessions.** A sign-in used in the second half of its 30 days is extended to a full 30 days, and its cookie renewed, so active players are never signed out.
+- **Expired or deleted sign-ins.** The app now shows these as signed out with a message. It used to retry the connection forever while still looking signed in.
+- **No more silent overwrites between devices.**
+  - Every upload names the cloud save it started from; if another device saved in between, the server answers 409 with the newer save and you choose which to keep.
+  - Coming back to the app also checks for a newer save: it is taken quietly if this device has nothing unsaved.
+
+### Your games and your data (Online → *Your games and data*)
+
+- **Game history.** Every online game (ranked, Vanishing, Card Chess and Battle Royale) newest first, with result, rating change and date, loaded in pages.
+- **Replays.** Any game can be replayed move by move with the arrow keys. Battle Royale and Card Chess games replay too, as they now keep their logs and hands (schema version 2, migrated in place).
+- **Export my data.** Downloads everything the server holds about you as JSON: account, ratings, seasons, clan, cloud save and every game.
+- **Delete account.** You type DELETE to confirm, and it can't be done during a game. It removes your sign-ins, cloud save, ratings, seasons and clan membership; the clan passes to the next member. Opponents keep their games against you, without your name.
+
+### Screens that load on demand
+
+- **The characters' history.** Its download is retried, and if it still fails it is tried again later (a Classic opponent falls back to general lines meanwhile).
+- **The interview and the history quiz.** A failed download shows a message instead of doing nothing or breaking the screen. The quiz shows "Loading…" instead of an empty window.
+
+### Tests
+
+- **`npm run test:restart`, 52 checks.**
+  - Crash-and-restart for each kind of game, with clocks paused during the outage.
+  - Players who never return, and the tournament after a restart.
+  - The app closing a game the server lost.
+  - Sliding sessions and cloud-save conflicts.
+  - History, export and deletion.
+- **`npm run test:engine`, 17 checks.**
+  - A scripted Stockfish worker that crashes, hangs or is stopped early.
+  - The pool replacing a dead worker.
+  - Card Chess notation and the replays.
+- **`npm run test:storage`, 56 checks.** It now also covers upgrading a 6.15 database in place.
 
 ---
 

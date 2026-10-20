@@ -3,7 +3,7 @@
 // it (cloudSync.ts).
 import { showToast } from '../../stores/toastStore'
 import { createStore } from '../../utils/store'
-import { type AccountUser, ApiError, type ServerConfig, api } from './api'
+import { type AccountUser, ApiError, type ServerConfig, api, unauthorizedListeners } from './api'
 
 export type AccountState =
   | { status: 'loading' }
@@ -57,6 +57,27 @@ export function signedIn(user: AccountUser): void {
 export function patchUser(user: AccountUser): void {
   const s = accountStore.get()
   if (s.status === 'signed-in') accountStore.set({ ...s, user })
+}
+
+/**
+ * The server no longer accepts our sign-in (it expired, or the account was
+ * deleted elsewhere): show it as signed out, which also closes the game
+ * connection and stops cloud sync.
+ */
+export function sessionEnded(message = 'Your sign-in has expired. Please sign in again.'): void {
+  const s = accountStore.get()
+  if (s.status !== 'signed-in') return
+  accountStore.set({ status: 'signed-out', config: s.config })
+  showToast('warning', 'Signed out', message, 7000)
+}
+unauthorizedListeners.add(() => sessionEnded())
+
+/** Deletes the account on the server, then signs out here (local progress on this device stays). */
+export async function deleteAccount(): Promise<void> {
+  const s = accountStore.get()
+  await api.deleteAccount()
+  if (s.status === 'signed-in') accountStore.set({ status: 'signed-out', config: s.config })
+  showToast('info', 'Account deleted', 'Your online account and everything stored with it are gone. Progress on this device stays.', 7000)
 }
 
 export async function signOut(): Promise<void> {

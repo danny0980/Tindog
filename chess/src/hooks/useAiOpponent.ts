@@ -1,5 +1,5 @@
 import { Chess } from 'chess.js'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { chooseMove, repertoireMove } from '../engine/personalities'
 import { scoreToCp } from '../engine/scoring'
 import type { SpecialMove } from '../engine/variant'
@@ -90,6 +90,8 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
   }, [getAllowedMoves, getSpecials, onChosen, onEval, onMove, onSpecial, onThink, profile])
 
   const { search, stop, status } = engine
+  // Bumped to search again when a search was cut short (the app went to the background mid-thought).
+  const [rethink, setRethink] = useState(0)
 
   useEffect(() => {
     if (!active || status !== 'ready') return
@@ -122,6 +124,13 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
       .then(async ([result]) => {
         // Ignore replies for positions that are no longer on the board (undo, new game…).
         if (cancelled || getFen() !== fen) return
+        // Stopped early (the app was hidden): its move may be shallow, so think again once the app is back.
+        if (result.interrupted) {
+          whenVisible(() => {
+            if (!cancelled) setRethink((n) => n + 1)
+          })
+          return
+        }
         const top = result.lines[0]
         const bestCp = top ? scoreToCp(top.score) : 0
         if (top) onEvalRef.current?.(bestCp)
@@ -151,7 +160,21 @@ export function useAiOpponent({ engine, fen, active, profile, gameId, getFen, ge
       cancelled = true
       stop()
     }
-  }, [active, fen, gameId, getFen, getHistory, search, status, stop])
+  }, [active, fen, gameId, getFen, getHistory, rethink, search, status, stop])
+}
+
+/** Runs `fn` now if the page is visible, else as soon as it becomes visible. */
+function whenVisible(fn: () => void): void {
+  if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+    window.setTimeout(fn, 0)
+    return
+  }
+  const onChange = () => {
+    if (document.visibilityState !== 'visible') return
+    document.removeEventListener('visibilitychange', onChange)
+    fn()
+  }
+  document.addEventListener('visibilitychange', onChange)
 }
 
 /** Resolves a SAN book move to squares; null if absent or illegal (then the engine searches instead). */

@@ -5,7 +5,7 @@
 import { RANKED_POOLS, RANKED_PROTOCOL, VANISH_POOLS, type ClientMessage, type GameSnapshot, type PublicPlayer, type ServerMessage, parseClientMessage, poolById } from '../src/online/ranked/protocol'
 import { warPoints } from './clans'
 import { newId } from './auth'
-import { GameRoom, type Result, type Side, eloChange } from './game'
+import { GameRoom, type GameRoomState, type Result, type Side, eloChange } from './game'
 import { Matchmaker } from './matchmaker'
 import { ModeRooms } from './modes/modeRooms'
 import type { Store, User } from './store'
@@ -24,10 +24,15 @@ export interface HubDeps {
   graceMs?: number
   /** How often the queue is paired. */
   pairEveryMs?: number
+  /** After a restart, how long players of a resumed game have to come back. */
+  restoreGraceMs?: number
   /** Overrides for the online modes (tests). */
   modes?: { botDelayMs?: number; royaleFillMs?: number; royaleSoloMs?: number; random?: () => number }
   log?: (line: string) => void
 }
+
+/** How long a result waits for a player who never comes back. */
+export const MISSED_TTL_MS = 24 * 3_600_000
 
 /** Messages per second a connection may send before being disconnected. */
 const MAX_MSG_PER_SEC = 20
@@ -63,8 +68,15 @@ export class Hub {
   private readonly activeGame = new Map<string, string>()
   private readonly gameTimers = new Map<string, unknown>()
   private readonly graceTimers = new Map<string, unknown>()
-  /** Results of games that ended while the player was away, delivered when they come back. */
-  private readonly missedResults = new Map<string, ServerMessage>()
+  /** Results of games that ended while the player was away, delivered when they come back (kept a day). */
+  private readonly missedResults = new Map<string, { msg: ServerMessage; at: number }>()
+  /** Players known to be away from a game: until when they may come back (for the opponent's countdown). */
+  private readonly awayUntil = new Map<string, number>()
+  /** Restored games waiting for their players after a restart. */
+  private readonly restoreTimers = new Map<string, unknown>()
+  readonly restoreGraceMs: number
+  /** Called after a user connects (the tournament listens, to start games after a restart). */
+  onConnect: ((userId: string) => void) | null = null
   private pairTimer: unknown = null
   private closed = false
   /** Tournament (or other) games: a label for the players, and who to tell the result. */
@@ -80,8 +92,9 @@ export class Hub {
     this.setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms))
     this.clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>))
     this.graceMs = deps.graceMs ?? 60_000
+    this.restoreGraceMs = deps.restoreGraceMs ?? 120_000
     this.log = deps.log ?? (() => {})
-    this.modes = new ModeRooms({ store: this.store, now: this.now, setTimer: this.setTimer, clearTimer: this.clearTimer, log: this.log, send: (id, msg) => this.send(id, msg), isOnline: (id) => this.isOnline(id), graceMs: this.graceMs, ...deps.modes })
+    this.modes = new ModeRooms({ store: this.store, now: this.now, setTimer: this.setTimer, clearTimer: this.clearTimer, log: this.log, send: (id, msg) => this.send(id, msg), isOnline: (id) => this.isOnline(id), isBusy: (id) => this.activeGame.has(id), graceMs: this.graceMs, restoreGraceMs: this.restoreGraceMs, ...deps.modes })
     const every = deps.pairEveryMs ?? 1000
     // Re-pair on a timer too: waiting windows widen, so a pair may become possible without anyone joining.
     const loop = (): void => {
@@ -133,26 +146,119 @@ export class Hub {
     const set = this.conns.get(user.id) ?? new Set<Conn>()
     set.add(conn)
     this.conns.set(user.id, set)
-    conn.send(JSON.stringify({ type: 'HELLO', protocol: RANKED_PROTOCOL, user: { id: user.id, name: user.name, rating: user.rating } } satisfies ServerMessage))
-    // Back in time: resume the game in progress.
+    const now = this.now()
+    // Back in time: cancel the countdown.
     const grace = this.graceTimers.get(user.id)
     if (grace !== undefined) {
       this.clearTimer(grace)
       this.graceTimers.delete(user.id)
     }
+    const wasAway = this.awayUntil.delete(user.id)
+    // A result from while you were away comes first, so the app closes that game before HELLO says what is live.
     const missed = this.missedResults.get(user.id)
     if (missed) {
       this.missedResults.delete(user.id)
-      conn.send(JSON.stringify(missed))
+      conn.send(JSON.stringify(missed.msg))
     }
+    this.modes.deliverMissed(user.id, conn)
+    conn.send(JSON.stringify({ type: 'HELLO', protocol: RANKED_PROTOCOL, user: { id: user.id, name: user.name, rating: user.rating }, active: this.activeFor(user.id) } satisfies ServerMessage))
     const game = this.gameOf(user.id)
     if (game) {
       const side = game.sideOf(user.id)!
       const opp = game.players[side === 'w' ? 'b' : 'w']
-      conn.send(JSON.stringify({ type: 'MATCH_FOUND', game: this.snap(game, side, this.now()) } satisfies ServerMessage))
-      if (grace !== undefined) this.send(opp, { type: 'OPPONENT_RECONNECTED', gameId: game.id })
+      // Restored after a restart and your move: your clock starts now (not while the server was down).
+      if (game.paused && game.turn === side) {
+        game.resume(now)
+        this.schedule(game)
+        this.persist(game)
+        this.send(opp, { type: 'MATCH_FOUND', game: this.snap(game, side === 'w' ? 'b' : 'w', now) })
+      }
+      conn.send(JSON.stringify({ type: 'MATCH_FOUND', game: this.snap(game, side, now) } satisfies ServerMessage))
+      if (wasAway) this.send(opp, { type: 'OPPONENT_RECONNECTED', gameId: game.id })
+      // Your opponent isn't back yet: show their countdown.
+      const oppAway = this.awayUntil.get(opp)
+      if (oppAway !== undefined && !this.conns.has(opp)) conn.send(JSON.stringify({ type: 'OPPONENT_DISCONNECTED', gameId: game.id, graceMs: Math.max(0, oppAway - now) } satisfies ServerMessage))
     }
     this.modes.connected(user.id)
+    this.onConnect?.(user.id)
+  }
+
+  /** The game a user is in right now, of any kind (sent in HELLO so the app can drop a game the server no longer has). */
+  private activeFor(userId: string): { kind: 'chess' | 'cards' | 'royale'; gameId: string } | null {
+    const id = this.activeGame.get(userId)
+    if (id) return { kind: 'chess', gameId: id }
+    return this.modes.activeFor(userId)
+  }
+
+  /** Saves a game in progress, so a restarted server can resume it. */
+  private persist(game: GameRoom): void {
+    const label = this.labels.get(game.id)
+    this.store.putLive(game.id, 'chess', { ...game.toState(this.now()), label: label ?? null }, this.now())
+  }
+
+  /**
+   * After a restart: brings back the games that were being played. Clocks
+   * stay stopped until the player to move reconnects; whoever isn't back
+   * within `restoreGraceMs` loses (or, if neither is, the game is aborted).
+   * Returns how many games came back.
+   */
+  restoreLive(): number {
+    let restored = 0
+    const now = this.now()
+    for (const row of this.store.liveGames('chess')) {
+      const state = row.state as GameRoomState & { label?: string | null }
+      const game = GameRoom.restore(state, now)
+      const players = game ? [game.players.w, game.players.b] : []
+      if (!game || players.some((id) => !this.store.user(id) || this.activeGame.has(id))) {
+        this.store.dropLive(row.id)
+        continue
+      }
+      this.games.set(game.id, game)
+      for (const id of players) {
+        this.activeGame.set(id, game.id)
+        this.awayUntil.set(id, now + this.restoreGraceMs)
+      }
+      if (state.label) this.labels.set(game.id, state.label)
+      this.schedule(game)
+      this.restoreTimers.set(
+        game.id,
+        this.setTimer(() => {
+          this.restoreTimers.delete(game.id)
+          if (!this.games.has(game.id)) return
+          const gone = (['w', 'b'] as const).filter((side) => !this.conns.has(game.players[side]) && !this.graceTimers.has(game.players[side]))
+          const r = gone.length === 2 ? game.abort() : gone.length === 1 ? game.abandon(gone[0]!) : null
+          if (r) this.finish(game, r)
+        }, this.restoreGraceMs),
+      )
+      restored += 1
+    }
+    restored += this.modes.restoreLive()
+    if (restored > 0) this.log(`restored ${restored} game(s) in progress`)
+    return restored
+  }
+
+  /** In a game of any kind right now. */
+  isPlaying(userId: string): boolean {
+    return this.activeGame.has(userId) || this.modes.isPlaying(userId)
+  }
+
+  /** Closes every connection of a user and takes them out of the queues (account deletion). */
+  kick(userId: string): void {
+    this.matchmaker.leave(userId)
+    this.modes.leaveQueues(userId)
+    for (const c of [...(this.conns.get(userId) ?? [])]) c.close(4001, 'Account deleted')
+  }
+
+  /** Is this game being played now? (The tournament asks after a restart.) */
+  hasGame(gameId: string): boolean {
+    return this.games.has(gameId)
+  }
+
+  /** Tells `hook` the result of a game already running (the tournament, after a restart). */
+  attachResultHook(gameId: string, hook: GameResultHook): boolean {
+    if (!this.games.has(gameId)) return false
+    this.hooks.set(gameId, hook)
+    return true
   }
 
   disconnect(userId: string, conn: Conn): void {
@@ -167,6 +273,7 @@ export class Hub {
     if (!game) return
     // The last tab closed mid-game: the opponent is told, and the player has a grace period.
     const side = game.sideOf(userId)!
+    this.awayUntil.set(userId, this.now() + this.graceMs)
     this.send(game.players[side === 'w' ? 'b' : 'w'], { type: 'OPPONENT_DISCONNECTED', gameId: game.id, graceMs: this.graceMs })
     this.graceTimers.set(
       userId,
@@ -264,7 +371,7 @@ export class Hub {
         if (timed) return this.finish(game, timed)
         const refused = game.move(side, msg.ply, msg.uci, now)
         if (refused) {
-          conn.send(JSON.stringify({ type: 'MOVE_REJECTED', gameId: game.id, ply: msg.ply, reason: refused, game: game.snapshot(side, this.player(game.players[side === 'w' ? 'b' : 'w']), now) } satisfies ServerMessage))
+          conn.send(JSON.stringify({ type: 'MOVE_REJECTED', gameId: game.id, ply: msg.ply, reason: refused, game: this.snap(game, side, now) } satisfies ServerMessage))
           if (game.result) this.finish(game, game.result)
           return
         }
@@ -274,7 +381,10 @@ export class Hub {
         this.send(opp, { type: 'OPPONENT_MOVE', gameId: game.id, ply: msg.ply, uci: msg.uci, clocks })
         this.toWatchers(game.id, { type: 'SPECTATE_MOVE', gameId: game.id, ply: msg.ply, uci: msg.uci, clocks })
         if (game.result) this.finish(game, game.result)
-        else this.schedule(game)
+        else {
+          this.schedule(game)
+          this.persist(game)
+        }
         return
       }
       case 'RESIGN': {
@@ -289,7 +399,10 @@ export class Hub {
       case 'OFFER_DRAW': {
         const game = this.games.get(msg.gameId)
         const side = game?.sideOf(userId)
-        if (game && side && game.offerDraw(side)) this.send(game.players[side === 'w' ? 'b' : 'w'], { type: 'DRAW_OFFERED', gameId: game.id, by: side })
+        if (game && side && game.offerDraw(side)) {
+          this.send(game.players[side === 'w' ? 'b' : 'w'], { type: 'DRAW_OFFERED', gameId: game.id, by: side })
+          this.persist(game)
+        }
         return
       }
       case 'ANSWER_DRAW': {
@@ -297,7 +410,10 @@ export class Hub {
         const side = game?.sideOf(userId)
         if (!game || !side) return
         const out = game.answerDraw(side, msg.accept)
-        if (out === 'declined') this.send(game.players[side === 'w' ? 'b' : 'w'], { type: 'DRAW_DECLINED', gameId: game.id })
+        if (out === 'declined') {
+          this.send(game.players[side === 'w' ? 'b' : 'w'], { type: 'DRAW_DECLINED', gameId: game.id })
+          this.persist(game)
+        }
         else if (out && out !== 'invalid') this.finish(game, out)
         return
       }
@@ -339,6 +455,7 @@ export class Hub {
     for (const side of ['w', 'b'] as const) this.send(players[side], { type: 'MATCH_FOUND', game: this.snap(game, side, this.now()) })
     this.log(`match ${game.id}: ${players.w} (white) vs ${players.b} (black), ${pool.id}${label ? ` · ${label}` : ''}`)
     this.schedule(game)
+    this.persist(game)
     return game.id
   }
 
@@ -393,9 +510,12 @@ export class Hub {
   private finish(game: GameRoom, result: Result): void {
     if (!this.games.has(game.id)) return
     this.games.delete(game.id)
-    const timer = this.gameTimers.get(game.id)
-    if (timer !== undefined) this.clearTimer(timer)
-    this.gameTimers.delete(game.id)
+    this.store.dropLive(game.id)
+    for (const timers of [this.gameTimers, this.restoreTimers]) {
+      const timer = timers.get(game.id)
+      if (timer !== undefined) this.clearTimer(timer)
+      timers.delete(game.id)
+    }
     const w = this.store.user(game.players.w)
     const b = this.store.user(game.players.b)
     const rated = result.reason !== 'aborted' && w !== null && b !== null
@@ -441,15 +561,23 @@ export class Hub {
     for (const side of ['w', 'b'] as const) {
       const id = game.players[side]
       this.activeGame.delete(id)
+      this.awayUntil.delete(id)
       const grace = this.graceTimers.get(id)
       if (grace !== undefined) this.clearTimer(grace)
       this.graceTimers.delete(id)
       const over: ServerMessage = { type: 'GAME_OVER', gameId: game.id, winner: result.winner, reason: result.reason, rating: { before: before[side], after: Math.max(100, before[side] + change[side]) } }
       if (this.conns.has(id)) this.send(id, over)
-      else this.missedResults.set(id, over)
+      else this.keepMissed(id, over)
     }
     this.log(`game ${game.id} over: ${result.winner ?? 'draw'} by ${result.reason}`)
     hook?.(result.winner ? game.players[result.winner] : null, result.reason === 'aborted')
+  }
+
+  /** Holds a result for a player who is away; results older than a day are dropped. */
+  private keepMissed(userId: string, msg: ServerMessage): void {
+    const now = this.now()
+    for (const [id, m] of this.missedResults) if (now - m.at > MISSED_TTL_MS) this.missedResults.delete(id)
+    this.missedResults.set(userId, { msg, at: now })
   }
 
   /** Live counts (for /api/health). */
@@ -464,6 +592,7 @@ export class Hub {
     if (this.pairTimer !== null) this.clearTimer(this.pairTimer)
     for (const t of this.gameTimers.values()) this.clearTimer(t)
     for (const t of this.graceTimers.values()) this.clearTimer(t)
+    for (const t of this.restoreTimers.values()) this.clearTimer(t)
     this.modes.close()
   }
 }

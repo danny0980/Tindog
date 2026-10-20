@@ -5,11 +5,17 @@
 // same save → nothing to do; a fresh device → the cloud save is restored;
 // progress on both → you choose (never silently overwritten). After that,
 // changes upload a few seconds after they happen.
+//
+// Two devices at once: every upload names the cloud save it started from
+// (`base`). If another device saved in between, the server refuses (409)
+// and sends the newer save, and you choose again. Coming back to the app
+// also checks for a newer cloud save: it is taken quietly when this device
+// has nothing unsaved, else you choose.
 import { createDefaultProfile, profileStore, sanitizeProfile } from '../../stores/profileStore'
 import { sanitizeSettings, settingsStore } from '../../stores/settingsStore'
 import { createStore } from '../../utils/store'
 import { accountStore } from './account'
-import { api } from './api'
+import { ApiError, api } from './api'
 
 export interface SaveSummary {
   elo: number
@@ -56,6 +62,10 @@ let uploadTimer: ReturnType<typeof setTimeout> | null = null
 let watching: Array<() => void> = []
 /** Stops uploads while a cloud save is being applied (that change isn't news). */
 let applying = false
+/** The cloud save this device is in step with (its `updatedAt`; null = there was none). */
+let base: number | null = null
+/** Changes on this device that haven't reached the cloud yet. */
+let dirty = false
 
 function stopWatching(): void {
   watching.forEach((off) => off())
@@ -64,14 +74,44 @@ function stopWatching(): void {
   uploadTimer = null
 }
 
+/** Shows the choice between this device and a newer cloud save (uploads pause until it is made). */
+function conflict(data: SaveBlob, updatedAt: number | null): void {
+  stopWatching()
+  pendingCloud = data
+  pendingAt = updatedAt
+  syncStore.set({ status: 'conflict', cloud: summarise(data.profile, updatedAt), device: summarise(profileStore.get(), null) })
+}
+let pendingAt: number | null = null
+
 async function upload(): Promise<void> {
   if (accountStore.get().status !== 'signed-in') return
   syncStore.set({ status: 'syncing' })
   try {
-    const { updatedAt } = await api.putSave(localBlob())
+    const { updatedAt } = await api.putSave(localBlob(), base)
+    base = updatedAt
+    dirty = false
     syncStore.set({ status: 'synced', at: updatedAt })
   } catch (err) {
+    // Another device saved since we last synced: never overwrite it silently.
+    const cloud = err instanceof ApiError && err.status === 409 ? (err.body as { cloud?: { data?: unknown; updatedAt?: unknown } } | null)?.cloud : undefined
+    if (cloud && isBlob(cloud.data)) return conflict(cloud.data, typeof cloud.updatedAt === 'number' ? cloud.updatedAt : null)
     syncStore.set({ status: 'error', message: err instanceof Error ? err.message : 'Cloud save failed.' })
+  }
+}
+
+/** Back in the app: is there a newer cloud save from another device? */
+async function checkForNewer(): Promise<void> {
+  const st = syncStore.get().status
+  if (accountStore.get().status !== 'signed-in' || st === 'conflict' || st === 'syncing' || st === 'off') return
+  try {
+    const cloud = await api.getSave()
+    if (!cloud || cloud.updatedAt === base || !isBlob(cloud.data)) return
+    if (dirty) return conflict(cloud.data, cloud.updatedAt)
+    apply(cloud.data)
+    base = cloud.updatedAt
+    syncStore.set({ status: 'synced', at: cloud.updatedAt })
+  } catch {
+    // Offline for a moment: the next upload will find out.
   }
 }
 
@@ -79,6 +119,7 @@ function watch(): void {
   stopWatching()
   const schedule = () => {
     if (applying) return
+    dirty = true
     if (uploadTimer) clearTimeout(uploadTimer)
     uploadTimer = setTimeout(() => void upload(), UPLOAD_DELAY_MS)
   }
@@ -100,6 +141,7 @@ async function onSignedIn(): Promise<void> {
   try {
     const cloud = await api.getSave()
     const data = cloud && isBlob(cloud.data) ? cloud.data : null
+    base = cloud?.updatedAt ?? null
     if (!data) {
       await upload()
     } else if (JSON.stringify(data) === JSON.stringify(localBlob())) {
@@ -108,8 +150,7 @@ async function onSignedIn(): Promise<void> {
       apply(data)
       syncStore.set({ status: 'synced', at: cloud?.updatedAt ?? Date.now() })
     } else {
-      pendingCloud = data
-      syncStore.set({ status: 'conflict', cloud: summarise(data.profile, cloud?.updatedAt ?? null), device: summarise(profileStore.get(), null) })
+      conflict(data, cloud?.updatedAt ?? null)
       return
     }
     watch()
@@ -123,6 +164,9 @@ export async function resolveConflict(keep: 'device' | 'cloud'): Promise<void> {
   if (syncStore.get().status !== 'conflict') return
   if (keep === 'cloud' && pendingCloud) apply(pendingCloud)
   pendingCloud = null
+  // Either way we now build on the newest cloud save, so this upload is accepted.
+  base = pendingAt
+  pendingAt = null
   await upload()
   watch()
 }
@@ -140,10 +184,13 @@ export function startCloudSync(): void {
     if (!signedIn && wasSignedIn) {
       stopWatching()
       pendingCloud = null
+      base = null
+      dirty = false
       syncStore.set({ status: 'off' })
     }
     wasSignedIn = signedIn
   }
   accountStore.subscribe(react)
   react()
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void checkForNewer())
 }

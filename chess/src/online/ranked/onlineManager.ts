@@ -9,7 +9,7 @@ import type { RoyaleGame } from '../../royale/royale'
 import type { Color, MoveInput, Square } from '../../types/chess'
 import type { CardAction, CardSnapshot, ModeOver, OnlineMode, RoyaleAction, RoyaleSeat, RoyaleSnapshot } from './modeProtocol'
 import { applyCardAction, applyRoyaleAction, endsTurn, replayCards, replayRoyale, seatPlayer } from './modeRules'
-import { type ClientMessage, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, type SpectateSnapshot, parseServerMessage } from './protocol'
+import { type ActiveGame, type ClientMessage, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, type SpectateSnapshot, parseServerMessage } from './protocol'
 
 /** The parts of the browser WebSocket API we use (the `ws` package matches it too). */
 export interface SocketLike {
@@ -116,6 +116,10 @@ export type RankedEvent =
   | { kind: 'mode-found'; mode: OnlineMode }
   | { kind: 'mode-move'; mode: OnlineMode; byMe: boolean; capture: boolean }
   | { kind: 'mode-over'; result: ModeOver; won: boolean }
+  /** A result for a game this screen no longer shows (it ended while we were away). */
+  | { kind: 'missed-result'; text: string }
+  /** The socket keeps failing before it opens: the sign-in may have expired. */
+  | { kind: 'auth-check' }
 
 export interface ManagerDeps {
   /** Opens the socket to /ws (cookies go along on their own in a browser). */
@@ -128,6 +132,10 @@ export interface ManagerDeps {
 }
 
 const OPEN = 1
+/** Said when a game is closed because the server no longer has it. */
+export const STALE_GAME = 'This game was cancelled: the server restarted and couldn’t resume it (unrated).'
+/** Failed connection attempts in a row before asking whether the sign-in is still valid. */
+const AUTH_CHECK_AFTER = 2
 const turnOf = (moves: readonly string[]): Color => (moves.length % 2 === 0 ? 'w' : 'b')
 
 function replay(moves: readonly string[]): { fen: string; last: { from: Square; to: Square } | null } | null {
@@ -163,6 +171,8 @@ export class RankedManager {
   /** We want to be connected (so drops reconnect). */
   private wanted = false
   private retries = 0
+  /** Connections in a row that closed before the server said HELLO (a refused sign-in looks like this). */
+  private failedOpens = 0
   private retryTimer: unknown = null
   /** The pool we are queueing for (re-sent after a reconnect). */
   private wantPool: string | null = null
@@ -219,6 +229,11 @@ export class RankedManager {
       if (!this.wanted) {
         this.set({ phase: 'offline', searching: null })
         return
+      }
+      // Refused before HELLO, again and again: the app checks whether the sign-in has expired (it signs out if so).
+      if (this.view.phase === 'connecting' || this.retries > 0) {
+        this.failedOpens += 1
+        if (this.failedOpens === AUTH_CHECK_AFTER) this.emit({ kind: 'auth-check' })
       }
       // Dropped: try again with backoff (1 s, 2 s, 4 s … up to 15 s).
       const delay = Math.min(15_000, this.deps.retryBaseMs * 2 ** this.retries)
@@ -402,6 +417,23 @@ export class RankedManager {
     return { gameId: s.gameId, seat: s.seat, seats: s.seats, actions: s.actions, game, turnEndsAt: s.turnMs === null ? null : this.deps.now() + s.turnMs, rated: s.rated, result: null }
   }
 
+  /**
+   * Closes any unfinished game the server no longer has (it restarted and
+   * couldn't resume it). Shown as aborted, with a note why.
+   */
+  private dropStale(active: ActiveGame | null): void {
+    const has = (kind: ActiveGame['kind'], id: string) => active?.kind === kind && active.gameId === id
+    const g = this.view.game
+    if (g && !g.result && !has('chess', g.gameId)) {
+      const r = this.view.me?.rating ?? 0
+      this.set({ game: { ...g, running: null, drawOffer: null, opponentAwayUntil: null, result: { winner: null, reason: 'aborted', rating: { before: r, after: r } } }, phase: 'over', error: STALE_GAME })
+    }
+    const c = this.view.cards
+    if (c && !c.result && !has('cards', c.gameId)) this.set({ cards: { ...c, running: null, opponentAwayUntil: null, result: { gameId: c.gameId, mode: 'cards', winner: null, ranking: [], reason: 'aborted', rating: null } }, error: STALE_GAME })
+    const ry = this.view.royale
+    if (ry && !ry.result && !has('royale', ry.gameId)) this.set({ royale: { ...ry, turnEndsAt: null, result: { gameId: ry.gameId, mode: 'royale', winner: null, ranking: [], reason: 'aborted', rating: null } }, error: STALE_GAME })
+  }
+
   dismissGame(): void {
     if (this.view.game?.result) this.set({ game: null, phase: this.socket ? 'idle' : 'offline' })
   }
@@ -431,14 +463,19 @@ export class RankedManager {
   private receive(msg: ServerMessage): void {
     const g = this.view.game
     switch (msg.type) {
-      case 'HELLO':
+      case 'HELLO': {
         this.retries = 0
-        this.set({ me: { name: msg.user.name, rating: msg.user.rating }, phase: g && !g.result ? 'playing' : this.wantPool ? 'searching' : 'idle', error: null })
+        this.failedOpens = 0
+        // The server says which game we are in; one we still show that it no longer has is closed.
+        if (msg.active !== undefined) this.dropStale(msg.active)
+        const live = this.view.game
+        this.set({ me: { name: msg.user.name, rating: msg.user.rating }, phase: live && !live.result ? 'playing' : live?.result ? 'over' : this.wantPool ? 'searching' : 'idle', ...(this.view.error === STALE_GAME ? {} : { error: null }) })
         // We were queueing when the connection dropped: queue again.
-        if (this.wantPool && !(g && !g.result)) this.send({ type: 'FIND_MATCH', pool: this.wantPool })
+        if (this.wantPool && !(live && !live.result)) this.send({ type: 'FIND_MATCH', pool: this.wantPool })
         if (this.wantMode) this.send({ type: 'FIND_MODE', mode: this.wantMode })
         if (this.wantWatch) this.send({ type: 'SPECTATE', gameId: this.wantWatch })
         return
+      }
       case 'SEARCHING':
         this.set({ searching: { pool: msg.pool, since: this.view.searching?.since ?? this.deps.now(), queued: msg.queued }, phase: 'searching' })
         return
@@ -494,7 +531,12 @@ export class RankedManager {
         return
       }
       case 'GAME_OVER': {
-        if (!g || g.gameId !== msg.gameId) return
+        if (!g || g.gameId !== msg.gameId) {
+          // A game that ended while we were away (e.g. the page was reloaded): say how it went.
+          const d = msg.rating.after - msg.rating.before
+          this.emit({ kind: 'missed-result', text: msg.reason === 'aborted' ? 'A ranked game was aborted while you were away.' : `A ranked game ended while you were away: ${d > 0 ? 'you won' : d < 0 ? 'you lost' : 'no rating change'} (${msg.rating.before} → ${msg.rating.after}).` })
+          return
+        }
         const game: RankedGame = { ...g, clocks: clocksNow(g, this.deps.now()), running: null, drawOffer: null, opponentAwayUntil: null, result: { winner: msg.winner, reason: msg.reason, rating: msg.rating } }
         // Vanishing Chess changes its own rating, not the one shown as yours.
         const standard = !g.pool.startsWith('vanish-')
@@ -608,6 +650,10 @@ export class RankedManager {
           // Leaving early: the final order arrives later, so keep what we know.
           this.set({ royale: { ...r, turnEndsAt: null, result: res.ranking.length === 0 && r.result ? r.result : res } })
           this.emit({ kind: 'mode-over', result: res, won: res.ranking[0] === r.seat })
+        } else {
+          const name = res.mode === 'cards' ? 'Card Chess' : 'Battle Royale'
+          const d = res.rating ? res.rating.after - res.rating.before : 0
+          this.emit({ kind: 'missed-result', text: res.rating ? `A ${name} game ended while you were away: ${d > 0 ? '+' : ''}${d} rating (${res.rating.before} → ${res.rating.after}).` : `A ${name} game ended while you were away.` })
         }
         return
       }

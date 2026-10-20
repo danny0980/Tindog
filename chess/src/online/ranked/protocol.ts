@@ -32,6 +32,12 @@ export const poolById = (id: string): RankedTimeControl | undefined => RANKED_PO
 
 export type RankedReason = 'checkmate' | 'resign' | 'timeout' | 'agreement' | 'stalemate' | 'threefold' | 'insufficient' | 'fifty-move' | 'timeout-insufficient' | 'abandon' | 'aborted'
 
+/** The game a player is in on the server (of any kind). */
+export interface ActiveGame {
+  kind: 'chess' | 'cards' | 'royale'
+  gameId: string
+}
+
 export interface PublicPlayer {
   name: string
   rating: number
@@ -80,7 +86,8 @@ export type ClientMessage =
 
 // ── Server → client ─────────────────────────────────────────────────────────
 export type ServerMessage =
-  | { type: 'HELLO'; protocol: number; user: PublicPlayer & { id: string } }
+  /** `active` = the game you are in right now on the server (null: none; the app drops any game it still shows). */
+  | { type: 'HELLO'; protocol: number; user: PublicPlayer & { id: string }; active?: ActiveGame | null }
   | { type: 'SEARCHING'; pool: string; queued: number }
   | { type: 'MATCH_FOUND'; game: GameSnapshot }
   | { type: 'MOVE_ACCEPTED'; gameId: string; ply: number; clocks: { w: number; b: number } }
@@ -208,7 +215,13 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'HELLO': {
       const p = player(d.user)
       const uid = isRecord(d.user) ? id(d.user.id) : null
-      return p && uid && int(d.protocol, 0, 1000) !== null ? { type: 'HELLO', protocol: d.protocol as number, user: { ...p, id: uid } } : null
+      const a = d.active
+      const kind = isRecord(a) && (a.kind === 'chess' || a.kind === 'cards' || a.kind === 'royale') ? a.kind : null
+      const gameId = isRecord(a) ? id(a.gameId) : null
+      if (a !== undefined && a !== null && !(kind && gameId)) return null
+      if (!p || !uid || int(d.protocol, 0, 1000) === null) return null
+      // An older server sends no `active`: leave it out (unknown), never read it as "no game".
+      return { type: 'HELLO', protocol: d.protocol as number, user: { ...p, id: uid }, ...(a === undefined ? {} : { active: kind && gameId ? { kind, gameId } : null }) }
     }
     case 'SEARCHING':
       return typeof d.pool === 'string' && int(d.queued, 0, 1_000_000) !== null ? { type: 'SEARCHING', pool: d.pool, queued: d.queued as number } : null

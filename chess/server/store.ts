@@ -55,6 +55,8 @@ export interface GameRecord {
   moves: string[]
   ratingChange: { w: number; b: number }
   endedAt: number
+  /** What a replay needs beyond the moves (Card Chess: both hands). */
+  extra?: { hands?: { w: string[]; b: string[] } }
 }
 
 /** A finished online Battle Royale (four seats; computer seats have no user). */
@@ -68,6 +70,16 @@ export interface RoyaleRecord {
   plies: number
   ratingChange: Record<string, number>
   endedAt: number
+  /** The action log, for replays (absent for games before 6.16). */
+  actions?: unknown[]
+}
+
+/** A game in progress, saved after every move so a restarted server can resume it. */
+export interface LiveRow {
+  id: string
+  kind: 'chess' | 'cards' | 'royale'
+  state: unknown
+  updatedAt: number
 }
 
 /** The online modes with their own rating (standard chess uses the user's own rating). */
@@ -123,7 +135,7 @@ const MAX_SEASON_HISTORY = 24
 /** Rated games kept (older ones are dropped; per-user stats stay on the user). */
 const MAX_GAMES = 50_000
 /** Bumped with each schema change; `migrate` brings older files up to date. */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -196,6 +208,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS clans_name ON clans (name COLLATE NOCASE);
 CREATE TABLE IF NOT EXISTS clan_members (user_id TEXT PRIMARY KEY, clan_id TEXT NOT NULL REFERENCES clans (id) ON DELETE CASCADE, position INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS clan_members_clan ON clan_members (clan_id, position);
 CREATE TABLE IF NOT EXISTS clan_war (week TEXT NOT NULL, clan_id TEXT NOT NULL, points INTEGER NOT NULL, PRIMARY KEY (week, clan_id));
+CREATE TABLE IF NOT EXISTS live_games (id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS games_ended ON games (ended_at DESC);
 `
 
 interface UserRow {
@@ -221,6 +235,7 @@ interface GameRow {
   change_w: number
   change_b: number
   ended_at: number
+  extra: string | null
 }
 interface ClanRow {
   id: string
@@ -230,8 +245,29 @@ interface ClanRow {
   created_at: number
 }
 
+interface RoyaleRow {
+  id: string
+  seats: string
+  ranking: string
+  reason: string
+  plies: number
+  changes: string
+  ended_at: number
+  actions: string | null
+}
+const toRoyale = (r: RoyaleRow): RoyaleRecord => ({
+  id: r.id,
+  seats: JSON.parse(r.seats) as Array<string | null>,
+  ranking: JSON.parse(r.ranking) as number[],
+  reason: r.reason,
+  plies: r.plies,
+  ratingChange: JSON.parse(r.changes) as Record<string, number>,
+  endedAt: r.ended_at,
+  ...(r.actions ? { actions: JSON.parse(r.actions) as unknown[] } : {}),
+})
+
 const toUser = (r: UserRow): User => ({ id: r.id, email: r.email, googleSub: r.google_sub, name: r.name, createdAt: r.created_at, rating: r.rating, games: r.games, wins: r.wins, losses: r.losses, draws: r.draws })
-const toGame = (r: GameRow): GameRecord => ({ id: r.id, pool: r.pool, white: r.white, black: r.black, winner: r.winner === 'w' || r.winner === 'b' ? r.winner : null, reason: r.reason, moves: JSON.parse(r.moves) as string[], ratingChange: { w: r.change_w, b: r.change_b }, endedAt: r.ended_at })
+const toGame = (r: GameRow): GameRecord => ({ id: r.id, pool: r.pool, white: r.white, black: r.black, winner: r.winner === 'w' || r.winner === 'b' ? r.winner : null, reason: r.reason, moves: JSON.parse(r.moves) as string[], ratingChange: { w: r.change_w, b: r.change_b }, endedAt: r.ended_at, ...(r.extra ? { extra: JSON.parse(r.extra) as GameRecord['extra'] } : {}) })
 
 export class Store {
   readonly db: Database.Database
@@ -270,10 +306,17 @@ export class Store {
       sweepMagic: db.prepare('DELETE FROM magic WHERE expires_at <= ?'),
       save: db.prepare<[string], { data: string; updated_at: number }>('SELECT data, updated_at FROM saves WHERE user_id = ?'),
       putSave: db.prepare('INSERT OR REPLACE INTO saves (user_id, data, updated_at) VALUES (?, ?, ?)'),
-      addGame: db.prepare('INSERT OR IGNORE INTO games (id, pool, white, black, winner, reason, moves, change_w, change_b, ended_at) VALUES (@id, @pool, @white, @black, @winner, @reason, @moves, @w, @b, @endedAt)'),
+      addGame: db.prepare('INSERT OR IGNORE INTO games (id, pool, white, black, winner, reason, moves, change_w, change_b, ended_at, extra) VALUES (@id, @pool, @white, @black, @winner, @reason, @moves, @w, @b, @endedAt, @extra)'),
+      gamesPage: db.prepare<[string, string, number, number], GameRow>('SELECT * FROM games WHERE (white = ? OR black = ?) AND ended_at < ? ORDER BY ended_at DESC LIMIT ?'),
+      gameById: db.prepare<[string], GameRow>('SELECT * FROM games WHERE id = ?'),
+      royalePage: db.prepare<[string, number, number], RoyaleRow>('SELECT * FROM royale_games WHERE EXISTS (SELECT 1 FROM json_each(royale_games.seats) WHERE value = ?) AND ended_at < ? ORDER BY ended_at DESC LIMIT ?'),
+      royaleById: db.prepare<[string], RoyaleRow>('SELECT * FROM royale_games WHERE id = ?'),
+      putLive: db.prepare('INSERT OR REPLACE INTO live_games (id, kind, state, updated_at) VALUES (?, ?, ?, ?)'),
+      dropLive: db.prepare('DELETE FROM live_games WHERE id = ?'),
+      liveAll: db.prepare<[string], { id: string; kind: string; state: string; updated_at: number }>('SELECT * FROM live_games WHERE kind = ?'),
       trimGames: db.prepare('DELETE FROM games WHERE seq <= (SELECT MAX(seq) FROM games) - ?'),
       gamesOf: db.prepare<[string, string, number], GameRow>('SELECT * FROM games WHERE white = ? OR black = ? ORDER BY seq DESC LIMIT ?'),
-      addRoyale: db.prepare('INSERT OR IGNORE INTO royale_games (id, seats, ranking, reason, plies, changes, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+      addRoyale: db.prepare('INSERT OR IGNORE INTO royale_games (id, seats, ranking, reason, plies, changes, ended_at, actions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
       leaderboard: db.prepare<[number], UserRow>('SELECT * FROM users WHERE games > 0 ORDER BY rating DESC LIMIT ?'),
       modeRating: db.prepare<[string, string], ModeRating>('SELECT rating, games, wins, losses, draws FROM mode_ratings WHERE user_id = ? AND mode = ?'),
       putModeRating: db.prepare('INSERT OR REPLACE INTO mode_ratings (user_id, mode, rating, games, wins, losses, draws) VALUES (@userId, @mode, @rating, @games, @wins, @losses, @draws)'),
@@ -312,8 +355,15 @@ export class Store {
     const row = this.db.prepare<[], { value: string }>("SELECT value FROM meta WHERE key = 'schema'").get()
     const version = row ? Number(row.value) : 0
     if (version > SCHEMA_VERSION) throw new Error(`The database ${this.file ?? ''} was written by a newer server (schema ${version}); upgrade this server first.`)
-    // (Future schema changes go here: `if (version < 2) { … }`.)
-    if (version < SCHEMA_VERSION) this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)").run(String(SCHEMA_VERSION))
+    // Schema changes, oldest first; each runs once, in the same transaction as the new version number.
+    this.db.transaction(() => {
+      if (version < 2) {
+        // 6.16: replays (Card Chess hands, Battle Royale action logs).
+        this.db.exec('ALTER TABLE games ADD COLUMN extra TEXT')
+        this.db.exec('ALTER TABLE royale_games ADD COLUMN actions TEXT')
+      }
+      if (version < SCHEMA_VERSION) this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)").run(String(SCHEMA_VERSION))
+    })()
   }
 
   private getMeta(key: string): string | null {
@@ -435,6 +485,9 @@ export class Store {
   dropSession(hash: string): void {
     this.q.dropSession.run(hash)
   }
+  dropSessionsOf(userId: string): void {
+    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId)
+  }
   magic(hash: string): MagicRow | null {
     const r = this.q.magic.get(hash)
     return r ? { email: r.email, expiresAt: r.expires_at } : null
@@ -467,14 +520,80 @@ export class Store {
 
   // ── Rated games ───────────────────────────────────────────────────────────
   addGame(game: GameRecord): void {
-    this.q.addGame.run({ id: game.id, pool: game.pool, white: game.white, black: game.black, winner: game.winner, reason: game.reason, moves: JSON.stringify(game.moves), w: game.ratingChange.w, b: game.ratingChange.b, endedAt: game.endedAt })
+    this.q.addGame.run({ id: game.id, pool: game.pool, white: game.white, black: game.black, winner: game.winner, reason: game.reason, moves: JSON.stringify(game.moves), w: game.ratingChange.w, b: game.ratingChange.b, endedAt: game.endedAt, extra: game.extra ? JSON.stringify(game.extra) : null })
     this.q.trimGames.run(MAX_GAMES)
   }
   gamesOf(userId: string, limit: number): GameRecord[] {
     return this.q.gamesOf.all(userId, userId, limit).map(toGame)
   }
   addRoyaleGame(r: RoyaleRecord): void {
-    this.q.addRoyale.run(r.id, JSON.stringify(r.seats), JSON.stringify(r.ranking), r.reason, r.plies, JSON.stringify(r.ratingChange), r.endedAt)
+    this.q.addRoyale.run(r.id, JSON.stringify(r.seats), JSON.stringify(r.ranking), r.reason, r.plies, JSON.stringify(r.ratingChange), r.endedAt, r.actions ? JSON.stringify(r.actions) : null)
+  }
+
+  // ── History (newest first, paged by end time) ─────────────────────────────
+  /** A player's two-player games ending before `before`. */
+  gamesPage(userId: string, before: number, limit: number): GameRecord[] {
+    return this.q.gamesPage.all(userId, userId, before, limit).map(toGame)
+  }
+  game(id: string): GameRecord | null {
+    const r = this.q.gameById.get(id)
+    return r ? toGame(r) : null
+  }
+  /** A player's Battle Royale games ending before `before`. */
+  royalePage(userId: string, before: number, limit: number): RoyaleRecord[] {
+    return this.q.royalePage.all(userId, before, limit).map(toRoyale)
+  }
+  royaleGame(id: string): RoyaleRecord | null {
+    const r = this.q.royaleById.get(id)
+    return r ? toRoyale(r) : null
+  }
+
+  // ── Games in progress (survive a restart) ─────────────────────────────────
+  putLive(id: string, kind: LiveRow['kind'], state: unknown, now: number): void {
+    this.q.putLive.run(id, kind, JSON.stringify(state), now)
+  }
+  dropLive(id: string): void {
+    this.q.dropLive.run(id)
+  }
+  liveGames(kind: LiveRow['kind']): LiveRow[] {
+    return this.q.liveAll.all(kind).map((r) => ({ id: r.id, kind, state: JSON.parse(r.state) as unknown, updatedAt: r.updated_at }))
+  }
+
+  // ── Your data: export and deletion ────────────────────────────────────────
+  /** Everything stored about a user, for a download. */
+  exportUser(userId: string): Record<string, unknown> | null {
+    const user = this.user(userId)
+    if (!user) return null
+    return {
+      exportedAt: new Date().toISOString(),
+      account: user,
+      modeRatings: Object.fromEntries(RATED_MODES.map((m) => [m, this.modeRating(userId, m)])),
+      season: { current: this.seasonCurrent(), row: this.seasonRow(userId), history: this.seasonHistory(userId) },
+      clan: this.clanOf(userId),
+      cloudSave: this.save(userId),
+      games: this.gamesPage(userId, Number.MAX_SAFE_INTEGER, 1_000_000),
+      battleRoyale: this.royalePage(userId, Number.MAX_SAFE_INTEGER, 1_000_000),
+    }
+  }
+
+  /**
+   * Deletes a user and everything that is only theirs: the account, sign-ins,
+   * cloud save, ratings, season rows and clan membership (in one transaction).
+   * Finished games stay for their opponents' history, under an id that no
+   * longer leads to a name.
+   */
+  deleteUser(userId: string): boolean {
+    const user = this.user(userId)
+    if (!user) return false
+    this.transaction(() => {
+      this.db.prepare('DELETE FROM season_rows WHERE user_id = ?').run(userId)
+      this.db.prepare('DELETE FROM season_history WHERE user_id = ?').run(userId)
+      this.db.prepare('DELETE FROM clan_members WHERE user_id = ?').run(userId)
+      if (user.email) this.db.prepare('DELETE FROM magic WHERE email = ?').run(user.email)
+      // Sessions, the cloud save and mode ratings go with the user (ON DELETE CASCADE).
+      this.db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+    })
+    return true
   }
   leaderboard(limit: number): User[] {
     return this.q.leaderboard.all(limit).map(toUser)

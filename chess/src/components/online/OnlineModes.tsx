@@ -8,7 +8,7 @@ import { accountStore } from '../../online/ranked/account'
 import { type ModesInfo, type RatedModeId, api } from '../../online/ranked/api'
 import { CARDS_POOL, ROYALE_MOVE_MS } from '../../online/ranked/modeProtocol'
 import { seatPlayer } from '../../online/ranked/modeRules'
-import { type CardsOnline, type RoyaleOnline, clocksNow } from '../../online/ranked/onlineManager'
+import { type CardsOnline, type RoyaleOnline, STALE_GAME, clocksNow } from '../../online/ranked/onlineManager'
 import { VANISH_POOLS, poolById } from '../../online/ranked/protocol'
 import { getRanked, useRanked } from '../../online/ranked/rankedSession'
 import type { Pos } from '../../royale/royale'
@@ -313,6 +313,7 @@ export function CardsOnlineView({ cards }: { cards: CardsOnline }) {
           {status}
         </div>
         {result && <ModeResultCard text={resultText} rating={result.rating} />}
+        {result && view.error === STALE_GAME && <p className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs text-amber-100">{STALE_GAME}</p>}
         <div className="glass space-y-2 rounded-2xl p-3">
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
             <Sparkles className="size-3.5" /> Your hand
@@ -398,6 +399,7 @@ function ResignModal({ open, onClose, title, text }: { open: boolean; onClose: (
 
 export function RoyaleOnlineView({ royale }: { royale: RoyaleOnline }) {
   const ranked = getRanked()
+  const staleNote = useRanked().error
   const [selected, setSelected] = useState<Pos | null>(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const result = royale.result
@@ -448,6 +450,7 @@ export function RoyaleOnlineView({ royale }: { royale: RoyaleOnline }) {
             You are {SEATS[royale.seat]} · move {game.ply + 1} · {royale.rated ? 'rated' : 'unrated (one person)'}
           </div>
         </div>
+        {result && staleNote === STALE_GAME && <p className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs text-amber-100">{STALE_GAME}</p>}
         {result && result.ranking.length > 0 && <ModeResultCard text={place === 1 ? 'Last king standing' : `${place ? ordinal(place) : ''} place`} rating={result.rating} />}
         <ul className="glass space-y-1.5 rounded-2xl p-3" aria-label="Scoreboard">
           {royale.seats.map((s, i) => {

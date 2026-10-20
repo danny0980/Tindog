@@ -15,13 +15,28 @@ export interface CardResult {
 
 const other = (s: Side): Side => (s === 'w' ? 'b' : 'w')
 
+/** A Card Chess game as saved to the database. */
+export interface CardRoomState {
+  id: string
+  players: Record<Side, string>
+  offer: CardId[]
+  drafts: Record<Side, CardId[] | null>
+  phase: 'draft' | 'play'
+  draftEndsAt: number
+  actions: CardAction[]
+  turns: number
+  clocks: Record<Side, number>
+  playStartedAt: number
+  savedAt: number
+}
+
 export class CardRoom {
   readonly id: string
   readonly players: Record<Side, string>
   readonly offer: CardId[]
   readonly drafts: Record<Side, CardId[] | null> = { w: null, b: null }
   phase: 'draft' | 'play' = 'draft'
-  readonly draftEndsAt: number
+  draftEndsAt: number
   private game: CardGame | null = null
   readonly actions: CardAction[] = []
   /** Turn-ending actions so far (the first two must come quickly, or the game is aborted). */
@@ -30,6 +45,8 @@ export class CardRoom {
   private turnStartedAt: number | null = null
   private playStartedAt = 0
   result: CardResult | null = null
+  /** Restored after a restart: no play timer runs until the player to move is back. */
+  private waiting = false
 
   constructor(id: string, players: Record<Side, string>, now: number, random: () => number = Math.random) {
     this.id = id
@@ -105,7 +122,7 @@ export class CardRoom {
   }
 
   private deadlines(): { draftAt: number | null; abortAt: number | null; flagAt: number | null } {
-    if (this.result) return { draftAt: null, abortAt: null, flagAt: null }
+    if (this.result || this.waiting) return { draftAt: null, abortAt: null, flagAt: null }
     if (this.phase === 'draft') return { draftAt: this.draftEndsAt, abortAt: null, flagAt: null }
     const firstFrom = this.turns === 0 ? this.playStartedAt : this.turnStartedAt
     return {
@@ -141,11 +158,64 @@ export class CardRoom {
     return Number.isFinite(next) ? Math.max(0, next - now) : null
   }
 
+  /** Ends the game with no result (nobody came back after a restart). */
+  abort(): CardResult | null {
+    if (this.result) return null
+    this.result = { winner: null, reason: 'aborted' }
+    return this.result
+  }
+
   /** Resigning (or leaving) before both sides have moved just aborts. */
   resign(side: Side, reason: 'resign' | 'abandon' = 'resign'): CardResult | null {
     if (this.result) return null
     this.result = this.turns < 2 ? { winner: null, reason: 'aborted' } : { winner: other(side), reason }
     return this.result
+  }
+
+  toState(now: number): CardRoomState {
+    return { id: this.id, players: { ...this.players }, offer: [...this.offer], drafts: { w: this.drafts.w, b: this.drafts.b }, phase: this.phase, draftEndsAt: this.draftEndsAt, actions: [...this.actions], turns: this.turns, clocks: { ...this.clocks }, playStartedAt: this.playStartedAt, savedAt: now }
+  }
+
+  /**
+   * Rebuilds a saved game: the draft timer and the first-move timer are moved
+   * on by the time the server was down, and the clock to move stays stopped
+   * until that player is back (`resume`). Null if the log doesn't replay.
+   */
+  static restore(s: CardRoomState, now: number): CardRoom | null {
+    const shift = Math.max(0, now - s.savedAt)
+    const room = new CardRoom(s.id, s.players, now)
+    room.offer.splice(0, room.offer.length, ...s.offer)
+    room.drafts.w = s.drafts.w
+    room.drafts.b = s.drafts.b
+    room.draftEndsAt = s.draftEndsAt + shift
+    if (s.phase === 'play') {
+      if (!s.drafts.w || !s.drafts.b) return null
+      room.startPlay(s.playStartedAt + shift)
+      for (const a of s.actions) {
+        if (!room.game || !applyCardAction(room.game, a)) return null
+        room.actions.push(a)
+      }
+      const r = room.game?.result
+      if (r) room.result = { winner: r.winner, reason: r.reason }
+    }
+    room.turns = s.turns
+    room.clocks = { ...s.clocks }
+    room.turnStartedAt = null
+    // In play, every timer waits for the player to move (the draft timer just carries on).
+    room.waiting = s.phase === 'play'
+    return room
+  }
+
+  /** Restored after a restart and waiting for the player to move. */
+  get paused(): boolean {
+    return this.waiting && this.result === null
+  }
+
+  resume(now: number): void {
+    if (!this.paused) return
+    this.waiting = false
+    if (this.turns === 0) this.playStartedAt = now
+    else this.turnStartedAt = now
   }
 
   snapshot(side: Side, opponent: PublicPlayer, now: number): CardSnapshot {

@@ -10,7 +10,7 @@ import { settingsStore } from '../../stores/settingsStore'
 import { showToast } from '../../stores/toastStore'
 import { recordOnlineResult } from '../../utils/feats'
 import { onlineScreen } from '../onlineSession'
-import { accountStore, patchUser } from './account'
+import { accountStore, patchUser, sessionEnded } from './account'
 import { api } from './api'
 import { RankedManager, type RankedView, rankedResultText } from './onlineManager'
 
@@ -45,6 +45,17 @@ export function getRanked(): RankedManager {
       void api.me().then((user) => user && patchUser(user)).catch(() => {})
     } else if (e.kind === 'draw-offered' && !onlineScreen.visible) {
       showToast('info', 'Draw offered', 'Your ranked opponent offers a draw.')
+    } else if (e.kind === 'missed-result') {
+      showToast('info', 'While you were away', e.text, 8000)
+      void api.me().then((user) => user && patchUser(user)).catch(() => {})
+    } else if (e.kind === 'auth-check') {
+      // The connection keeps being refused: if the server no longer knows us, the sign-in has expired.
+      void api
+        .me()
+        .then((user) => {
+          if (!user) sessionEnded()
+        })
+        .catch(() => {})
     } else if (e.kind === 'mode-found') {
       sfx.pickup()
       if (!onlineScreen.visible) showToast('success', e.mode === 'cards' ? 'Card Chess opponent found' : 'Battle Royale table ready', 'Your game is waiting for you in Online.')

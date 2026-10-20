@@ -336,6 +336,8 @@ export function useTimeRush(active: boolean) {
     summary,
     runId,
     engineStatus,
+    engineError: engine.error,
+    retryEngine: engine.retry,
     start,
     quit,
     onMove,

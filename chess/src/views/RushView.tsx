@@ -6,6 +6,7 @@ import { ChessBoard } from '../components/board/ChessBoard'
 import { ConfettiCanvas } from '../components/effects/ConfettiCanvas'
 import { RushHud } from '../components/rush/RushHud'
 import { ScorePopups } from '../components/rush/ScorePopups'
+import { EngineNotice } from '../components/game/EngineNotice'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { RUSH_POINTS_PER_COIN, RUSH_ROUND_BONUS_MS, RUSH_START_MS } from '../constants/rush'
@@ -49,10 +50,10 @@ export function RushView({ active }: { active: boolean }) {
               <Stat label="Best round" value={String(rushRecord.bestRound)} />
               <Stat label="Runs" value={String(rushRecord.runs)} />
             </div>
-            <Button variant="primary" size="lg" className="mt-6 w-full" onClick={rush.start} icon={<Play className="size-5" fill="currentColor" />}>
-              Start rush
+            <Button variant="primary" size="lg" className="mt-6 w-full" onClick={rush.start} disabled={rush.engineStatus !== 'ready'} icon={<Play className="size-5" fill="currentColor" />} data-rush-start>
+              {rush.engineStatus === 'ready' ? 'Start rush' : rush.engineStatus === 'error' ? 'Engine unavailable' : 'Starting Stockfish…'}
             </Button>
-            {rush.engineStatus !== 'ready' && <p className="mt-2 text-xs text-slate-500">Warming up Stockfish…</p>}
+            <EngineNotice status={rush.engineStatus} error={rush.engineError} onRetry={rush.retryEngine} className="mt-2 text-left" />
           </div>
         </section>
         <section className="glass rounded-2xl p-4">
@@ -103,6 +104,8 @@ export function RushView({ active }: { active: boolean }) {
             Quit
           </Button>
         </div>
+        {/* The engine stopped mid-run: your clock is paused on its turn, so nothing is lost while it restarts. */}
+        <EngineNotice status={rush.engineStatus} error={rush.engineError} onRetry={rush.retryEngine} />
       </div>
       <aside className="hidden flex-col gap-3 lg:flex">
         <RushHud timeLeft={rush.timeLeft} score={rush.score} combo={rush.combo} round={rush.round} difficulty={rush.level?.difficulty ?? 'beginner'} best={rushRecord.bestScore} />

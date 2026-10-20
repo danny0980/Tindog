@@ -8,6 +8,7 @@ import type { Color } from '../../types/chess'
 import { HILL, VARIANTS, VARIANT_IDS, type VariantId, chess960Rank, variantResultText } from '../../variants/rules'
 import { LEVELS, type VariantLevel, useVariantGame } from '../../variants/useVariantGame'
 import { ChessBoard } from '../board/ChessBoard'
+import { EngineNotice } from '../game/EngineNotice'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 
@@ -117,7 +118,7 @@ export function VariantsView() {
   const them: Color = me === 'w' ? 'b' : 'w'
   const result = game.result
   const showResult = result !== null && seenResult !== v.version
-  const status = result ? variantResultText(result, me) : v.thinking ? 'The computer is thinking…' : game.inCheck ? 'Check! Your move' : 'Your move'
+  const status = result ? variantResultText(result, me) : v.waitingForEngine ? 'Waiting for the engine…' : v.thinking ? 'The computer is thinking…' : game.inCheck ? 'Check! Your move' : 'Your move'
 
   const finish = () => setSeenResult(v.version)
 
@@ -144,6 +145,7 @@ export function VariantsView() {
         {game.variant === 'threecheck' && <CheckPips label="You" count={game.checks[me]} />}
       </div>
       <aside className="flex flex-col gap-3">
+        {!result && <EngineNotice status={v.engineStatus} error={v.engineError} onRetry={v.retryEngine} />}
         <div className="glass rounded-2xl px-4 py-3">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-sky-200">
             {VARIANTS[game.variant].name}

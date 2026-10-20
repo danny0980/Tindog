@@ -25,6 +25,8 @@ export interface SearchOptions {
 export interface SearchResult {
   bestMove: string
   lines: EngineLine[]
+  /** The search was stopped early (a newer search, or the app went to the background): the move may be shallow. */
+  interrupted?: boolean
 }
 
 export interface DifficultyConfig {

@@ -40,7 +40,10 @@ export interface VariantView {
   myColor: Color
   level: VariantLevel
   thinking: boolean
+  /** It is the computer's turn but its engine isn't running (starting, restarting or failed). */
+  waitingForEngine: boolean
   engineStatus: 'idle' | 'loading' | 'ready' | 'error'
+  engineError: string | null
 }
 
 function sound(game: VariantGame, move: VMove, wasCapture: boolean): void {
@@ -154,6 +157,7 @@ export function useVariantGame(active: boolean) {
     game && game.variant === 'chess960' && game.turn === myColor ? game.legalMoves().flatMap((m) => (m.castle ? [{ from: m.from, to: m.to, kind: 'castle' }] : [])) : []
 
   // The computer is "thinking" whenever it is its turn.
-  const view: VariantView = { game, version, myColor, level, thinking: aiToMove, engineStatus: engine.status }
-  return { ...view, battle, castleTargets, start, move, resign, leave }
+  const waitingForEngine = Boolean(active && game && !game.result && game.turn !== myColor && engine.status !== 'ready')
+  const view: VariantView = { game, version, myColor, level, thinking: aiToMove, waitingForEngine, engineStatus: engine.status, engineError: engine.error }
+  return { ...view, battle, castleTargets, start, move, resign, leave, retryEngine: engine.retry }
 }

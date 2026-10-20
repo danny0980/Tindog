@@ -74,6 +74,27 @@ export class Auth {
     return this.store.user(row.userId)
   }
 
+  /**
+   * Sliding sessions: a session used in the second half of its life is
+   * extended to a full term again, so active players are never signed out.
+   * Returns the new expiry when it was extended (the cookie must be renewed too).
+   */
+  touch(rawToken: string | null | undefined): number | null {
+    if (!rawToken || rawToken.length > 100) return null
+    const hash = sha256(rawToken)
+    const row = this.store.session(hash)
+    const now = this.now()
+    if (!row || row.expiresAt <= now || row.expiresAt - now > this.sessionMs / 2) return null
+    const expiresAt = now + this.sessionMs
+    this.store.putSession(hash, { userId: row.userId, expiresAt })
+    return expiresAt
+  }
+
+  /** Ends every session of a user (account deletion). */
+  endAllSessions(userId: string): void {
+    this.store.dropSessionsOf(userId)
+  }
+
   endSession(rawToken: string | null | undefined): void {
     if (rawToken) this.store.dropSession(sha256(rawToken))
   }

@@ -14,6 +14,8 @@ import { useRanked } from '../online/ranked/rankedSession'
 import { AccountPanel, FindMatchPanel, RankedGameView } from '../components/online/Ranked'
 import { LeaguePanel, SpectateView } from '../components/online/League'
 import { CardsOnlineView, OnlineModesPanel, RoyaleOnlineView } from '../components/online/OnlineModes'
+import { AccountDataPanel } from '../components/online/AccountData'
+import { HistoryView } from '../components/online/HistoryView'
 import { type ColorChoice, TIME_CONTROLS, parseRoomCode, trimName } from '../online/protocol'
 import { profileStore } from '../stores/profileStore'
 import { settingsStore, updateSettings } from '../stores/settingsStore'
@@ -39,6 +41,7 @@ export function OnlineView({ inviteCode, onInviteUsed }: { inviteCode: string | 
   const view = useOnlineSession()
   const session = getOnlineSession()
   const ranked = useRanked()
+  const [history, setHistory] = useState(false)
 
   useEffect(() => {
     onlineScreen.visible = true
@@ -58,14 +61,15 @@ export function OnlineView({ inviteCode, onInviteUsed }: { inviteCode: string | 
   if (ranked.game) return <RankedGameView game={ranked.game} />
   if (ranked.cards) return <CardsOnlineView cards={ranked.cards} />
   if (ranked.royale) return <RoyaleOnlineView royale={ranked.royale} />
+  if (history) return <HistoryView onBack={() => setHistory(false)} />
   if (ranked.watch) return <SpectateView game={ranked.watch} />
   if (view.phase === 'playing' && view.match) return <OnlineGame match={view.match} opponent={view.opponent} link={view.link} />
   if (view.phase === 'opening' || view.phase === 'waiting') return <WaitingRoom code={view.code ?? ''} ready={view.phase === 'waiting'} onCancel={() => session.leave()} />
   if (view.phase === 'joining') return <Connecting code={view.code ?? ''} onCancel={() => session.leave()} />
-  return <Lobby error={view.error} />
+  return <Lobby error={view.error} onOpenHistory={() => setHistory(true)} />
 }
 
-function Lobby({ error }: { error: string | null }) {
+function Lobby({ error, onOpenHistory }: { error: string | null; onOpenHistory: () => void }) {
   const session = getOnlineSession()
   const name = useStore(settingsStore, (s) => s.onlineName)
   const tcId = useStore(settingsStore, (s) => s.onlineTimeControl)
@@ -90,6 +94,7 @@ function Lobby({ error }: { error: string | null }) {
       </section>
 
       <AccountPanel />
+      <AccountDataPanel onOpenHistory={onOpenHistory} />
       <FindMatchPanel />
       <OnlineModesPanel />
       <LeaguePanel />

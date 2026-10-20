@@ -26,7 +26,7 @@ export function QuizView() {
     <div className="mx-auto w-full max-w-2xl space-y-4" data-quiz>
       <section className="glass space-y-3 rounded-3xl p-5">
         {quiz ? (
-          <QuizPanel key={round} questions={quiz} onDone={() => undefined} />
+          <QuizPanel key={round} questions={quiz} />
         ) : (
           <div className="space-y-2 text-sm text-slate-300">
             <p>Five questions about the people of Classic Chess: true facts from the history books (“Who is this?”), their dates, and one line from the game itself.</p>

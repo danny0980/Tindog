@@ -23,18 +23,21 @@ class EnginePool {
       const promise = StockfishEngine.create(STOCKFISH_WORKER_PATH)
       slot = { promise, refs: 0, idleTimer: undefined }
       this.slots.set(role, slot)
-      promise.catch(() => {
+      const drop = () => {
         if (this.slots.get(role)?.promise === promise) this.slots.delete(role)
-      })
+      }
+      // A worker that fails to start, or crashes later, leaves the pool: the next acquire starts a fresh one.
+      promise.then((engine) => engine.onCrash(drop), drop)
     }
     window.clearTimeout(slot.idleTimer)
     slot.refs += 1
     return slot.promise
   }
 
-  release(role: EngineRole): void {
+  /** Lets go of `role`. Pass the promise `acquire` returned, so a release after a crash never touches its replacement. */
+  release(role: EngineRole, acquired?: Promise<StockfishEngine>): void {
     const slot = this.slots.get(role)
-    if (!slot) return
+    if (!slot || (acquired && slot.promise !== acquired)) return
     slot.refs = Math.max(0, slot.refs - 1)
     if (slot.refs > 0) return
     window.clearTimeout(slot.idleTimer)

@@ -6,7 +6,7 @@ import { useStore } from '../../hooks/useStore'
 import { accountStore, patchUser, signOut, signedIn } from '../../online/ranked/account'
 import { api } from '../../online/ranked/api'
 import { resolveConflict, syncStore } from '../../online/ranked/cloudSync'
-import { type RankedGame, clocksNow, rankedResultText } from '../../online/ranked/onlineManager'
+import { type RankedGame, STALE_GAME, clocksNow, rankedResultText } from '../../online/ranked/onlineManager'
 import { RANKED_POOLS, poolById } from '../../online/ranked/protocol'
 import { getRanked, useRanked } from '../../online/ranked/rankedSession'
 import { settingsStore } from '../../stores/settingsStore'
@@ -351,6 +351,11 @@ export function RankedGameView({ game }: { game: RankedGame }) {
           {awayFor !== null && !game.result ? <WifiOff className="size-4 shrink-0" /> : <Trophy className="size-4 shrink-0 text-sky-300" />}
           <span>{status}</span>
         </div>
+        {game.result && view.error === STALE_GAME && (
+          <p className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs text-amber-100" data-stale-game>
+            {STALE_GAME}
+          </p>
+        )}
         {game.result && game.result.reason !== 'aborted' && (
           <div className="glass rounded-2xl px-4 py-3 text-center" data-ranked-rating-change>
             <div className="text-[11px] uppercase tracking-wider text-slate-400">{vanish ? 'Vanishing rating' : 'Online rating'}</div>

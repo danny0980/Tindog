@@ -1,4 +1,4 @@
-import { AlertTriangle, BookOpen, Crown, Eye, Flag, Handshake, LoaderCircle, Timer } from 'lucide-react'
+import { AlertTriangle, BookOpen, Crown, Eye, Flag, Handshake, LoaderCircle, RefreshCw, Timer } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { EngineStatus } from '../../types/engine'
 import type { GameStatus } from '../../types/chess'
@@ -15,6 +15,8 @@ interface GameStatusBannerProps {
   isReview: boolean
   opening: DetectedOpening | null
   opponentName?: string
+  /** Starts the engine again after it gave up. */
+  onRetryEngine?: () => void
 }
 
 const TONES = {
@@ -23,7 +25,7 @@ const TONES = {
   danger: 'border-red-400/30 bg-red-500/10 text-red-100 [&_.banner-icon]:bg-red-500/25',
 } as const
 
-function Banner({ tone, icon, title, detail, opening }: { tone: keyof typeof TONES; icon: ReactNode; title: string; detail: ReactNode; opening: DetectedOpening | null }) {
+function Banner({ tone, icon, title, detail, opening, action }: { tone: keyof typeof TONES; icon: ReactNode; title: string; detail: ReactNode; opening: DetectedOpening | null; action?: ReactNode }) {
   return (
     <div className={`glass rounded-xl px-4 py-3 transition-colors ${TONES[tone]}`} role="status" aria-live="polite">
       <div className="flex items-center gap-3">
@@ -32,6 +34,7 @@ function Banner({ tone, icon, title, detail, opening }: { tone: keyof typeof TON
           <div className="truncate text-base font-bold leading-tight">{title}</div>
           <div className="truncate text-sm opacity-75">{detail}</div>
         </div>
+        {action && <div className="ml-auto shrink-0">{action}</div>}
       </div>
       {opening && (
         <div className="mt-2.5 flex items-center gap-2 border-t border-white/5 pt-2.5 text-xs">
@@ -44,10 +47,23 @@ function Banner({ tone, icon, title, detail, opening }: { tone: keyof typeof TON
   )
 }
 
-export function GameStatusBanner({ status, aiThinking, engineStatus, engineError, isAiMode, isLive, isReview, opening, opponentName = 'Stockfish' }: GameStatusBannerProps) {
+export function GameStatusBanner({ status, aiThinking, engineStatus, engineError, isAiMode, isLive, isReview, opening, opponentName = 'Stockfish', onRetryEngine }: GameStatusBannerProps) {
   if (isAiMode && engineStatus === 'error') {
     return (
-      <Banner tone="danger" icon={<AlertTriangle className="size-5" />} title="Engine unavailable" opening={opening} detail={`${engineError ?? 'Stockfish failed to load.'} Try a local game.`} />
+      <Banner
+        tone="danger"
+        icon={<AlertTriangle className="size-5" />}
+        title="Engine unavailable"
+        opening={opening}
+        detail={`${engineError ?? 'Stockfish failed to load.'} Retry, or play a local game.`}
+        action={
+          onRetryEngine && (
+            <button type="button" onClick={onRetryEngine} className="flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-white/15" data-engine-retry>
+              <RefreshCw className="size-3.5" /> Retry
+            </button>
+          )
+        }
+      />
     )
   }
   if (!isLive) {
@@ -61,7 +77,7 @@ export function GameStatusBanner({ status, aiThinking, engineStatus, engineError
     return <Banner tone={r.kind === 'draw' ? 'neutral' : 'success'} icon={icon} title={isReview ? `Review · ${title}` : title} detail={detail} opening={opening} />
   }
   if (isAiMode && engineStatus === 'loading') {
-    return <Banner tone="neutral" icon={<LoaderCircle className="size-5 animate-spin" />} title={`Summoning ${opponentName}…`} detail="Preparing the engine" opening={opening} />
+    return <Banner tone="neutral" icon={<LoaderCircle className="size-5 animate-spin" />} title={`Summoning ${opponentName}…`} detail={engineError ?? 'Preparing the engine'} opening={opening} />
   }
   if (status.inCheck) {
     return <Banner tone="danger" icon={<AlertTriangle className="size-5" />} title="Check!" detail={`${colorName(status.turn)} must get out of check`} opening={opening} />

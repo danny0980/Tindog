@@ -2,7 +2,7 @@
 // real clocks, accepts only legal moves from the side to move, and decides
 // the result. Time is passed in (`now`) so tests can run whole games.
 import { Chess } from 'chess.js'
-import type { GameSnapshot, PublicPlayer, RankedReason, RankedTimeControl } from '../src/online/ranked/protocol'
+import { type GameSnapshot, type PublicPlayer, type RankedReason, type RankedTimeControl, poolById } from '../src/online/ranked/protocol'
 
 export type Side = 'w' | 'b'
 export interface Result {
@@ -28,12 +28,29 @@ function canMate(chess: Chess, color: Side): boolean {
   return minors >= 2
 }
 
+/** A game in progress as saved to the database (times are server clock ms). */
+export interface GameRoomState {
+  id: string
+  pool: string
+  players: Record<Side, string>
+  startedAt: number
+  moves: string[]
+  clocks: Record<Side, number>
+  turnStartedAt: number | null
+  drawOffer: Side | null
+  /** When this was saved: on restore, the time the server was down is added back so nobody's clock ran. */
+  savedAt: number
+}
+
 export class GameRoom {
   readonly id: string
   readonly pool: RankedTimeControl
   /** User ids per side. */
   readonly players: Record<Side, string>
-  readonly startedAt: number
+  /** When the game started (moved on when a restored game resumes, for the first-move timer). */
+  startedAt: number
+  /** Restored after a restart: no timer runs until the player to move is back. */
+  private waiting = false
   private readonly chess = new Chess()
   readonly moves: string[] = []
   private clocks: Record<Side, number>
@@ -107,7 +124,7 @@ export class GameRoom {
 
   /** The moments a time event can happen: an abort (first moves not made) and a flag. */
   private deadlines(): { abortAt: number | null; flagAt: number | null } {
-    if (this.result) return { abortAt: null, flagAt: null }
+    if (this.result || this.waiting) return { abortAt: null, flagAt: null }
     const firstMoveFrom = this.moves.length === 0 ? this.startedAt : this.turnStartedAt
     return {
       abortAt: this.moves.length < 2 && firstMoveFrom !== null ? firstMoveFrom + FIRST_MOVE_MS : null,
@@ -164,6 +181,57 @@ export class GameRoom {
   abandon(side: Side): Result | null {
     if (this.result) return null
     this.result = this.moves.length < 2 ? { winner: null, reason: 'aborted' } : { winner: other(side), reason: 'abandon' }
+    return this.result
+  }
+
+  /** Everything needed to rebuild this game after a restart. */
+  toState(now: number): GameRoomState {
+    return { id: this.id, pool: this.pool.id, players: { ...this.players }, startedAt: this.startedAt, moves: [...this.moves], clocks: { ...this.clocks }, turnStartedAt: this.turnStartedAt, drawOffer: this.drawOffer, savedAt: now }
+  }
+
+  /**
+   * Rebuilds a saved game. The time the server was down doesn't count: every
+   * moment is shifted by it, so the clock to move resumes where it stopped.
+   * Null if the save doesn't replay (an unknown pool or an illegal move).
+   */
+  static restore(s: GameRoomState, now: number): GameRoom | null {
+    const pool = poolById(s.pool)
+    if (!pool) return null
+    const shift = Math.max(0, now - s.savedAt)
+    const room = new GameRoom(s.id, pool, s.players, s.startedAt + shift)
+    for (const uci of s.moves) {
+      try {
+        room.chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), ...(uci.length > 4 ? { promotion: uci[4] } : {}) })
+      } catch {
+        return null
+      }
+      room.moves.push(uci)
+    }
+    room.clocks = { ...s.clocks }
+    // Clocks (and the first-move timer) stay stopped until the player to move is back (see `resume`).
+    room.turnStartedAt = null
+    room.waiting = true
+    room.drawOffer = s.drawOffer
+    return room
+  }
+
+  /** Restored after a restart and waiting for the player to move: no clock or timer runs. */
+  get paused(): boolean {
+    return this.waiting && this.result === null
+  }
+
+  /** The player to move is back: their clock (or, before the first moves, the first-move timer) starts now. */
+  resume(now: number): void {
+    if (!this.paused) return
+    this.waiting = false
+    if (this.moves.length === 0) this.startedAt = now
+    else this.turnStartedAt = now
+  }
+
+  /** Ends the game with no result (nobody came back after a restart). */
+  abort(): Result | null {
+    if (this.result) return null
+    this.result = { winner: null, reason: 'aborted' }
     return this.result
   }
 

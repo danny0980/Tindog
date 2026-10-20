@@ -27,7 +27,9 @@ export interface AppDeps {
   now?: () => number
   log?: (line: string) => void
   /** Overrides for tests (fast grace periods, pairing). */
-  hub?: { graceMs?: number; pairEveryMs?: number }
+  hub?: { graceMs?: number; pairEveryMs?: number; restoreGraceMs?: number }
+  /** After a restart, how long tournament players get to reconnect (tests). */
+  tournamentResumeGraceMs?: number
   /** When the first weekly tournament starts (tests). */
   tournamentStartsAt?: number
 }
@@ -54,6 +56,7 @@ function readCookie(header: string | undefined, name: string): string | null {
 
 const newClanId = (): string => `c${randomBytes(9).toString('hex')}`
 
+const SEAT_COLORS = ['Red', 'Blue', 'Yellow', 'Green'] as const
 const VERSION = process.env.APP_VERSION ?? process.env.npm_package_version ?? 'dev'
 
 /**
@@ -94,6 +97,8 @@ export function createApp(deps: AppDeps): Running {
   const log = deps.log ?? console.log
   const auth = new Auth(store, config.sessionDays, now)
   const hub = new Hub({ store, now, log, ...deps.hub })
+  // Games that were being played when the server last stopped come back first, so the tournament can follow them.
+  hub.restoreLive()
   const tournaments = new TournamentManager({
     store,
     now,
@@ -101,10 +106,14 @@ export function createApp(deps: AppDeps): Running {
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     startGame: (players, pool, label, onResult) => hub.startGame(players, pool, label, onResult),
     isAvailable: (id) => hub.isAvailable(id),
+    attachResult: (gameId, onResult) => hub.attachResultHook(gameId, onResult),
+    ...(deps.tournamentResumeGraceMs !== undefined ? { resumeGraceMs: deps.tournamentResumeGraceMs } : {}),
     changed: () => hub.broadcast({ type: 'TOURNAMENT_CHANGED' }),
     log,
     ...(deps.tournamentStartsAt !== undefined ? { firstStartsAt: deps.tournamentStartsAt } : {}),
   })
+  // After a restart, a returning player may let a tournament game start.
+  hub.onConnect = () => tournaments.playerConnected()
   const perEmail = new RateLimiter(5, 15 * 60_000, now)
   const perIp = new RateLimiter(30, 15 * 60_000, now)
   const allowedOrigin = config.publicUrl ? new URL(config.publicUrl).origin : null
@@ -155,10 +164,18 @@ export function createApp(deps: AppDeps): Running {
     if (!user) res.status(401).json({ error: 'Please sign in.' })
     return user
   }
+  const cookieOptions = (expiresAt: number) => ({ httpOnly: true, sameSite: 'lax' as const, secure: config.production, path: '/', maxAge: expiresAt - now() })
   const setSession = (res: Response, userId: string): void => {
     const s = auth.startSession(userId)
-    res.cookie(SESSION_COOKIE, s.token, { httpOnly: true, sameSite: 'lax', secure: config.production, path: '/', maxAge: s.expiresAt - now() })
+    res.cookie(SESSION_COOKIE, s.token, cookieOptions(s.expiresAt))
   }
+  // Sliding sessions: a session in the second half of its life is extended, and its cookie renewed.
+  app.use('/api', (req, _res, next) => {
+    const t = sessionToken(req)
+    const extended = auth.touch(t)
+    if (t && extended) _res.cookie(SESSION_COOKIE, t, cookieOptions(extended))
+    next()
+  })
 
   // ── Info ──────────────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => {
@@ -237,9 +254,18 @@ export function createApp(deps: AppDeps): Running {
   app.put('/api/save', (req, res) => {
     const user = requireUser(req, res)
     if (!user) return
-    const data = (req.body as { data?: unknown } | undefined)?.data
+    const body = req.body as { data?: unknown; baseUpdatedAt?: unknown } | undefined
+    const data = body?.data
     if (typeof data !== 'object' || data === null) return void res.status(400).json({ error: 'Nothing to save.' })
     if (JSON.stringify(data).length > MAX_SAVE_BYTES) return void res.status(413).json({ error: 'Save is too large.' })
+    // Another device saved since this one last synced: refuse, and send the newer save so the player can choose.
+    // (`baseUpdatedAt` = the cloud save this device started from; null = it had none. Left out = overwrite, as before 6.16.)
+    if ('baseUpdatedAt' in (body ?? {})) {
+      const base = body?.baseUpdatedAt
+      if (base !== null && typeof base !== 'number') return void res.status(400).json({ error: 'Bad save version.' })
+      const current = store.save(user.id)
+      if (current && current.updatedAt !== base) return void res.status(409).json({ error: 'Another device saved newer progress.', cloud: current })
+    }
     const updatedAt = now()
     store.putSave(user.id, { data, updatedAt })
     res.json({ updatedAt })
@@ -255,6 +281,71 @@ export function createApp(deps: AppDeps): Running {
       return { id: g.id, pool: g.pool, color: side, opponent: opp?.name ?? 'Player', result: g.winner === null ? 'draw' : g.winner === side ? 'win' : 'loss', reason: g.reason, ratingChange: g.ratingChange[side], moves: g.moves.length, endedAt: g.endedAt }
     })
     res.json({ games })
+  })
+
+  // ── Online game history ───────────────────────────────────────────────────
+  const name = (id: string | null) => (id ? (store.user(id)?.name ?? 'Deleted player') : null)
+  const kindOf = (pool: string): 'chess' | 'vanish' | 'cards' => (pool.startsWith('vanish-') ? 'vanish' : pool.startsWith('cards-') ? 'cards' : 'chess')
+  app.get('/api/history', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const before = Number(req.query.before)
+    const cursor = Number.isFinite(before) && before > 0 ? before : Number.MAX_SAFE_INTEGER
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 20))
+    const two = store.gamesPage(user.id, cursor, limit).map((g) => {
+      const side = g.white === user.id ? 'w' : 'b'
+      return { id: g.id, kind: kindOf(g.pool), pool: g.pool, opponents: [name(side === 'w' ? g.black : g.white) ?? 'Player'], result: g.reason === 'aborted' ? 'aborted' : g.winner === null ? 'draw' : g.winner === side ? 'win' : 'loss', reason: g.reason, ratingChange: g.ratingChange[side], moves: g.moves.length, place: null, endedAt: g.endedAt }
+    })
+    const royale = store.royalePage(user.id, cursor, limit).map((r) => {
+      const seat = r.seats.indexOf(user.id)
+      const place = r.ranking.indexOf(seat) + 1
+      return { id: r.id, kind: 'royale', pool: 'royale', opponents: r.seats.flatMap((s, i) => (i === seat ? [] : [name(s) ?? `${SEAT_COLORS[i]} army`])), result: place === 1 ? 'win' : 'loss', reason: r.reason, ratingChange: r.ratingChange[user.id] ?? 0, moves: r.plies, place: place || null, endedAt: r.endedAt }
+    })
+    const games = [...two, ...royale].sort((a, b) => b.endedAt - a.endedAt).slice(0, limit)
+    res.json({ games, next: games.length === limit ? (games.at(-1)?.endedAt ?? null) : null })
+  })
+  app.get('/api/history/:id', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const id = String(req.params.id)
+    const g = store.game(id)
+    // Only your own games (a game id is not a secret, but other people's history is theirs).
+    if (g && (g.white === user.id || g.black === user.id)) {
+      return void res.json({ id: g.id, kind: kindOf(g.pool), pool: g.pool, color: g.white === user.id ? 'w' : 'b', white: name(g.white), black: name(g.black), winner: g.winner, reason: g.reason, moves: g.moves, hands: g.extra?.hands ?? null, ratingChange: g.ratingChange[g.white === user.id ? 'w' : 'b'], endedAt: g.endedAt })
+    }
+    const r = store.royaleGame(id)
+    if (r && r.seats.includes(user.id)) {
+      return void res.json({ id: r.id, kind: 'royale', seat: r.seats.indexOf(user.id), seats: r.seats.map((s, i) => name(s) ?? `${SEAT_COLORS[i]} army`), ranking: r.ranking, reason: r.reason, actions: r.actions ?? null, ratingChange: r.ratingChange[user.id] ?? 0, endedAt: r.endedAt })
+    }
+    res.status(404).json({ error: 'No such game in your history.' })
+  })
+
+  // ── Your data: export and account deletion ────────────────────────────────
+  app.get('/api/me/export', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    res.setHeader('Content-Disposition', `attachment; filename="chronos-chess-${user.id}.json"`)
+    res.json(store.exportUser(user.id))
+  })
+  app.delete('/api/me', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    if ((req.body as { confirm?: unknown } | undefined)?.confirm !== 'DELETE') return void res.status(400).json({ error: 'Type DELETE to confirm.' })
+    if (hub.isPlaying(user.id)) return void res.status(409).json({ error: 'Finish or resign your game in progress first.' })
+    // Out of the weekly tournament, the queues and your clan (the clan passes on, or closes when you were the last).
+    tournaments.leave(user.id)
+    const clan = store.clanOf(user.id)
+    if (clan) {
+      const members = clan.members.filter((m) => m !== user.id)
+      if (members.length === 0) store.dropClan(clan.id)
+      else store.putClan({ ...clan, members, ownerId: clan.ownerId === user.id ? members[0]! : clan.ownerId })
+    }
+    hub.kick(user.id)
+    auth.endAllSessions(user.id)
+    store.deleteUser(user.id)
+    log(`account ${user.id} deleted`)
+    res.clearCookie(SESSION_COOKIE, { path: '/' })
+    res.json({ deleted: true })
   })
 
   app.get('/api/leaderboard', (_req, res) => void res.json({ players: store.leaderboard(50).map((u) => ({ name: u.name, rating: u.rating, games: u.games })) }))

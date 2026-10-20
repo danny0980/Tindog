@@ -115,11 +115,37 @@ export interface ModesInfo {
 
 export class ApiError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  /** The server's JSON answer (e.g. a 409 carries the newer cloud save). */
+  readonly body: unknown
+  constructor(status: number, message: string, body: unknown = null) {
     super(message)
     this.status = status
+    this.body = body
   }
 }
+
+/** Called when the server says the sign-in is no longer valid (a 401 on a signed-in route). */
+export const unauthorizedListeners = new Set<() => void>()
+
+/** One finished online game, in the history list. */
+export interface HistoryRow {
+  id: string
+  kind: 'chess' | 'vanish' | 'cards' | 'royale'
+  pool: string
+  opponents: string[]
+  result: 'win' | 'loss' | 'draw' | 'aborted'
+  reason: string
+  ratingChange: number
+  moves: number
+  /** Battle Royale: your finishing place. */
+  place: number | null
+  endedAt: number
+}
+
+/** A finished game in full, for its replay. */
+export type HistoryGame =
+  | { id: string; kind: 'chess' | 'vanish' | 'cards'; pool: string; color: 'w' | 'b'; white: string | null; black: string | null; winner: 'w' | 'b' | null; reason: string; moves: string[]; hands: { w: string[]; b: string[] } | null; ratingChange: number; endedAt: number }
+  | { id: string; kind: 'royale'; seat: number; seats: string[]; ranking: number[]; reason: string; actions: unknown[] | null; ratingChange: number; endedAt: number }
 
 async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   let res: Response
@@ -137,7 +163,10 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
   // No server behind /api (e.g. a static host): the app's own HTML comes back instead of JSON.
   if (!type.includes('application/json')) throw new ApiError(0, 'The game server is not running.')
   const data = (await res.json()) as T & { error?: string }
-  if (!res.ok) throw new ApiError(res.status, typeof data.error === 'string' ? data.error : 'Something went wrong.')
+  if (!res.ok) {
+    if (res.status === 401) for (const fn of unauthorizedListeners) fn()
+    throw new ApiError(res.status, typeof data.error === 'string' ? data.error : 'Something went wrong.', data)
+  }
   return data
 }
 
@@ -158,7 +187,8 @@ export const api = {
     const r = await call<{ data: unknown; updatedAt: number | null }>('/save')
     return r.data === null || r.updatedAt === null ? null : { data: r.data, updatedAt: r.updatedAt }
   },
-  putSave: (data: unknown) => call<{ updatedAt: number }>('/save', { method: 'PUT', body: { data } }),
+  /** `base` = the cloud save this device started from (null: none); a newer one on the server answers 409. Left out: overwrite. */
+  putSave: (data: unknown, base?: number | null) => call<{ updatedAt: number }>('/save', { method: 'PUT', body: base === undefined ? { data } : { data, baseUpdatedAt: base } }),
   games: () => call<{ games: RatedGame[] }>('/games'),
   leaderboard: () => call<{ players: Array<{ name: string; rating: number; games: number }> }>('/leaderboard'),
   season: () => call<SeasonInfo>('/season'),
@@ -174,4 +204,9 @@ export const api = {
   leaveClan: () => call<{ ok: boolean }>('/clans/leave', { method: 'POST', body: {} }),
   live: () => call<{ games: LiveGameRow[] }>('/live'),
   modes: () => call<ModesInfo>('/modes'),
+  history: (before?: number) => call<{ games: HistoryRow[]; next: number | null }>(`/history${before ? `?before=${before}` : ''}`),
+  historyGame: (id: string) => call<HistoryGame>(`/history/${encodeURIComponent(id)}`),
+  /** Everything the server holds about you, as JSON. */
+  exportData: () => call<Record<string, unknown>>('/me/export'),
+  deleteAccount: () => call<{ deleted: boolean }>('/me', { method: 'DELETE', body: { confirm: 'DELETE' } }),
 }

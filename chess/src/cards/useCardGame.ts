@@ -182,5 +182,7 @@ export function useCardGame(active: boolean) {
     // version: re-run after every move.
   }, [after, aiToMove, engine, game, level, version])
 
-  return { phase, offered, game, version, myColor, level, thinking: aiToMove, engineStatus: engine.status, deal, begin, move, playCard, ward, resign, leave }
+  // The computer's turn, but its engine isn't running (starting, restarting or failed).
+  const waitingForEngine = Boolean(active && game && !game.result && game.turn !== myColor && engine.status !== 'ready')
+  return { phase, offered, game, version, myColor, level, thinking: aiToMove, waitingForEngine, engineStatus: engine.status, engineError: engine.error, retryEngine: engine.retry, deal, begin, move, playCard, ward, resign, leave }
 }

@@ -1300,6 +1300,7 @@ export function useGameController({ active }: { active: boolean }) {
     clock: { times: clock.times, enabled: clock.enabled },
     engineStatus: playEngine.status,
     engineError: playEngine.error,
+    retryEngine: playEngine.retry,
     aiThinking,
     movableColor,
     canUndo: undoPlies > 0,

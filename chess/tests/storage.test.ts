@@ -108,6 +108,25 @@ const file = join(dir, 'chess.db')
   check('a database from a newer server is refused', threw(() => new Store(newer)))
 }
 
+{
+  // A 6.15 database (schema 1) is upgraded in place: replay columns are added, nothing is lost.
+  const v1 = join(dir, 'v1.db')
+  const raw = new Database(v1)
+  raw.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO meta VALUES ('schema', '1');
+    CREATE TABLE games (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, pool TEXT NOT NULL, white TEXT NOT NULL, black TEXT NOT NULL, winner TEXT, reason TEXT NOT NULL, moves TEXT NOT NULL, change_w INTEGER NOT NULL, change_b INTEGER NOT NULL, ended_at INTEGER NOT NULL);
+    CREATE TABLE royale_games (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, seats TEXT NOT NULL, ranking TEXT NOT NULL, reason TEXT NOT NULL, plies INTEGER NOT NULL, changes TEXT NOT NULL, ended_at INTEGER NOT NULL);
+    INSERT INTO games (id, pool, white, black, winner, reason, moves, change_w, change_b, ended_at) VALUES ('old0000001', '5+3', 'a', 'b', 'w', 'resign', '["e2e4"]', 5, -5, 1);`)
+  raw.close()
+  const up = new Store(v1)
+  const cols = (t: string) => (up.db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name)
+  check('a schema-1 database is upgraded to schema 2 in place', (up.db.prepare("SELECT value FROM meta WHERE key = 'schema'").get() as { value: string }).value === '2' && cols('games').includes('extra') && cols('royale_games').includes('actions'))
+  check('…keeping its games', up.game('old0000001')?.moves.join() === 'e2e4' && up.game('old0000001')?.extra === undefined)
+  up.putLive('live000001', 'chess', { a: 1 }, 5)
+  check('games in progress are stored and listed by kind', up.liveGames('chess')[0]?.id === 'live000001' && up.liveGames('cards').length === 0)
+  up.dropLive('live000001')
+  up.close()
+}
+
 // ── Importing the JSON data file of earlier versions ────────────────────────
 {
   const legacy: LegacyDb = {

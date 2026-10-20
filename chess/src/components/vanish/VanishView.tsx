@@ -10,6 +10,7 @@ import { PEEKS, hiddenCount, vanishMask, visibleFor } from '../../vanish/vanish'
 import { variantResultText } from '../../variants/rules'
 import { LEVELS, type VariantLevel, useVariantGame } from '../../variants/useVariantGame'
 import { ChessBoard } from '../board/ChessBoard'
+import { EngineNotice } from '../game/EngineNotice'
 import { Button } from '../ui/Button'
 import { Segmented } from '../ui/Segmented'
 
@@ -80,7 +81,7 @@ export function VanishView() {
   // Everything shows once the game is over, or during a peek.
   const mask = result || peeking ? null : vanishMask(game.startFen, game.uciHistory)
   const hidden = mask ? hiddenCount(mask) : 0
-  const status = result ? variantResultText(result, me) : v.thinking ? 'The computer is thinking…' : game.inCheck ? 'Check! Your move' : 'Your move'
+  const status = result ? variantResultText(result, me) : v.waitingForEngine ? 'Waiting for the engine…' : v.thinking ? 'The computer is thinking…' : game.inCheck ? 'Check! Your move' : 'Your move'
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start" data-vanish="playing">
@@ -102,6 +103,7 @@ export function VanishView() {
         />
       </div>
       <aside className="flex flex-col gap-3">
+        {!result && <EngineNotice status={v.engineStatus} error={v.engineError} onRetry={v.retryEngine} />}
         <div className="glass rounded-2xl px-4 py-3 text-sm text-white" role="status" data-vanish-status>
           {status}
           <div className="mt-1 text-xs text-slate-400" data-vanish-hidden={hidden}>

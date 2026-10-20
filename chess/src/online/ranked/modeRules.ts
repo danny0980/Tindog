@@ -1,7 +1,7 @@
 // Replaying the online modes' action logs. The server (the referee) and the
 // browser both run exactly this, on the same rules code, so a log always
 // means the same position on both sides.
-import { CardGame, type CardId } from '../../cards/cardGame'
+import { CARD_IDS, CardGame, type CardId } from '../../cards/cardGame'
 import { PLAYERS, type PlayerId, RoyaleGame, SIZE } from '../../royale/royale'
 import type { Color, Square } from '../../types/chess'
 import type { CardAction, RoyaleAction } from './modeProtocol'
@@ -23,6 +23,21 @@ export function replayCards(hands: Record<Color, CardId[]>, actions: readonly Ca
   const game = new CardGame(hands)
   for (const a of actions) if (!applyCardAction(game, a)) return null
   return game
+}
+
+/** Card Chess actions as short strings for the game record: e2e4, c:knights-leap:c1e2 (a drop: c:reinforcements:e3), w:aegis:d1. */
+export function cardNotation(a: CardAction): string {
+  return a.k === 'm' ? a.uci : a.k === 'c' ? `c:${a.card}:${a.from ?? ''}${a.to}` : `w:${a.card}:${a.sq}`
+}
+
+/** Reads `cardNotation` back (for replays); null if it isn't one. */
+export function parseCardNotation(text: string): CardAction | null {
+  const [k, card, squares = ''] = text.split(':')
+  if (card === undefined) return /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(text) ? { k: 'm', uci: text } : null
+  if (k === 'w' && (card === 'stone-wall' || card === 'aegis') && /^[a-h][1-8]$/.test(squares)) return { k: 'w', card, sq: squares }
+  if (k !== 'c' || !(CARD_IDS as string[]).includes(card)) return null
+  if (/^[a-h][1-8]$/.test(squares)) return { k: 'c', card: card as CardId, from: null, to: squares }
+  return /^[a-h][1-8][a-h][1-8]$/.test(squares) ? { k: 'c', card: card as CardId, from: squares.slice(0, 2), to: squares.slice(2) } : null
 }
 
 /** Does this action end the player's turn? (A ward is a free action.) */

@@ -9,7 +9,8 @@ import { getBoardTheme } from '../constants/themes'
 import { useEngine } from '../hooks/useEngine'
 import { applyFeat } from '../stores/featActions'
 import { settingsStore } from '../stores/settingsStore'
-import { recordVariantResult } from '../utils/feats'
+import { recordBattleResult, recordVariantResult } from '../utils/feats'
+import type { Battle } from '../data/battles'
 import type { Color, MoveInput, Square } from '../types/chess'
 import { type Candidate, chooseVariantMove } from './ai'
 import { type VMove, VariantGame, type VariantId, random960 } from './rules'
@@ -28,6 +29,8 @@ export interface VariantSetup {
   level: VariantLevel
   /** Chess960 start position (random if omitted). */
   position960?: number
+  /** A historic battle (variant 'battle'). */
+  battle?: Battle
 }
 
 export interface VariantView {
@@ -53,6 +56,7 @@ export function useVariantGame(active: boolean) {
   const [version, setVersion] = useState(0)
   const [myColor, setMyColor] = useState<Color>('w')
   const [level, setLevel] = useState<VariantLevel>('club')
+  const [battle, setBattle] = useState<Battle | null>(null)
   const engine = useEngine('variant', active && game !== null)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
 
@@ -62,8 +66,8 @@ export function useVariantGame(active: boolean) {
     if (r.winner === null) sfx.draw()
     else if (r.winner === me) sfx.victory()
     else sfx.defeat()
-    applyFeat((p) => recordVariantResult(p, game.variant, r.winner === me, r.reason))
-  }, [])
+    applyFeat((p) => (battle ? recordBattleResult(p, battle.id, me, r.winner === me) : recordVariantResult(p, game.variant, r.winner === me, r.reason)))
+  }, [battle])
 
   const apply = useCallback(
     (game: VariantGame, move: VMove): boolean => {
@@ -80,7 +84,8 @@ export function useVariantGame(active: boolean) {
   const start = useCallback(
     (setup: VariantSetup) => {
       const color: Color = setup.color === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : setup.color
-      setGame(new VariantGame(setup.variant, setup.variant === 'chess960' ? (setup.position960 ?? random960()) : 518))
+      setGame(setup.battle ? VariantGame.battleGame(setup.battle.setup) : new VariantGame(setup.variant, setup.variant === 'chess960' ? (setup.position960 ?? random960()) : 518))
+      setBattle(setup.battle ?? null)
       setMyColor(color)
       setLevel(setup.level)
       engine.newGame()
@@ -144,5 +149,5 @@ export function useVariantGame(active: boolean) {
 
   // The computer is "thinking" whenever it is its turn.
   const view: VariantView = { game, version, myColor, level, thinking: aiToMove, engineStatus: engine.status }
-  return { ...view, castleTargets, start, move, resign, leave }
+  return { ...view, battle, castleTargets, start, move, resign, leave }
 }

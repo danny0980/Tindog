@@ -11,7 +11,7 @@ import { ChessBoard } from '../board/ChessBoard'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 
-const ICONS: Record<VariantId, typeof Shuffle> = { chess960: Shuffle, koth: Mountain, threecheck: Crosshair }
+const ICONS: Record<VariantId, typeof Shuffle> = { chess960: Shuffle, koth: Mountain, threecheck: Crosshair, battle: Flag }
 const COLORS: ReadonlyArray<{ id: Color | 'random'; label: string }> = [
   { id: 'w', label: 'White' },
   { id: 'random', label: 'Random' },

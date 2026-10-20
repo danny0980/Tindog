@@ -229,8 +229,8 @@ export function useGameController({ active }: { active: boolean }) {
   const reviewBoss = useStore(rosterStore, () => (review?.bossId ? getCachedBoss(review.bossId) : null))
   const reviewLegend = review?.legendId ? getLegend(review.legendId) : null
   const persona = useMemo<Persona | null>(
-    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic) : null),
-    [boss, classic, gameSettings.legendStrength, legend],
+    () => (boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, settings.classicAvatar) : null),
+    [boss, classic, gameSettings.legendStrength, legend, settings.classicAvatar],
   )
   const reviewPersona = useMemo<Persona | null>(
     () => (reviewBoss ? bossPersona(reviewBoss) : reviewLegend ? legendPersona(reviewLegend, 'authentic') : null),
@@ -341,6 +341,7 @@ export function useGameController({ active }: { active: boolean }) {
         variant: game.getVariantEvents(),
         legendId: legend?.id ?? null,
         bossId: boss?.id ?? null,
+        classicId: classic?.id ?? null,
         ...(persona ? { opponentElo: persona.elo } : {}),
         ...(boss && battleRelics.includes('firewall-core') ? { eloLossCap: FIREWALL_ELO_CAP } : {}),
       }
@@ -495,7 +496,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (ironmanSummary?.wiped) window.setTimeout(() => showToast('warning', 'Ironman run lost', `Permadeath: ${ironmanSummary.lostBosses} conquered bosses fall back into darkness.`, 6000), 1200)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, battle, battleRelics, boss, casual, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl],
+    [aiColor, battle, battleRelics, boss, casual, classic, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl],
   )
 
   const handleFlag = useCallback(
@@ -888,7 +889,7 @@ export function useGameController({ active }: { active: boolean }) {
         : next.mode === 'ai' && next.legendId
           ? legendPersona(getLegend(next.legendId), next.legendStrength)
           : challengerClassic
-            ? classicPersona(challengerClassic)
+            ? classicPersona(challengerClassic, settingsStore.get().classicAvatar)
             : null
       const kind: BattleKind = launch?.kind ?? (challengerBoss ? 'campaign' : 'legend')
       // Shrine blessings join the next campaign battle's tactics.

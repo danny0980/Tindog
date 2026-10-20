@@ -1,10 +1,60 @@
-# ♞ Chess Arena: AAA Edition (v6.9 · Chronos Chess — Ranked Online)
+# ♞ Chess Arena: AAA Edition (v6.10 · Chronos Chess — Living History)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
 - No `any` types.
 - No audio files, because every sound is synthesised at runtime.
 - Works offline once loaded, apart from the Google Fonts stylesheet.
+
+---
+
+## What's new in 6.10: living history (Phase A)
+
+### Play the Real Battle (Legends → *Play the Real Battle*)
+
+Three famous battles as chess positions, playable from either side against Stockfish (Beginner, Club or Master):
+
+| Battle | Position | Twist | How it is won |
+| --- | --- | --- | --- |
+| **Thermopylae**, 480 BCE | Locked pawns on both wings form the mountain and the sea, leaving a narrow pass. | At the Persians' 10th move, the Immortals (two knights) appear behind the Greek lines, as Ephialtes' mountain path allowed. | The Greeks (Leonidas) win by holding out to the end of move 20. |
+| **Cannae**, 216 BCE | Rome masses pawns in the centre; Hannibal is strong on the wings. | At Hannibal's 12th move, his cavalry returns behind the Roman lines. | Hannibal must win by the end of move 35. |
+| **Waterloo**, 1815 | Napoleon is a bishop short (Grouchy never arrived). | At the Allies' 14th move, Blücher's Prussians arrive on the French flank. | Checkmate wins; otherwise material decides after move 30. |
+
+The opposing commander (Leonidas, Hannibal, Wellington or Napoleon) greets you and has the last word, aloud if character voices are on. Reinforcements land only on empty squares and never where they would give check. The engine side lives in `src/variants/rules.ts` (`BattleRules`) and the battles in `src/data/battles.ts`. Four new achievements are included, among them *Rewrite History*, for winning a battle for the side that lost it.
+
+### Character Interviews
+
+After you beat a Classic character, **Interview** on the game-over card lets you ask them seven questions. Answers are read aloud with the browser's speech engine. Each answer is labelled:
+- **From the history books:** who they were, when they lived, a true fact, or their real historical rival.
+- **In character:** their feelings about the game, chess advice in their playing style, or their view of today's world. These are imagined for the game.
+
+Their statue in the museum also opens the interview.
+
+### Personal Timeline & Trophy Museum (Legends → *Trophy Museum*)
+
+All 100 Classic characters sit on a timeline from 2300 BCE to today. The scale is piecewise, so the crowded modern centuries get room. Everyone you beat lights up and gets a statue in the Hall of Statues, with a plaque showing their name and years. Click a statue for the full history and the interview.
+
+Wins are now stored permanently (`feats.classicBeaten`), so the museum is no longer limited by the 60-game match history.
+
+### History Quiz & rival meetings
+
+- **History Quiz** (Legends → *History Quiz*, or after a Classic win) mixes three question types:
+  - *Who is this?*, built from true facts that never contain the person's name;
+  - *When did they live?*;
+  - one clearly labelled question about a line from the game itself.
+
+  Each right answer pays 5 coins. The game's lines are never presented as real quotations.
+- **Historical rivals** (`src/data/classic/rivals.ts`): choose a Classic avatar and face their rival, and the opponent greets you and says goodbye with lines written for that meeting. The rivalries are Napoleon–Wellington, Saladin–Richard, Cleopatra–Augustus, Kublai Khan–Marco Polo, Capablanca–Alekhine, Lasker–Capablanca, Steinitz–Lasker, Morphy–Anderssen, Staunton–Morphy, Tesla–Edison and Tal–Fischer. Each comes with a short, checkable note on the real history.
+
+### Tests
+
+`npm run test:history` covers 60 checks:
+- battle positions, reinforcements (timing, occupied squares, check) and objectives;
+- random play-outs that must always end by the deadline;
+- year parsing for all 100 characters;
+- interview answers, quiz fairness (no name leaks, right answers), rivals, feats and sanitising.
+
+It is part of `npm run check`.
 
 ---
 

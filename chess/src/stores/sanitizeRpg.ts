@@ -142,6 +142,10 @@ export function sanitizeFeats(raw: unknown): FeatCounters {
     threeCheckWins: count(r.threeCheckWins),
     onlineGames: count(r.onlineGames),
     onlineWins: count(r.onlineWins),
+    battlesWon: Array.isArray(r.battlesWon) ? [...new Set(r.battlesWon.filter((x): x is string => typeof x === 'string' && /^[a-z0-9-]{1,30}:[wb]$/.test(x)))].slice(0, 100) : [],
+    classicBeaten: Array.isArray(r.classicBeaten) ? [...new Set(r.classicBeaten.filter((x): x is string => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, 200) : [],
+    interviewed: Array.isArray(r.interviewed) ? [...new Set(r.interviewed.filter((x): x is string => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, 200) : [],
+    quizCorrect: count(r.quizCorrect),
     lessonsDone: Array.isArray(r.lessonsDone) ? [...new Set(r.lessonsDone.filter((x): x is string => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, 200) : [],
   }
 }

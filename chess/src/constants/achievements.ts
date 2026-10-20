@@ -69,6 +69,16 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'world-stage', title: 'On the World Stage', description: 'Win five online games.', icon: 'globe', reward: 200, tier: 'gold' },
   { id: 'opening-student', title: 'Opening Student', description: 'Complete three Opening School lessons.', icon: 'scroll', reward: 50, tier: 'bronze' },
   { id: 'opening-scholar', title: 'Opening Scholar', description: 'Complete every Opening School lesson.', icon: 'scroll', reward: 300, tier: 'gold' },
+  // ── Historic battles ──
+  { id: 'hold-the-pass', title: 'Hold the Pass', description: 'Hold Thermopylae as the Greeks until the end of move 20.', icon: 'shield', reward: 150, tier: 'gold' },
+  { id: 'double-envelopment', title: 'Double Envelopment', description: 'Win Cannae as Hannibal.', icon: 'swords', reward: 150, tier: 'gold' },
+  { id: 'near-run-thing', title: 'A Near-Run Thing', description: 'Win the Battle of Waterloo.', icon: 'flag', reward: 150, tier: 'gold' },
+  { id: 'first-interview', title: 'On the Record', description: 'Interview a Classic character you have beaten.', icon: 'search', reward: 50, tier: 'bronze' },
+  { id: 'press-corps', title: 'Press Corps', description: 'Interview 10 different Classic characters.', icon: 'scroll', reward: 150, tier: 'silver' },
+  { id: 'curator', title: 'Curator', description: 'Beat 25 Classic characters and fill the Trophy Museum.', icon: 'trophy', reward: 200, tier: 'gold' },
+  { id: 'perfect-recall', title: 'Perfect Recall', description: 'Answer every question of a history quiz correctly.', icon: 'brain', reward: 100, tier: 'silver' },
+  { id: 'historian', title: 'Historian', description: 'Answer 50 history quiz questions correctly.', icon: 'hourglass', reward: 200, tier: 'gold' },
+  { id: 'rewrite-history', title: 'Rewrite History', description: 'Win a historic battle for the side that lost it in real life.', icon: 'scroll', reward: 250, tier: 'platinum' },
 ]
 
 export const getAchievement = (id: string): AchievementDef | undefined => ACHIEVEMENTS.find((a) => a.id === id)

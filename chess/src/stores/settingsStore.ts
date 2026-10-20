@@ -140,7 +140,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     showLegalMoves: bool(s.showLegalMoves, d.showLegalMoves),
     showCoordinates: bool(s.showCoordinates, d.showCoordinates),
     game: sanitizeGame(s.game),
-    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament', 'classic', 'variants', 'openings'], d.legendsScreen),
+    legendsScreen: oneOf(s.legendsScreen, ['select', 'historical', 'fantasy', 'freeplay', 'grand', 'gauntlet', 'tournament', 'classic', 'variants', 'openings', 'battles', 'museum', 'quiz'], d.legendsScreen),
     grandRealm: oneOf(s.grandRealm, GRAND_REALM_IDS, d.grandRealm),
   }
 }

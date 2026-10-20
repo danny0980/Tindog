@@ -1,4 +1,4 @@
-import { Coins, Crown, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Brain, Coins, Crown, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
@@ -29,9 +29,11 @@ interface GameOverModalProps {
   opponent?: { spec: PortraitSpec; label: string } | null
   /** A true fact about the historical opponent (Classic Chess), shown after the game. */
   lesson?: { name: string; fact: string } | null
+  /** After beating a Classic character: interview them, or take a quick history quiz. */
+  history?: { name: string; onInterview: () => void; onQuiz: () => void } | null
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -67,6 +69,16 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               </Button>
               <Button onClick={onRematch} icon={<Swords className="size-4" />}>
                 Rematch
+              </Button>
+            </div>
+          ) : null}
+          {history ? (
+            <div className="grid grid-cols-2 gap-2" data-gameover-history>
+              <Button variant="primary" onClick={history.onInterview} icon={<Mic className="size-4" />} data-gameover-interview>
+                Interview
+              </Button>
+              <Button onClick={history.onQuiz} icon={<Brain className="size-4" />} data-gameover-quiz>
+                History quiz
               </Button>
             </div>
           ) : null}

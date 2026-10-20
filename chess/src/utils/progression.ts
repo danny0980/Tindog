@@ -58,6 +58,8 @@ export interface MatchInput {
   legendId?: LegendId | null
   /** Grand Campaign boss, if any. */
   bossId?: BossId | null
+  /** Classic Chess character, if any (a win adds them to the Trophy Museum). */
+  classicId?: string | null
   opponentElo?: number
   /** Firewall Core relic: the most Elo a rated defeat may cost. */
   eloLossCap?: number
@@ -180,6 +182,10 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
     coins: profile.coins + coins,
     totalCoinsEarned: profile.totalCoinsEarned + coins,
     matches: [record, ...profile.matches].slice(0, MAX_MATCH_HISTORY),
+    feats:
+      outcome === 'win' && input.classicId && !profile.feats.classicBeaten.includes(input.classicId)
+        ? { ...profile.feats, classicBeaten: [...profile.feats.classicBeaten, input.classicId] }
+        : profile.feats,
   }
 
   // Achievement checks.
@@ -204,6 +210,7 @@ export function applyMatch(profile: PlayerProfile, input: MatchInput, now: Date 
   if (nextStats.games >= 50) ids.push('veteran')
   if (elo >= 1500) ids.push('rising-star')
   if (elo >= 1800) ids.push('master-class')
+  if (next.feats.classicBeaten.length >= 25) ids.push('curator')
 
   const granted = grant(next, ids, nowIso)
   next = granted.profile

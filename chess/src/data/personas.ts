@@ -1,5 +1,6 @@
 // Adapters that turn any character — a hand-crafted Chronos legend or a
 // generated Grand Campaign boss — into the Persona the play screen stages.
+import { rivalLines } from './classic/rivals'
 import { loreFor } from './classic/lore'
 import type { Boss } from '../types/campaign'
 import type { Difficulty } from '../types/chess'
@@ -64,12 +65,14 @@ export function bossPersona(boss: Boss): Persona {
  * (shallow search, blunder guard early on), style from the archetype and the
  * opening book; no spells — Classic games never get a battle setup at all.
  */
-export function classicPersona(c: ClassicCharacter): Persona {
+/** A Classic character as an opponent; facing their historical rival (your avatar), they speak to that rivalry. */
+export function classicPersona(c: ClassicCharacter, facing: string | null = null): Persona {
   const era = getClassicEra(c.era)
   const archetype = ARCHETYPES[c.archetype]
   const book = BOOKS[c.book]
   const short = c.name.split(' ')[0] ?? c.name
   const lore = loreFor(c.id)
+  const rival = rivalLines(c.id, facing)
   return {
     key: `classic:${c.id}`,
     name: c.name,
@@ -79,10 +82,10 @@ export function classicPersona(c: ClassicCharacter): Persona {
     profile: buildProfile(c.archetype, c.elo, { w: book.w, b: book.b }),
     quotes: {
       ...archetype.lines,
-      intro: [c.line],
+      intro: [rival ? rival.intro : c.line],
       // Their own words at the end of the game (from the lore), with the generic lines as fallback.
-      legendWins: lore ? [lore.victory] : [`${short} takes the game. Study it — you were closer than you think.`, 'A fine fight. Come back stronger.'],
-      legendLoses: lore ? [lore.defeat] : [`Well played. ${short} tips the king to you.`, 'The board was yours today. I salute you.'],
+      legendWins: rival ? [rival.victory] : lore ? [lore.victory] : [`${short} takes the game. Study it — you were closer than you think.`, 'A fine fight. Come back stronger.'],
+      legendLoses: rival ? [rival.defeat] : lore ? [lore.defeat] : [`Well played. ${short} tips the king to you.`, 'The board was yours today. I salute you.'],
     },
     portrait: { icon: c.icon, from: era.from, to: era.to, monogram: (c.name.replace(/^(The|Sir|Queen|Captain) /, '')[0] ?? '?').toUpperCase() },
     themeId: era.themeId,

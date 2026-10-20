@@ -154,6 +154,14 @@ export interface FeatCounters {
   onlineWins: number
   /** Opening School lessons completed (ids, so a lesson counts once). */
   lessonsDone: string[]
+  /** Historic battles won, as "battle:side" (e.g. "waterloo:w"). */
+  battlesWon: string[]
+  /** Classic Chess characters beaten (ids): the Trophy Museum. */
+  classicBeaten: string[]
+  /** Classic characters interviewed after a win (ids). */
+  interviewed: string[]
+  /** History quiz questions answered correctly, lifetime. */
+  quizCorrect: number
 }
 
 // ── Titles & trophies ────────────────────────────────────────────────────────

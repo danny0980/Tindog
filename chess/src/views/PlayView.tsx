@@ -4,6 +4,11 @@ import { sfx } from '../audio'
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel'
 import { MoveInsightCard } from '../components/analysis/MoveInsightCard'
 import { factFor } from '../data/classic/lore'
+import { postGameQuiz, type QuizQuestion } from '../data/classic/quiz'
+import { type ClassicCharacter, getClassic } from '../data/classic/roster'
+import { InterviewModal } from '../components/history/InterviewPanel'
+import { QuizPanel } from '../components/history/QuizPanel'
+import { useBeatenClassics } from '../components/history/useBeaten'
 import { BoardHologram } from '../components/board/BoardHologram'
 import { ChessBoard } from '../components/board/ChessBoard'
 import { EvalBar } from '../components/board/EvalBar'
@@ -85,6 +90,9 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const [menuOpen, setMenuOpen] = useState(false)
   const [movesOpen, setMovesOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [interviewing, setInterviewing] = useState<ClassicCharacter | null>(null)
+  const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null)
+  const beatenClassics = useBeatenClassics()
   // Game key whose time-travel intro has already played.
   const [warpFor, setWarpFor] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ id: number; direction: SwipeDirection; label: string } | null>(null)
@@ -294,6 +302,21 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const classicId = game.persona?.key.startsWith('classic:') ? game.persona.key.slice('classic:'.length) : null
   const classicFact = classicId ? factFor(classicId, total) : null
   const classicLesson = classicFact && game.persona ? { name: game.persona.name, fact: classicFact } : null
+  // Beat a Classic character: interview them, or take a quick quiz about them and the others you have beaten.
+  const beatenClassic = classicId && game.summary?.outcome === 'win' ? getClassic(classicId) : null
+  const classicHistory = beatenClassic
+    ? {
+        name: beatenClassic.name,
+        onInterview: () => {
+          game.dismissGameOver()
+          setInterviewing(beatenClassic)
+        },
+        onQuiz: () => {
+          game.dismissGameOver()
+          setQuiz(postGameQuiz(beatenClassic, beatenClassics, total * 31 + beatenClassics.length))
+        },
+      }
+    : null
 
   const analysisHint = currentMoveAnalysis && !timeMachine.isLive && <MoveInsightCard move={currentMoveAnalysis} />
 
@@ -529,6 +552,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         summary={game.summary}
         opponent={game.persona ? { spec: game.persona.portrait, label: game.persona.name } : null}
         lesson={classicLesson}
+        history={classicHistory}
         isAiMode={game.isAiMode}
         moveCount={total}
         onNewGame={openNewGame}
@@ -545,6 +569,10 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         onAnalyze={game.requestAnalysis}
         onShare={() => void share()}
       />
+      <InterviewModal c={interviewing} onClose={() => setInterviewing(null)} />
+      <Modal open={quiz !== null} title="History quiz" onClose={() => setQuiz(null)}>
+        {quiz && <QuizPanel questions={quiz} onDone={() => undefined} />}
+      </Modal>
     </>
   )
 }

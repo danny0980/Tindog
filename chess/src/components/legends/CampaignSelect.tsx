@@ -1,4 +1,4 @@
-import { ChevronRight, Clapperboard, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
+import { Brain, ChevronRight, Clapperboard, Flag, Landmark, GraduationCap, Hourglass, Shuffle, Swords, WandSparkles } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { LESSONS } from '../../openings/lessons'
 import { profileStore } from '../../stores/profileStore'
@@ -14,6 +14,7 @@ import type { LegendsScreen } from '../../types/settings'
 import { LegendPortrait } from './LegendPortrait'
 import { ArtIcon } from '../ui/ArtIcon'
 import { ClassicCard } from '../classic/ClassicCard'
+import { useBeatenClassics } from '../history/useBeaten'
 
 interface CampaignSelectProps {
   defeated: Partial<Record<LegendId, string>>
@@ -38,6 +39,8 @@ const STYLE: Record<CampaignId, { icon: ReactNode; gradient: string; glow: strin
 export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectProps) {
   const unlockedCount = LEGENDS.filter((l) => defeated[l.id]).length
   const done = useStore(profileStore, (p) => p.feats.lessonsDone.length)
+  const battles = useStore(profileStore, (p) => new Set(p.feats.battlesWon.map((k) => k.split(':')[0])).size)
+  const museum = useBeatenClassics().length
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <ClassicCard onOpen={() => onOpen('classic')} />
@@ -58,6 +61,33 @@ export function CampaignSelect({ defeated, campaign, onOpen }: CampaignSelectPro
         title="Opening School"
         text="The main openings, move by move, taught by the masters"
         glow="from-emerald-300 via-teal-500 to-cyan-700"
+      />
+      <PathTile
+        path="battles"
+        onOpen={() => onOpen('battles')}
+        icon={<Flag className="size-6" />}
+        kicker={`History · ${battles}/3 battles won`}
+        title="Play the Real Battle"
+        text="Thermopylae, Cannae and Waterloo, with history’s own twists"
+        glow="from-amber-300 via-orange-500 to-red-700"
+      />
+      <PathTile
+        path="museum"
+        onOpen={() => onOpen('museum')}
+        icon={<Landmark className="size-6" />}
+        kicker={`Museum · ${museum} statues`}
+        title="Trophy Museum"
+        text="Your timeline of history fills up with everyone you beat"
+        glow="from-yellow-200 via-amber-400 to-stone-600"
+      />
+      <PathTile
+        path="quiz"
+        onOpen={() => onOpen('quiz')}
+        icon={<Brain className="size-6" />}
+        kicker="Quiz · 5 questions"
+        title="History Quiz"
+        text="Who is this? True facts about the people of Classic Chess"
+        glow="from-fuchsia-300 via-purple-500 to-indigo-700"
       />
       <h2 className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-violet-200 lg:col-span-3" data-section="fantasy">
         Fantasy campaign modes · spells, relics &amp; arena rules

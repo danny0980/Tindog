@@ -3,6 +3,7 @@
 // each takes a profile and returns the updated one plus what was unlocked.
 import type { AchievementDef, PlayerProfile } from '../types/profile'
 import type { VariantId, VariantResultReason } from '../variants/rules'
+import { quizReward } from '../data/classic/quiz'
 import { grant } from './progression'
 
 export interface FeatOutcome {
@@ -43,4 +44,37 @@ export function recordLesson(profile: PlayerProfile, lessonId: string, totalLess
   const feats = { ...profile.feats, lessonsDone: done }
   const ids = [...(done.length >= 3 ? ['opening-student'] : []), ...(done.length >= totalLessons ? ['opening-scholar'] : [])]
   return grant({ ...profile, feats }, ids, now())
+}
+
+/** Historic battles: who won, and from which side (the historical loser's win "rewrites history"). */
+const HISTORICAL_WINNER: Record<string, 'w' | 'b'> = { thermopylae: 'b', cannae: 'w', waterloo: 'w' }
+
+export function recordBattleResult(profile: PlayerProfile, battleId: string, side: 'w' | 'b', won: boolean): FeatOutcome {
+  if (!won) return { profile, unlocked: [] }
+  const key = `${battleId}:${side}`
+  const battles = profile.feats.battlesWon.includes(key) ? profile.feats.battlesWon : [...profile.feats.battlesWon, key]
+  const ids = [
+    ...(battleId === 'thermopylae' && side === 'w' ? ['hold-the-pass'] : []),
+    ...(battleId === 'cannae' && side === 'w' ? ['double-envelopment'] : []),
+    ...(battleId === 'waterloo' ? ['near-run-thing'] : []),
+    ...(HISTORICAL_WINNER[battleId] !== undefined && HISTORICAL_WINNER[battleId] !== side ? ['rewrite-history'] : []),
+  ]
+  return grant({ ...profile, feats: { ...profile.feats, battlesWon: battles } }, ids, now())
+}
+
+/** A Character Interview finished (the first time each character counts). */
+export function recordInterview(profile: PlayerProfile, classicId: string): FeatOutcome {
+  if (profile.feats.interviewed.includes(classicId)) return { profile, unlocked: [] }
+  const interviewed = [...profile.feats.interviewed, classicId]
+  const ids = ['first-interview', ...(interviewed.length >= 10 ? ['press-corps'] : [])]
+  return grant({ ...profile, feats: { ...profile.feats, interviewed } }, ids, now())
+}
+
+/** A history quiz finished: coins for each right answer. */
+export function recordQuiz(profile: PlayerProfile, correct: number, total: number): FeatOutcome & { coins: number } {
+  const coins = quizReward(correct)
+  const quizCorrect = profile.feats.quizCorrect + correct
+  const ids = [...(total > 0 && correct === total ? ['perfect-recall'] : []), ...(quizCorrect >= 50 ? ['historian'] : [])]
+  const paid = { ...profile, coins: profile.coins + coins, totalCoinsEarned: profile.totalCoinsEarned + coins, feats: { ...profile.feats, quizCorrect } }
+  return { ...grant(paid, ids, now()), coins }
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, Crown, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Brain, Crown, Flag, Landmark, GraduationCap, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Shuffle, Swords, Trophy, WandSparkles } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { lazyWithRetry } from '../utils/lazyWithRetry'
@@ -25,6 +25,9 @@ import { type IconSlot, artStore, iconFor } from '../assets/artManifest'
 import { ClassicView } from '../components/classic/ClassicView'
 import { OpeningSchool } from '../components/openings/OpeningSchool'
 import { VariantsView } from '../components/variants/VariantsView'
+import { BattlesView } from '../components/battles/BattlesView'
+import { MuseumView } from '../components/history/MuseumView'
+import { QuizView } from '../components/history/QuizView'
 
 // The Grand Campaign (map, dossier, archetype engine) is its own chunk; realm rosters load on top of it.
 const GrandCampaign = lazyWithRetry(() => import('../components/campaign/GrandCampaign'), (m) => m.default)
@@ -56,6 +59,9 @@ const HEADERS: Record<LegendsScreen, { title: string; subtitle: string; icon: ty
   classic: { title: 'CLASSIC CHESS', subtitle: '100 historical opponents · pure chess, no spells or special rules', icon: Crown, slot: 'classic' },
   grand: { title: 'GRAND CAMPAIGN', subtitle: '100 bosses across 5 realms — conquer the map, earn relics', icon: MapIcon, slot: 'grand-campaign' },
   variants: { title: 'CHESS VARIANTS', subtitle: 'Chess960, King of the Hill and Three-Check against the computer', icon: Shuffle, slot: 'classic' },
+  battles: { title: 'PLAY THE REAL BATTLE', subtitle: 'Thermopylae, Cannae and Waterloo as chess, with history’s own twists', icon: Flag, slot: 'classic' },
+  museum: { title: 'TROPHY MUSEUM', subtitle: 'Your personal timeline of history, from 2300 BCE to today', icon: Landmark, slot: 'classic' },
+  quiz: { title: 'HISTORY QUIZ', subtitle: 'Who is this? True facts about the people you have beaten', icon: Brain, slot: 'classic' },
   openings: { title: 'OPENING SCHOOL', subtitle: 'Learn the main openings move by move, taught by the masters', icon: GraduationCap, slot: 'classic' },
 }
 
@@ -169,6 +175,12 @@ export function LegendsView({ onChallenge, onChallengeClassic, onChallengeBoss, 
       {screen === 'variants' && <VariantsView />}
 
       {screen === 'openings' && <OpeningSchool />}
+
+      {screen === 'battles' && <BattlesView />}
+
+      {screen === 'museum' && <MuseumView />}
+
+      {screen === 'quiz' && <QuizView />}
 
       {screen === 'freeplay' && <FreePlayPanel defeated={progress.defeated} selected={freeSelected} onSelect={setFreeSelected} onStart={onChallenge} />}
     </div>

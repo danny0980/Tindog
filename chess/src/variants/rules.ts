@@ -6,7 +6,7 @@
 import { Chess, type Square } from 'chess.js'
 import type { Color, PieceSymbol } from '../types/chess'
 
-export type VariantId = 'chess960' | 'koth' | 'threecheck'
+export type VariantId = 'chess960' | 'koth' | 'threecheck' | 'battle'
 
 export interface VariantInfo {
   id: VariantId
@@ -32,6 +32,12 @@ export const VARIANTS: Record<VariantId, VariantInfo> = {
     short: 'Walk your king to the centre to win.',
     rules: ['All the normal rules apply, and checkmate still wins.', 'You also win the moment your king safely reaches one of the four centre squares: d4, e4, d5 or e5.'],
   },
+  battle: {
+    id: 'battle',
+    name: 'Historic battle',
+    short: 'A real battle as a chess position, with its own objective and reinforcements.',
+    rules: ['Each battle has its own objective (see the battle card).', 'Reinforcements arrive on the move history says they did.'],
+  },
   threecheck: {
     id: 'threecheck',
     name: 'Three-Check',
@@ -40,11 +46,45 @@ export const VARIANTS: Record<VariantId, VariantInfo> = {
   },
 }
 
-export const VARIANT_IDS = Object.keys(VARIANTS) as VariantId[]
+/** The variants on the Variants screen (battles have their own screen). */
+export const VARIANT_IDS: readonly VariantId[] = ['chess960', 'koth', 'threecheck']
 export const HILL: readonly Square[] = ['d4', 'e4', 'd5', 'e5']
 const FILES = 'abcdefgh'
 
-export type VariantResultReason = 'checkmate' | 'hill' | 'three-checks' | 'stalemate' | 'insufficient' | 'threefold' | 'fifty-move' | 'resign'
+export type VariantResultReason = 'checkmate' | 'hill' | 'three-checks' | 'stalemate' | 'insufficient' | 'threefold' | 'fifty-move' | 'resign' | 'held' | 'attack-failed' | 'field' | 'field-even'
+
+/** A battle's goal, judged after every move (checkmate always wins too). */
+export type BattleObjective =
+  /** `side` wins by still standing once `until` full moves are complete. */
+  | { kind: 'survive'; side: Color; until: number }
+  /** `side` must win by move `by`; otherwise the other side has held. */
+  | { kind: 'win-by'; side: Color; by: number }
+  /** Once `at` full moves are complete, whoever is ahead in material holds the field. */
+  | { kind: 'material'; at: number }
+
+/** Reinforcements: pieces that arrive when `color` starts its move number `move` (on empty squares only). */
+export interface BattleEvent {
+  id: string
+  move: number
+  color: Color
+  pieces: ReadonlyArray<{ square: Square; type: PieceSymbol }>
+  text: string
+}
+
+export interface BattleRules {
+  fen: string
+  objective: BattleObjective
+  events: readonly BattleEvent[]
+}
+
+const VALUE: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+
+/** Material per side (pawn 1, knight/bishop 3, rook 5, queen 9). */
+export function material(chess: Chess): { w: number; b: number } {
+  const out = { w: 0, b: 0 }
+  for (const row of chess.board()) for (const p of row) if (p) out[p.color] += VALUE[p.type as PieceSymbol]
+  return out
+}
 
 export interface VariantResult {
   winner: Color | null
@@ -121,11 +161,16 @@ export class VariantGame {
   private lastMove: { from: Square; to: Square } | null = null
   readonly checks: { w: number; b: number } = { w: 0, b: 0 }
   private ended: VariantResult | null = null
+  /** Battle rules (objective and reinforcements), for historic battles. */
+  readonly battle: BattleRules | null = null
+  /** Battle events that have happened, in order. */
+  readonly fired: string[] = []
 
-  constructor(variant: VariantId, position960 = 518, fen?: string) {
+  constructor(variant: VariantId, position960 = 518, fen?: string, battle: BattleRules | null = null) {
+    this.battle = battle
     this.variant = variant
     this.position960 = variant === 'chess960' ? position960 : null
-    this.startFen = variant === 'chess960' ? chess960Fen(position960) : (fen ?? STANDARD)
+    this.startFen = variant === 'chess960' ? chess960Fen(position960) : (battle?.fen ?? fen ?? STANDARD)
     this.fenNow = this.startFen
     this.rights = { w: { k: null, q: null }, b: { k: null, q: null } }
     if (variant === 'chess960') {
@@ -141,6 +186,16 @@ export class VariantGame {
   /** King of the Hill or Three-Check from a given position (standard castling rules). */
   static fromFen(variant: Exclude<VariantId, 'chess960'>, fen: string): VariantGame {
     return new VariantGame(variant, 518, fen)
+  }
+
+  /** A historic battle: its position, objective and reinforcements. */
+  static battleGame(rules: BattleRules): VariantGame {
+    return new VariantGame('battle', 518, rules.fen, rules)
+  }
+
+  /** The full-move number now (1 at the start, +1 after each Black move). */
+  get moveNumber(): number {
+    return Number(this.fenNow.split(' ')[5] ?? 1)
   }
 
   get fen(): string {
@@ -278,11 +333,39 @@ export class VariantGame {
     this.sans.push(move.san)
     this.ucis.push(move.uci)
     this.lastMove = move.castle ? { from: move.from, to: sq(move.castle === 'k' ? 6 : 2, mover === 'w' ? 1 : 8) } : { from: move.from, to: move.to }
+    this.reinforce()
     this.keys.push(this.key())
     const after = this.board()
     if (after.inCheck()) this.checks[mover] += 1
     this.ended = this.judge(after, mover)
     return true
+  }
+
+  /**
+   * Battle reinforcements due now (the side to move, at this move number).
+   * A piece only lands on an empty square, and never where it would leave the
+   * waiting side in check (that position would be illegal).
+   */
+  private reinforce(): void {
+    if (!this.battle) return
+    const chess = this.board()
+    const turn = chess.turn()
+    const due = this.battle.events.filter((e) => e.color === turn && e.move === this.moveNumber && !this.fired.includes(e.id))
+    if (due.length === 0) return
+    const [, , , , half, full] = this.fenNow.split(' ')
+    for (const event of due) {
+      for (const p of event.pieces) {
+        if (chess.get(p.square)) continue
+        const before = chess.fen()
+        chess.put({ type: p.type, color: event.color }, p.square)
+        // The waiting side must not be left in check.
+        const waiting = new Chess(chess.fen().replace(/ [wb] /, ` ${opposite(turn)} `), { skipValidation: true })
+        if (waiting.inCheck()) chess.load(before, { skipValidation: true })
+      }
+      this.fired.push(event.id)
+    }
+    const [placement] = chess.fen().split(' ')
+    this.fenNow = `${placement} ${turn} - - ${half ?? 0} ${full ?? 1}`
   }
 
   private applyCastle(chess: Chess, move: VMove): void {
@@ -326,6 +409,16 @@ export class VariantGame {
       if (kingOn) return { winner: mover, reason: 'hill' }
     }
     if (this.variant === 'threecheck' && this.checks[mover] >= 3) return { winner: mover, reason: 'three-checks' }
+    if (this.battle) {
+      const done = this.moveNumber - 1
+      const o = this.battle.objective
+      if (o.kind === 'survive' && done >= o.until) return { winner: o.side, reason: 'held' }
+      if (o.kind === 'win-by' && done >= o.by) return { winner: opposite(o.side), reason: 'attack-failed' }
+      if (o.kind === 'material' && done >= o.at) {
+        const m = material(after)
+        return m.w === m.b ? { winner: null, reason: 'field-even' } : { winner: m.w > m.b ? 'w' : 'b', reason: 'field' }
+      }
+    }
     if (after.isInsufficientMaterial()) return { winner: null, reason: 'insufficient' }
     const now = this.keys.at(-1)
     if (this.keys.filter((k) => k === now).length >= 3) return { winner: null, reason: 'threefold' }
@@ -345,7 +438,8 @@ export class VariantGame {
   }
 
   clone(): VariantGame {
-    const copy = new VariantGame(this.variant, this.position960 ?? 518, this.startFen)
+    const copy = new VariantGame(this.variant, this.position960 ?? 518, this.startFen, this.battle)
+    copy.fired.push(...this.fired)
     copy.fenNow = this.fenNow
     copy.rights = { w: { ...this.rights.w }, b: { ...this.rights.b } }
     copy.sans.push(...this.sans)
@@ -368,6 +462,10 @@ const REASON_TEXT: Record<VariantResultReason, string> = {
   threefold: 'by threefold repetition',
   'fifty-move': 'by the fifty-move rule',
   resign: 'by resignation',
+  held: 'by holding out to the end',
+  'attack-failed': 'as the attack ran out of time',
+  field: 'by holding the field',
+  'field-even': 'with the field still contested',
 }
 
 export function variantResultText(r: VariantResult, me: Color): string {

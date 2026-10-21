@@ -38,3 +38,4 @@ public/assets/report.html
 server-data/
 server/.env
 dist-server/
+*.apk

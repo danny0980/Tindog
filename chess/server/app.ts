@@ -129,10 +129,15 @@ export function createApp(deps: AppDeps): Running {
   // Email sign-in needs real email in production; in development the link is printed instead.
   const emailEnabled = config.smtpUrl !== null || !config.production
 
-  /** Only pages from our own origin may make cookie-authenticated changes (CSRF) or open the socket. */
+  const appOrigin = (origin: string | undefined): boolean => origin !== undefined && config.appOrigins.includes(origin)
+  /**
+   * Only pages from our own origin (or the iOS / Android app) may make changes
+   * or open the socket. The app signs in with a token in a header, never a
+   * cookie, so a page can't borrow its sign-in (no CSRF).
+   */
   const originOk = (origin: string | undefined): boolean => {
     if (!origin) return !config.production
-    return origin === allowedOrigin || (!config.production && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+    return origin === allowedOrigin || appOrigin(origin) || (!config.production && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
   }
 
   const app = express()
@@ -154,6 +159,19 @@ export function createApp(deps: AppDeps): Running {
     next()
   })
   if (config.production) app.use(compression())
+  // The iOS / Android app calls the API from its own origin: allow it (CORS), with the token header.
+  app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin
+    if (!appOrigin(origin)) return next()
+    res.setHeader('Access-Control-Allow-Origin', origin!)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization, x-chronos-client')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    res.setHeader('Access-Control-Max-Age', '600')
+    res.setHeader('Access-Control-Expose-Headers', 'content-disposition')
+    if (req.method === 'OPTIONS') return void res.status(204).end()
+    next()
+  })
   // A light cap on changes per address (sign-in emails have their own, stricter one).
   const perIpWrites = new RateLimiter(240, 60_000, now)
   app.use('/api', (req, res, next) => {
@@ -166,7 +184,14 @@ export function createApp(deps: AppDeps): Running {
     next()
   })
 
-  const sessionToken = (req: Request): string | null => readCookie(req.headers.cookie, SESSION_COOKIE)
+  /** The session: `Authorization: Bearer …` (the mobile apps) or the cookie (the website). */
+  const sessionToken = (req: Request): string | null => {
+    const h = req.headers.authorization
+    if (h?.startsWith('Bearer ')) return h.slice(7).trim() || null
+    return readCookie(req.headers.cookie, SESSION_COOKIE)
+  }
+  /** The mobile apps ask for the session token in the answer (they keep it themselves). */
+  const wantsToken = (req: Request): boolean => req.headers['x-chronos-client'] === 'native'
   const signedIn = (req: Request): User | null => auth.userFor(sessionToken(req))
   const requireUser = (req: Request, res: Response): User | null => {
     const user = signedIn(req)
@@ -174,9 +199,10 @@ export function createApp(deps: AppDeps): Running {
     return user
   }
   const cookieOptions = (expiresAt: number) => ({ httpOnly: true, sameSite: 'lax' as const, secure: config.production, path: '/', maxAge: expiresAt - now() })
-  const setSession = (res: Response, userId: string): void => {
+  const setSession = (res: Response, userId: string): string => {
     const s = auth.startSession(userId)
     res.cookie(SESSION_COOKIE, s.token, cookieOptions(s.expiresAt))
+    return s.token
   }
   // Sliding sessions: a session in the second half of its life is extended, and its cookie renewed.
   app.use('/api', (req, _res, next) => {
@@ -204,7 +230,7 @@ export function createApp(deps: AppDeps): Running {
     const base = !config.production && origin && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ? origin : config.publicUrl
     const link = `${base}/?signin=${auth.createMagicLink(email)}`
     try {
-      await mailer(email, link)
+      await mailer(email, link, auth.createSignInCode(email))
     } catch (err) {
       log(`mail to ${email} failed: ${err instanceof Error ? err.message : String(err)}`)
       return void res.status(502).json({ error: 'We could not send the email. Please try again.' })
@@ -216,8 +242,21 @@ export function createApp(deps: AppDeps): Running {
   app.post('/api/auth/email/verify', (req, res) => {
     const user = auth.redeemMagicLink((req.body as { token?: unknown } | undefined)?.token)
     if (!user) return void res.status(400).json({ error: 'That sign-in link has expired or was already used. Please request a new one.' })
-    setSession(res, user.id)
-    res.json({ user: publicUser(user) })
+    const token = setSession(res, user.id)
+    res.json({ user: publicUser(user), ...(wantsToken(req) ? { token } : {}) })
+  })
+
+  // The 6-digit code from the same email (the mobile apps; also handy on another device).
+  const perCodeEmail = new RateLimiter(8, 15 * 60_000, now)
+  app.post('/api/auth/email/code', (req, res) => {
+    const body = req.body as { email?: unknown; code?: unknown } | undefined
+    const email = normaliseEmail(body?.email)
+    if (!email) return void res.status(400).json({ error: 'Please enter a valid email address.' })
+    if (!perIp.take(`code-ip:${req.ip}`) || !perCodeEmail.take(`code:${email}`)) return void res.status(429).json({ error: 'Too many tries. Request a new email in a few minutes.' })
+    const user = auth.redeemSignInCode(email, body?.code)
+    if (!user) return void res.status(400).json({ error: 'That code is wrong, expired or already used.' })
+    const token = setSession(res, user.id)
+    res.json({ user: publicUser(user), ...(wantsToken(req) ? { token } : {}) })
   })
 
   app.post('/api/auth/google', async (req, res) => {
@@ -227,8 +266,8 @@ export function createApp(deps: AppDeps): Running {
     const identity = await google(credential)
     if (!identity) return void res.status(401).json({ error: 'Google sign-in failed. Please try again.' })
     const user = auth.googleUser(identity)
-    setSession(res, user.id)
-    res.json({ user: publicUser(user) })
+    const token = setSession(res, user.id)
+    res.json({ user: publicUser(user), ...(wantsToken(req) ? { token } : {}) })
   })
 
   app.post('/api/auth/logout', (req, res) => {
@@ -580,10 +619,15 @@ export function createApp(deps: AppDeps): Running {
 
   // ── WebSocket: ranked play ────────────────────────────────────────────────
   const server = createServer(app)
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 })
+  // The mobile apps can't send a cookie here: they offer the token as a WebSocket subprotocol, beside "chronos".
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, handleProtocols: (protocols) => (protocols.has('chronos') ? 'chronos' : false) })
+  const protocolToken = (req: IncomingMessage): string | null => {
+    const offered = String(req.headers['sec-websocket-protocol'] ?? '').split(',').map((p) => p.trim())
+    return offered.find((p) => p.startsWith('chronos.token.'))?.slice('chronos.token.'.length) ?? null
+  }
   server.on('upgrade', (req: IncomingMessage, socket, head) => {
     const path = (req.url ?? '').split('?')[0]
-    const user = path === '/ws' && originOk(req.headers.origin) ? auth.userFor(readCookie(req.headers.cookie, SESSION_COOKIE)) : null
+    const user = path === '/ws' && originOk(req.headers.origin) ? auth.userFor(protocolToken(req) ?? readCookie(req.headers.cookie, SESSION_COOKIE)) : null
     if (!user) {
       socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
       socket.destroy()

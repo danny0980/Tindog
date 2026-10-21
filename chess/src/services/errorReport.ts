@@ -4,6 +4,7 @@
 // trimmed stack, the screen's address and the browser's name. A few per
 // session at most, each message once; chunk downloads (flaky networks) are
 // left out, as they recover on their own.
+import { apiOrigin, appHasNoServer } from '../native/platform'
 import { isChunkLoadError } from '../utils/retry'
 
 const MAX_PER_SESSION = 5
@@ -17,7 +18,8 @@ export function reportError(error: unknown, where: string): void {
   sent.add(message)
   const body = JSON.stringify({ message, where, stack: error instanceof Error ? (error.stack ?? '').slice(0, 2000) : '', url: window.location.pathname, version: String(import.meta.env?.VITE_APP_VERSION ?? '') })
   // Fire and forget: a static host without the server simply answers 404.
-  void fetch('/api/client-error', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {})
+  if (appHasNoServer()) return
+  void fetch(`${apiOrigin()}/api/client-error`, { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {})
 }
 
 /** Reports errors that escape every handler (call once at start-up). */

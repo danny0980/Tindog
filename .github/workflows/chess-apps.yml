@@ -1,0 +1,89 @@
+# Chronos Chess: the checks, and the Android and iOS apps.
+#   - Repository variable CHESS_SERVER_URL (Settings → Secrets and variables → Actions → Variables):
+#     the game server the apps talk to, e.g. https://chess.example.com. Without it the apps build,
+#     but online play is off in them.
+#   - Optional secrets for a signed Android release: ANDROID_KEYSTORE_BASE64 (the .jks, base64),
+#     ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
+name: Chess apps
+
+on:
+  push:
+    paths: ['chess/**', '.github/workflows/chess-apps.yml']
+  pull_request:
+    paths: ['chess/**', '.github/workflows/chess-apps.yml']
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: chess
+
+env:
+  VITE_SERVER_URL: ${{ vars.CHESS_SERVER_URL }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: chess/package-lock.json }
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build:all
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: chess/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21, cache: gradle }
+      - run: npm ci
+      - run: npm run build && npx cap sync android
+      - name: Debug APK
+        working-directory: chess/android
+        run: ./gradlew assembleDebug
+      - name: Signed release (APK and Play bundle)
+        if: ${{ env.HAS_KEY == 'true' }}
+        working-directory: chess/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_FILE: release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          ./gradlew assembleRelease bundleRelease
+          rm release.jks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chess-android
+          path: |
+            chess/android/app/build/outputs/apk/**/*.apk
+            chess/android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: chess/package-lock.json }
+      - run: npm ci
+      - run: npm run build && npx cap sync ios
+      - name: Build for the iOS simulator (unsigned)
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          cd build/Build/Products/Debug-iphonesimulator && zip -qr "$GITHUB_WORKSPACE/chess/ChessArena-simulator.zip" App.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chess-ios-simulator
+          path: chess/ChessArena-simulator.zip
+          if-no-files-found: error

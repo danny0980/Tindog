@@ -1,4 +1,4 @@
-# ♞ Chess Arena: AAA Edition (v6.17 · Chronos Chess — Release)
+# ♞ Chess Arena: AAA Edition (v6.18 · Chronos Chess — iOS & Android)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
@@ -7,6 +7,35 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 - Works offline once loaded, apart from the Google Fonts stylesheet.
 
 ---
+
+## What's new in 6.18: the iOS and Android apps
+
+The whole game now ships as a real iOS and Android app, built with Capacitor 8. Every step is in **[docs/MOBILE.md](docs/MOBILE.md)**.
+
+- **Both native projects are in the repo.**
+  - `android/`, which builds here or in Android Studio: `npm run android:debug` gives an APK.
+  - `ios/`, which builds in Xcode on a Mac (`npm run cap:ios`).
+- **Online play works in the apps.** They talk to your game server, whose address is set at build time with `VITE_SERVER_URL=https://…`. The rest of the game is bundled, so it plays offline.
+- **Signing in from the app.**
+  - Every sign-in email now also carries a 6-digit code, which you type into the app; the website takes it too.
+  - The app then keeps a session token in the system's storage and sends it instead of the cookie, to the API and to the socket.
+  - The server allows Capacitor's origins (`APP_ORIGINS`) and answers CORS only for them.
+- **App polish.**
+  - A dark status bar.
+  - A launch screen that goes once the first frame is drawn.
+  - Android's back button closes a dialog, then returns to the board, then leaves the app.
+  - Icons and launch screens drawn from the game's emblem (`npm run native:assets`).
+- **Releases.**
+  - The Android version follows the game's: 6.18.0 becomes versionCode 61800.
+  - Release signing reads `android/keystore.properties` or the environment, and `npm run android:release` builds the signed APK and the Play bundle.
+- **CI** (`.github/workflows/chess-apps.yml`) runs the checks, builds the Android APK (signed too, with the key secrets) and an iOS simulator build on macOS, and keeps them as downloads.
+- **Tests:**
+  - sign-in codes (once only, expiry, a wrong code, one email's code doesn't work for another);
+  - Bearer tokens;
+  - CORS for the apps and not for other sites;
+  - code guessing limits;
+  - the socket's token subprotocol;
+  - signing out ends the token.
 
 ## What's new in 6.17: release
 
@@ -1874,6 +1903,8 @@ Every haptic then logs `[haptic] <kind> <intensity>` to the console. Use the *Te
 ---
 
 ## 3. Shipping to iOS & Android with Capacitor
+
+> **6.18:** the native projects, icons, status bar, splash, back button, app sign-in and CI are all done. **[docs/MOBILE.md](docs/MOBILE.md)** is the current guide; the sections below are background.
 
 The project is already set up for this:
 - `base: './'` in `vite.config.ts`

@@ -77,6 +77,7 @@ Set these in `server/.env` or in the environment. Every setting is documented in
 | `TRUST_PROXY` | no | `1` in production | How many proxies sit in front, so rate limits see the real client IP. Use `0` when nothing is in front. |
 | `PORT` / `HOST` | no | `8787` / `0.0.0.0` | Where the server listens. |
 | `SESSION_DAYS` | no | `30` | How long a sign-in lasts; a sign-in used in its second half is renewed for the full term. |
+| `APP_ORIGINS` | no | Capacitor's origins | The iOS / Android apps' origins (`capacitor://localhost`, `https://localhost`), allowed to call the API and open the socket. `off` if you don't ship the apps. See `docs/MOBILE.md`. |
 
 The server refuses to start in production without `PUBLIC_URL` and at least one sign-in method, or with an `SMTP_URL` that isn't `smtp://` or `smtps://`. It starts, but warns, when:
 - `PUBLIC_URL` is plain http (Secure cookies would be dropped);
@@ -100,7 +101,12 @@ In production the server sends these headers:
 Other protections:
 - **Caching.** Hashed assets are cached for a year; the engine files for a week; the page itself is revalidated on every load.
 - **Sessions.** Session cookies are httpOnly, SameSite=Lax and Secure, and only their SHA-256 is stored.
-- **Origin checks.** Every change and every socket must come from `PUBLIC_URL`.
+- **Origin checks.** Every change and every socket must come from `PUBLIC_URL`, or from the apps' origins (`APP_ORIGINS`).
+- **The apps.** The iOS / Android apps can't use the cookie, so they sign in with a token:
+  - the server returns it in the sign-in answer, only to a client that says it is the app (`x-chronos-client: native`);
+  - the app sends it as `Authorization: Bearer …`, and to the socket as the subprotocol `chronos.token.…`;
+  - CORS answers only the apps' origins, never other sites.
+- **Sign-in codes.** Every sign-in email also carries a 6-digit code, for the apps (or another device). It expires with the link, works once, and guesses are limited to 8 per address per 15 minutes.
 - **Rate limits.**
   - Sign-in emails: per address and per IP.
   - API changes: 240 a minute per IP.

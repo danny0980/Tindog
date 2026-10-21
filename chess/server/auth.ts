@@ -1,7 +1,7 @@
 // Accounts and sign-in: Google Sign-In (ID tokens verified with Google's
 // library) and email magic links (single-use, 15 minutes). Sessions are
 // random 256-bit tokens in an httpOnly cookie; only their SHA-256 is stored.
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 import type { Store, User } from './store'
 
 export const SESSION_COOKIE = 'cc_session'
@@ -106,12 +106,37 @@ export class Auth {
     return t
   }
 
-  /** Redeems a magic-link token: finds or creates the account. Single use. */
+  /** Redeems a magic-link token: finds or creates the account. Single use (it also cancels the email's code). */
   redeemMagicLink(rawToken: unknown): User | null {
     if (typeof rawToken !== 'string' || rawToken.length < 20 || rawToken.length > 100) return null
     const row = this.store.takeMagic(sha256(rawToken))
     if (!row || row.expiresAt <= this.now()) return null
-    return this.store.userByEmail(row.email) ?? this.createUser({ email: row.email, googleSub: null, name: row.email.split('@')[0] ?? 'Player' })
+    return this.signInByEmail(row.email)
+  }
+
+  /**
+   * A 6-digit code for the same email, for the mobile apps (a link in the
+   * email would open the browser, not the app). Same 15 minutes, single use;
+   * guessing is held off by a per-email attempt limit in the route.
+   */
+  createSignInCode(email: string): string {
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0')
+    this.store.putMagic(sha256(`code:${email}:${code}`), { email, expiresAt: this.now() + MAGIC_TTL_MS })
+    return code
+  }
+
+  /** Redeems an emailed code: finds or creates the account. Single use (it also cancels the email's link). */
+  redeemSignInCode(email: string, code: unknown): User | null {
+    if (typeof code !== 'string' || !/^\d{6}$/.test(code.trim())) return null
+    const row = this.store.takeMagic(sha256(`code:${email}:${code.trim()}`))
+    if (!row || row.expiresAt <= this.now() || row.email !== email) return null
+    return this.signInByEmail(email)
+  }
+
+  private signInByEmail(email: string): User {
+    // Whichever way was used, the other one (and any older email) stops working.
+    this.store.dropMagicFor(email)
+    return this.store.userByEmail(email) ?? this.createUser({ email, googleSub: null, name: email.split('@')[0] ?? 'Player' })
   }
 
   /** Signs in with a verified Google identity: by Google id, else links to an account with the same verified email. */

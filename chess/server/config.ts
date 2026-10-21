@@ -28,6 +28,12 @@ export interface Config {
   backupHours: number
   /** Automatic backups kept (the oldest are deleted). */
   backupKeep: number
+  /**
+   * Where the iOS / Android app's pages come from (Capacitor serves them as
+   * capacitor://localhost and https://localhost). Requests from these are
+   * allowed (CORS) and sign in with a token instead of a cookie. Empty = off.
+   */
+  appOrigins: string[]
 }
 
 const str = (v: string | undefined): string | null => (v && v.trim() ? v.trim() : null)
@@ -66,6 +72,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: readonly 
     backupDir: memory || backups === 'off' ? null : backups ? resolve(backups) : production && dataFile ? resolve(dataFile, '..', 'backups') : null,
     backupHours: int(env.BACKUP_HOURS, 24, 1, 24 * 30),
     backupKeep: int(env.BACKUP_KEEP, 7, 1, 365),
+    appOrigins: env.APP_ORIGINS === 'off' ? [] : (str(env.APP_ORIGINS)?.split(',').map((o) => o.trim()).filter(Boolean) ?? ['capacitor://localhost', 'https://localhost', 'ionic://localhost']),
   }
 }
 

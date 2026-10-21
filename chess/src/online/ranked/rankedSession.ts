@@ -11,16 +11,23 @@ import { showToast } from '../../stores/toastStore'
 import { recordOnlineResult } from '../../utils/feats'
 import { onlineScreen } from '../onlineSession'
 import { accountStore, patchUser, sessionEnded } from './account'
+import { appToken } from '../../native/appToken'
+import { isNativeApp, socketUrl } from '../../native/platform'
 import { api } from './api'
 import { RankedManager, type RankedView, rankedResultText } from './onlineManager'
 
 let manager: RankedManager | null = null
 
-const socketUrl = (): string => `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
 
 export function getRanked(): RankedManager {
   if (manager) return manager
-  const m = new RankedManager({ open: () => new WebSocket(socketUrl()) })
+  // The apps prove who they are with their token, offered as a subprotocol beside "chronos" (no cookies there).
+  const m = new RankedManager({
+    open: () => {
+      const token = isNativeApp() ? appToken() : null
+      return token ? new WebSocket(socketUrl(), ['chronos', `chronos.token.${token}`]) : new WebSocket(socketUrl())
+    },
+  })
   m.onEvent((e) => {
     if (e.kind === 'move') {
       const chess = new Chess()

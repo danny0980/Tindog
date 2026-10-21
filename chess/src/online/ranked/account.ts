@@ -1,6 +1,7 @@
 // Your account on the game server: who you are, sign-in and sign-out, and
 // the magic-link landing (?signin=TOKEN in the address). Cloud saves hang off
 // it (cloudSync.ts).
+import { loadAppToken } from '../../native/appToken'
 import { showToast } from '../../stores/toastStore'
 import { createStore } from '../../utils/store'
 import { type AccountUser, ApiError, type ServerConfig, api, unauthorizedListeners } from './api'
@@ -21,6 +22,7 @@ export function loadAccount(force = false): Promise<void> {
   if (started && !force) return started
   started = (async () => {
     try {
+      await loadAppToken()
       const config = await api.config()
       // Arriving from a sign-in email: finish signing in, then drop the token from the address bar.
       const token = new URLSearchParams(window.location.search).get('signin')

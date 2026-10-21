@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/index.css'
 import { loadAccount } from './online/ranked/account'
 import { startCloudSync } from './online/ranked/cloudSync'
+import { startNativeShell } from './native/shell'
 import { watchUncaughtErrors } from './services/errorReport'
 
 const container = document.getElementById('root')
@@ -28,3 +29,7 @@ createRoot(container).render(
     </ErrorBoundary>
   </StrictMode>,
 )
+
+// The iOS / Android app: dark status bar, and the launch screen goes once the first frame is drawn
+// (here rather than in App, so a crash screen isn't hidden behind it).
+requestAnimationFrame(() => startNativeShell())

@@ -8,6 +8,11 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  plugins: {
+    // The app hides the launch screen itself once it has drawn (src/native/shell.ts).
+    SplashScreen: { launchAutoHide: false, backgroundColor: '#0b0d12', showSpinner: false },
+    StatusBar: { style: 'DARK', backgroundColor: '#0b0d12', overlaysWebView: false },
+  },
   ios: {
     contentInset: 'never',
     backgroundColor: '#0b0d12',

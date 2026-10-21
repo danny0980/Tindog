@@ -1,7 +1,7 @@
 {
   "name": "chess-arena",
   "private": true,
-  "version": "6.17.0",
+  "version": "6.18.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-stockfish.mjs",
@@ -56,11 +56,12 @@
     "test:restart": "tsx tests/restart.test.ts",
     "test:engine": "node scripts/run-ts-test.mjs tests/engine.test.ts",
     "test:community": "tsx tests/community.test.ts",
-    "doctor": "tsx server/cli.ts doctor"
+    "doctor": "tsx server/cli.ts doctor",
+    "native:assets": "node scripts/native-assets.mjs",
+    "android:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug",
+    "android:release": "npm run cap:sync && cd android && ./gradlew bundleRelease assembleRelease"
   },
   "dependencies": {
-    "@capacitor/core": "^8.5.3",
-    "@capacitor/haptics": "^8.0.2",
     "better-sqlite3": "^12.11.1",
     "chess.js": "^1.4.0",
     "compression": "^1.8.2",
@@ -71,7 +72,15 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@tailwindcss/vite": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/compression": "^1.8.1",

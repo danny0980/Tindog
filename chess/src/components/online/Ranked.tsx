@@ -16,6 +16,7 @@ import { ChessBoard } from '../board/ChessBoard'
 import { ChessClock } from '../game/ChessClock'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { isNativeApp } from '../../native/platform'
 import { GoogleButton } from './GoogleButton'
 
 /** Sign in (Google or an email link), your rating and record, and your cloud save. */
@@ -26,6 +27,7 @@ export function AccountPanel() {
   const [sent, setSent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [code, setCode] = useState('')
   const onGoogle = useCallback(async (credential: string) => {
     setError(null)
     try {
@@ -105,12 +107,48 @@ export function AccountPanel() {
         <h3 className="font-display text-lg font-extrabold text-white">Sign in for ranked play</h3>
         <p className="text-xs text-slate-400">Get matched with players around the world, earn an online rating, and keep your progress in the cloud on every device.</p>
       </div>
-      {cfg.google && <GoogleButton clientId={cfg.google} onCredential={(c) => void onGoogle(c)} />}
+      {/* Google's sign-in button can't run inside the iOS / Android app, which signs in by email code. */}
+      {cfg.google && !isNativeApp() && <GoogleButton clientId={cfg.google} onCredential={(c) => void onGoogle(c)} />}
       {cfg.email &&
         (sent ? (
-          <div className="rounded-2xl border border-emerald-300/30 bg-emerald-300/10 p-3 text-xs text-emerald-100" data-email-sent>
-            Check your inbox: we sent a sign-in link to <b>{sent}</b>. It works once and expires in 15 minutes.
-            {cfg.devLinks && <div className="mt-1 text-emerald-200/80">(Development server: the link is printed in the server’s console.)</div>}
+          <div className="space-y-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 p-3 text-xs text-emerald-100" data-email-sent>
+            <div>
+              Check your inbox: we sent a sign-in {isNativeApp() ? 'code' : 'link'} to <b>{sent}</b>. It works once and expires in 15 minutes.
+              {cfg.devLinks && <div className="mt-1 text-emerald-200/80">(Development server: the link and code are printed in the server’s console.)</div>}
+            </div>
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                setBusy(true)
+                setError(null)
+                api
+                  .verifyEmailCode(sent, code)
+                  .then(({ user }) => signedIn(user))
+                  .catch((err: unknown) => setError(err instanceof Error ? err.message : 'That code didn’t work.'))
+                  .finally(() => setBusy(false))
+              }}
+            >
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="6-digit code"
+                aria-label="Sign-in code from the email"
+                className="w-32 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-mono tracking-[0.3em] text-white outline-none placeholder:tracking-normal placeholder:text-slate-500 focus:border-sky-300/60"
+                data-code-input
+              />
+              <Button type="submit" size="sm" variant="primary" disabled={busy || code.length !== 6} data-code-submit>
+                Sign in
+              </Button>
+            </form>
+            <button type="button" className="text-emerald-200/80 underline" onClick={() => (setSent(null), setCode(''), setError(null))}>
+              Use a different email
+            </button>
           </div>
         ) : (
           <form
@@ -138,7 +176,7 @@ export function AccountPanel() {
               data-email-input
             />
             <Button type="submit" variant="secondary" disabled={busy} icon={busy ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />} data-email-submit>
-              Email me a link
+              {isNativeApp() ? 'Email me a code' : 'Email me a link'}
             </Button>
           </form>
         ))}

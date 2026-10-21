@@ -93,6 +93,15 @@ check('new players move faster', Math.abs(eloChange(1500, 1500, 1, 5)) > Math.ab
   const old = auth.createMagicLink('ada@example.com')
   t += 16 * 60_000
   check('magic links expire after 15 minutes', auth.redeemMagicLink(old) === null)
+  const code = auth.createSignInCode('code@example.com')
+  const unused = auth.createMagicLink('code@example.com')
+  check('sign-in codes are 6 digits', /^\d{6}$/.test(code))
+  check('a wrong code or another email fails', auth.redeemSignInCode('code@example.com', code === '000000' ? '111111' : '000000') === null && auth.redeemSignInCode('ada@example.com', code) === null)
+  check('the code signs you in, once', auth.redeemSignInCode('code@example.com', code)?.email === 'code@example.com' && auth.redeemSignInCode('code@example.com', code) === null)
+  check('signing in by code cancels that email’s link (and the other way round)', auth.redeemMagicLink(unused) === null)
+  const late = auth.createSignInCode('code@example.com')
+  t += 16 * 60_000
+  check('sign-in codes expire after 15 minutes', auth.redeemSignInCode('code@example.com', late) === null)
   const s = auth.startSession(user!.id)
   check('sessions find their user', auth.userFor(s.token)?.id === user!.id && auth.userFor('nope') === null)
   t += 31 * 86_400_000
@@ -108,11 +117,12 @@ check('new players move faster', Math.abs(eloChange(1500, 1500, 1, 5)) > Math.ab
 
 // ── A real server ───────────────────────────────────────────────────────────
 const links: string[] = []
+const codes: string[] = []
 const store = new Store(null)
 const app = createApp({
   config: { ...loadConfig({ PORT: '0', DATA_FILE: ':memory:' }, []), publicUrl: 'http://localhost:5175' },
   store,
-  mailer: async (_to, link) => void links.push(link),
+  mailer: async (_to, link, code) => void (links.push(link), code && codes.push(code)),
   google: async (credential) => (credential === 'good-google-token' ? { sub: 'google-42', email: 'gm@example.com', emailVerified: true, name: 'Grace M' } : null),
   log: () => {},
   hub: { graceMs: 400, pairEveryMs: 50 },
@@ -321,6 +331,51 @@ mf.disconnect()
 mc.disconnect()
 md.disconnect()
 check('disconnect() goes offline', mc.state.phase === 'offline')
+
+// ── The iOS / Android apps: a token instead of the cookie, CORS, and the socket's subprotocol ──
+const APP = 'https://localhost' // Capacitor's Android origin
+const appPost = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+  fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', origin: APP, 'x-chronos-client': 'native', ...headers }, body: JSON.stringify(body) })
+const preflight = await fetch(`${base}/api/me`, { method: 'OPTIONS', headers: { origin: APP, 'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization' } })
+check('the apps’ CORS preflight is answered', preflight.status === 204 && preflight.headers.get('access-control-allow-origin') === APP && /authorization/.test(preflight.headers.get('access-control-allow-headers') ?? ''))
+const noCors = await fetch(`${base}/api/config`, { headers: { origin: 'https://evil.example' } })
+check('other sites get no CORS', noCors.headers.get('access-control-allow-origin') === null)
+check('the apps may ask for a sign-in email', (await appPost('/api/auth/email', { email: 'app@example.com' })).status === 200 && codes.length > 0)
+check('a wrong code is refused', (await appPost('/api/auth/email/code', { email: 'app@example.com', code: codes.at(-1) === '000000' ? '111111' : '000000' })).status === 400)
+const codeRes = await appPost('/api/auth/email/code', { email: 'app@example.com', code: codes.at(-1) })
+const signedApp = (await codeRes.json()) as { user: { email: string }; token?: string }
+check('the emailed code signs the app in and returns its token', codeRes.status === 200 && signedApp.user.email === 'app@example.com' && typeof signedApp.token === 'string' && codeRes.headers.get('access-control-allow-origin') === APP)
+const appToken = signedApp.token ?? ''
+const webCode = await (async () => {
+  await post('/api/auth/email', { email: 'web@example.com' })
+  return (await (await post('/api/auth/email/code', { email: 'web@example.com', code: codes.at(-1) })).json()) as { token?: string }
+})()
+check('the website never gets the token in the body', webCode.token === undefined)
+const appMe = (await (await fetch(`${base}/api/me`, { headers: { authorization: `Bearer ${appToken}`, origin: APP } })).json()) as { user: { email: string } | null }
+check('the Bearer token signs requests in', appMe.user?.email === 'app@example.com')
+check('a bad Bearer token is nobody', ((await (await fetch(`${base}/api/me`, { headers: { authorization: 'Bearer nope' } })).json()) as { user: unknown }).user === null)
+const tries = await Promise.all(Array.from({ length: 9 }, () => appPost('/api/auth/email/code', { email: 'app@example.com', code: '123456' })))
+check('guessing codes is rate-limited', tries.some((r) => r.status === 429))
+const appSocket = await new Promise<string>((resolve) => {
+  const ws = new WebSocket(wsUrl, ['chronos', `chronos.token.${appToken}`], { headers: { origin: APP } })
+  ws.on('message', (data) => {
+    const msg = parseServerMessage(data.toString())
+    if (msg?.type === 'HELLO') (resolve(`${ws.protocol}:${msg.type}`), ws.close())
+  })
+  ws.on('unexpected-response', (_req, res) => resolve(String(res.statusCode)))
+  ws.on('error', () => resolve('error'))
+})
+check('the apps’ socket signs in with its token as a subprotocol', appSocket === 'chronos:HELLO')
+const badSocket = await new Promise<number>((resolve) => {
+  const ws = new WebSocket(wsUrl, ['chronos', 'chronos.token.nope'], { headers: { origin: APP } })
+  ws.on('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0))
+  ws.on('error', () => resolve(-1))
+})
+check('a bad socket token is refused', badSocket === 401)
+const appOut = await appPost('/api/auth/logout', {}, { authorization: `Bearer ${appToken}` })
+const afterOut = (await (await fetch(`${base}/api/me`, { headers: { authorization: `Bearer ${appToken}` } })).json()) as { user: unknown }
+check('signing out ends the app’s token', appOut.status === 200 && afterOut.user === null)
+
 await app.close()
 
 console.log(failures === 0 ? '\nAll server checks passed.' : `\n${failures} check(s) FAILED`)

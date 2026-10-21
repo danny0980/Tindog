@@ -497,6 +497,10 @@ export class Store {
   dropSession(hash: string): void {
     this.q.dropSession.run(hash)
   }
+  /** Cancels every pending sign-in link and code for an email (one was just used). */
+  dropMagicFor(email: string): void {
+    this.db.prepare('DELETE FROM magic WHERE email = ?').run(email)
+  }
   dropSessionsOf(userId: string): void {
     this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId)
   }

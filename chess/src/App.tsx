@@ -2,6 +2,7 @@ import { armyEffects } from './army/army'
 import { type BattleMode, opponentFor } from './war/war'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { onBackButton } from './native/shell'
 import { AppHeader } from './components/layout/AppHeader'
 import { BottomNav } from './components/layout/BottomNav'
 import { ToastViewport } from './components/ui/ToastViewport'
@@ -105,6 +106,15 @@ export default function App() {
     if (current !== next) runViewTransition(() => setView(next), navDirection(current, next))
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
+
+  // The iOS / Android app: Android's back button (another screen → the board).
+  useEffect(() => {
+    return onBackButton(() => {
+      if (viewRef.current === 'play') return false
+      navigate('play')
+      return true
+    })
+  }, [navigate])
 
   // Where an intro hands over: the chosen Legends mode screen, or straight into a game.
   const enterFromIntro = useCallback((target: IntroExit) => {

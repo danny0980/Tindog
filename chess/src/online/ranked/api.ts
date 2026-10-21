@@ -2,6 +2,9 @@
 // proxies /api in development; the server serves the app in production), so
 // the session cookie travels on its own.
 
+import { appToken, setAppToken } from '../../native/appToken'
+import { apiOrigin, appHasNoServer, isNativeApp } from '../../native/platform'
+
 export interface AccountUser {
   id: string
   name: string
@@ -179,12 +182,21 @@ export type HistoryGame =
   | { id: string; kind: 'royale'; seat: number; seats: string[]; ranking: number[]; reason: string; actions: unknown[] | null; ratingChange: number; endedAt: number }
 
 async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+  if (appHasNoServer()) throw new ApiError(0, 'This app was built without a game server address, so online play is off.')
+  // The apps sign in with a token (no cookies across origins); the website with its cookie.
+  const native = isNativeApp()
+  const token = native ? appToken() : null
+  const headers: Record<string, string> = {
+    ...(init?.body !== undefined ? { 'content-type': 'application/json' } : {}),
+    ...(native ? { 'x-chronos-client': 'native' } : {}),
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+  }
   let res: Response
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${apiOrigin()}/api${path}`, {
       method: init?.method ?? 'GET',
-      credentials: 'same-origin',
-      headers: init?.body !== undefined ? { 'content-type': 'application/json' } : {},
+      credentials: native ? 'omit' : 'same-origin',
+      headers,
       ...(init?.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
     })
   } catch {
@@ -195,9 +207,15 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
   if (!type.includes('application/json')) throw new ApiError(0, 'The game server is not running.')
   const data = (await res.json()) as T & { error?: string }
   if (!res.ok) {
-    if (res.status === 401) for (const fn of unauthorizedListeners) fn()
+    if (res.status === 401) {
+      setAppToken(null)
+      for (const fn of unauthorizedListeners) fn()
+    }
     throw new ApiError(res.status, typeof data.error === 'string' ? data.error : 'Something went wrong.', data)
   }
+  // A sign-in answer carries the apps' session token: keep it.
+  const fresh = (data as { token?: unknown }).token
+  if (native && typeof fresh === 'string') setAppToken(fresh)
   return data
 }
 
@@ -212,8 +230,10 @@ export const api = {
   rename: (name: string) => call<{ user: AccountUser }>('/me', { method: 'PATCH', body: { name } }),
   requestEmailLink: (email: string) => call<{ sent: boolean }>('/auth/email', { method: 'POST', body: { email } }),
   verifyEmailLink: (token: string) => call<{ user: AccountUser }>('/auth/email/verify', { method: 'POST', body: { token } }),
+  /** The 6-digit code from the sign-in email (the apps, or another device). */
+  verifyEmailCode: (email: string, code: string) => call<{ user: AccountUser }>('/auth/email/code', { method: 'POST', body: { email, code } }),
   google: (credential: string) => call<{ user: AccountUser }>('/auth/google', { method: 'POST', body: { credential } }),
-  logout: () => call<{ ok: boolean }>('/auth/logout', { method: 'POST', body: {} }),
+  logout: () => call<{ ok: boolean }>('/auth/logout', { method: 'POST', body: {} }).finally(() => setAppToken(null)),
   getSave: async (): Promise<{ data: unknown; updatedAt: number } | null> => {
     const r = await call<{ data: unknown; updatedAt: number | null }>('/save')
     return r.data === null || r.updatedAt === null ? null : { data: r.data, updatedAt: r.updatedAt }
@@ -241,5 +261,5 @@ export const api = {
   historyGame: (id: string) => call<HistoryGame>(`/history/${encodeURIComponent(id)}`),
   /** Everything the server holds about you, as JSON. */
   exportData: () => call<Record<string, unknown>>('/me/export'),
-  deleteAccount: () => call<{ deleted: boolean }>('/me', { method: 'DELETE', body: { confirm: 'DELETE' } }),
+  deleteAccount: () => call<{ deleted: boolean }>('/me', { method: 'DELETE', body: { confirm: 'DELETE' } }).then((r) => (setAppToken(null), r)),
 }

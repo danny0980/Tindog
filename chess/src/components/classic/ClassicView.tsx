@@ -3,7 +3,7 @@ import { loreFor } from '../../data/classic/lore'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ARCHETYPES } from '../../data/campaign/archetypes'
 import { BOOKS } from '../../data/campaign/books'
-import { CLASSIC_ERAS, CLASSIC_ROSTER, type ClassicCharacter, type ClassicEraId } from '../../data/classic/roster'
+import { CLASSIC_ERAS, CLASSIC_ROSTER, type ClassicCharacter, type ClassicEraId, classicUnlockedBy, classicUnlockedThrough } from '../../data/classic/roster'
 import { classicPersona, difficultyForElo } from '../../data/personas'
 import { classicTrophy } from '../../data/trophyAvatars'
 import { useStore } from '../../hooks/useStore'
@@ -33,7 +33,13 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
   const avatar = useStore(settingsStore, (s) => s.trophyAvatar)
   const classicBeaten = useStore(profileStore, (p) => p.feats.classicBeaten)
   const beaten = useMemo(() => new Set(matches.filter((m) => m.outcome === 'win').map((m) => m.opponent)), [matches])
-  const suggested = useMemo(() => CLASSIC_ROSTER.find((c) => c.elo >= elo - 250 && !beaten.has(c.name)) ?? CLASSIC_ROSTER.find((c) => !beaten.has(c.name)) ?? CLASSIC_ROSTER[0], [beaten, elo])
+  // Beaten for good (the lasting record), plus wins still in the match history.
+  const beatenIds = useMemo(() => new Set([...classicBeaten, ...CLASSIC_ROSTER.filter((c) => beaten.has(c.name)).map((c) => c.id)]), [beaten, classicBeaten])
+  const openThrough = classicUnlockedThrough(beatenIds)
+  const suggested = useMemo(
+    () => CLASSIC_ROSTER.find((c) => c.rank <= openThrough && c.elo >= elo - 250 && !beatenIds.has(c.id)) ?? CLASSIC_ROSTER.find((c) => c.rank <= openThrough && !beatenIds.has(c.id)) ?? CLASSIC_ROSTER[0],
+    [beatenIds, elo, openThrough],
+  )
   const [era, setEra] = useState<ClassicEraId | 'all'>('all')
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query).trim().toLowerCase()
@@ -41,6 +47,7 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
   const selected = CLASSIC_ROSTER.find((c) => c.id === selectedId) ?? suggested ?? null
   const shown = CLASSIC_ROSTER.filter((c) => (era === 'all' || c.era === era) && (!q || c.name.toLowerCase().includes(q) || c.title.toLowerCase().includes(q)))
   const [options, setOptions] = useState<ChallengeClock>({ color: 'random', timeControlId: 'none' })
+  const lockedBy = selected ? classicUnlockedBy(selected, beatenIds) : null
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]" data-classic>
@@ -50,7 +57,7 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
           <span className="min-w-0 flex-1">
             <b className="text-white">Pure chess.</b> No spells, tactics, weather or contracts — just 100 historical minds, each with their own style and openings, from a gentle ~600 to a world-champion ~2760.
           </span>
-          <span className="font-mono text-slate-400">{beaten.size > 0 ? `${CLASSIC_ROSTER.filter((c) => beaten.has(c.name)).length}/100 beaten` : '0/100 beaten'}</span>
+          <span className="font-mono text-slate-400">{beatenIds.size}/100 beaten</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Eras">
@@ -75,7 +82,7 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4" role="list" aria-label="Classic opponents">
           {shown.map((c) => (
-            <OpponentCard key={c.id} c={c} active={selected?.id === c.id} beaten={beaten.has(c.name)} suggested={suggested?.id === c.id} onSelect={() => setSelectedId(c.id)} />
+            <OpponentCard key={c.id} c={c} active={selected?.id === c.id} beaten={beatenIds.has(c.id)} locked={c.rank > openThrough} suggested={suggested?.id === c.id} onSelect={() => setSelectedId(c.id)} />
           ))}
         </div>
         {shown.length === 0 && <p className="text-sm text-slate-500">Nobody matches “{query}”.</p>}
@@ -83,7 +90,7 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
 
       {selected && (
         <aside className="glass space-y-3 self-start rounded-3xl p-4 lg:sticky lg:top-4" data-classic-dossier={selected.id}>
-          <Dossier c={selected} beaten={beaten.has(selected.name)} />
+          <Dossier c={selected} beaten={beatenIds.has(selected.id)} locked={lockedBy !== null} />
           <LoreBlock c={selected} />
           <Segmented
             label="Play as"
@@ -96,10 +103,16 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
             onChange={(v) => setOptions({ ...options, color: v as ColorChoice })}
           />
           <Segmented label="Clock" options={CAMPAIGN_TIME_CONTROLS} value={options.timeControlId} onChange={(v) => setOptions({ ...options, timeControlId: v })} />
-          <Button variant="primary" size="lg" className="w-full" icon={<Swords className="size-5" />} onClick={() => onPlay(selected.id, options)} data-classic-play>
-            Play {selected.name.split(' ')[0]}
-          </Button>
-          <AvatarButton c={selected} wearing={avatar?.key === `classic:${selected.id}`} canWear={beaten.has(selected.name) || classicBeaten.includes(selected.id)} />
+          {lockedBy ? (
+            <Button variant="primary" size="lg" className="w-full" icon={<Lock className="size-5" />} disabled data-classic-play data-classic-locked>
+              Beat {lockedBy.name.split(' ')[0]} to unlock
+            </Button>
+          ) : (
+            <Button variant="primary" size="lg" className="w-full" icon={<Swords className="size-5" />} onClick={() => onPlay(selected.id, options)} data-classic-play>
+              Play {selected.name.split(' ')[0]}
+            </Button>
+          )}
+          <AvatarButton c={selected} wearing={avatar?.key === `classic:${selected.id}`} canWear={beatenIds.has(selected.id)} />
         </aside>
       )}
     </div>
@@ -123,7 +136,7 @@ function AvatarButton({ c, wearing, canWear }: { c: ClassicCharacter; wearing: b
   )
 }
 
-function OpponentCard({ c, active, beaten, suggested, onSelect }: { c: ClassicCharacter; active: boolean; beaten: boolean; suggested: boolean; onSelect: () => void }) {
+function OpponentCard({ c, active, beaten, locked, suggested, onSelect }: { c: ClassicCharacter; active: boolean; beaten: boolean; locked: boolean; suggested: boolean; onSelect: () => void }) {
   const persona = classicPersona(c)
   const level = LEVEL[persona.difficulty]
   return (
@@ -133,10 +146,11 @@ function OpponentCard({ c, active, beaten, suggested, onSelect }: { c: ClassicCh
       onClick={onSelect}
       aria-pressed={active}
       data-classic-opponent={c.id}
+      data-locked={locked || undefined}
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 92px' }}
-      className={`relative flex items-center gap-2.5 rounded-2xl border p-2 text-left transition ${active ? 'border-accent bg-accent/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.07]'}`}
+      className={`relative flex items-center gap-2.5 rounded-2xl border p-2 text-left transition ${active ? 'border-accent bg-accent/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.07]'} ${locked && !active ? 'opacity-60' : ''}`}
     >
-      <PortraitEmblem spec={persona.portrait} label={c.name} size="sm" defeated={beaten} />
+      <PortraitEmblem spec={persona.portrait} label={c.name} size="sm" defeated={beaten} locked={locked} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-white">{c.name}</span>
         <span className="block truncate text-[11px] text-slate-400">{c.title}</span>
@@ -144,6 +158,7 @@ function OpponentCard({ c, active, beaten, suggested, onSelect }: { c: ClassicCh
           <span className="text-slate-300">~{c.elo}</span>
           <span className={level.tone}>{level.label}</span>
           {beaten && <Check className="size-3 text-emerald-300" aria-label="beaten" />}
+          {locked && <Lock className="size-3 text-slate-500" aria-label="locked" />}
         </span>
       </span>
       {suggested && !active && <ChevronRight className="size-4 shrink-0 text-accent" aria-label="suggested next" />}
@@ -151,14 +166,14 @@ function OpponentCard({ c, active, beaten, suggested, onSelect }: { c: ClassicCh
   )
 }
 
-function Dossier({ c, beaten }: { c: ClassicCharacter; beaten: boolean }) {
+function Dossier({ c, beaten, locked }: { c: ClassicCharacter; beaten: boolean; locked: boolean }) {
   const persona = classicPersona(c)
   const style = ARCHETYPES[c.archetype]
   const era = CLASSIC_ERAS.find((e) => e.id === c.era)
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
-        <PortraitEmblem spec={persona.portrait} label={c.name} size="lg" defeated={beaten} />
+        <PortraitEmblem spec={persona.portrait} label={c.name} size="lg" defeated={beaten} locked={locked} />
         <div className="min-w-0">
           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{era?.name}</div>
           <div className="font-display text-lg font-extrabold leading-tight text-white">{c.name}</div>

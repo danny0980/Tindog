@@ -185,6 +185,21 @@ export const getClassic = (id: string): ClassicCharacter | null => BY_ID.get(id)
 export const isClassicId = (v: unknown): v is string => typeof v === 'string' && BY_ID.has(v)
 export const getClassicEra = (id: ClassicEraId): ClassicEra => CLASSIC_ERAS.find((e) => e.id === id) ?? (CLASSIC_ERAS[0] as ClassicEra)
 
+/**
+ * The ladder opens one rung at a time: the first opponent is open, and beating
+ * one opens the next. Progress is the highest rung beaten, so anyone who won
+ * further up before the ladder was locked keeps everything below it.
+ */
+export function classicUnlockedThrough(beatenIds: ReadonlySet<string>): number {
+  let top = -1
+  for (const c of CLASSIC_ROSTER) if (beatenIds.has(c.id)) top = Math.max(top, c.rank)
+  return top + 1
+}
+export const isClassicUnlocked = (c: ClassicCharacter, beatenIds: ReadonlySet<string>): boolean => c.rank <= classicUnlockedThrough(beatenIds)
+/** Who you must beat to open this opponent (null when it is open). */
+export const classicUnlockedBy = (c: ClassicCharacter, beatenIds: ReadonlySet<string>): ClassicCharacter | null =>
+  isClassicUnlocked(c, beatenIds) ? null : (CLASSIC_ROSTER[classicUnlockedThrough(beatenIds)] ?? null)
+
 /** A Classic character's emblem: their icon on their era's colours, with a monogram. */
 export function classicPortrait(c: ClassicCharacter): PortraitSpec {
   const era = getClassicEra(c.era)

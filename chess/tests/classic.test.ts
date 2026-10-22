@@ -6,7 +6,7 @@ import { ARCHETYPES, strengthForElo } from '../src/data/campaign/archetypes'
 import { BOOKS } from '../src/data/campaign/books'
 import chronicle from '../src/data/campaign/rosters/chronicle'
 import discovery from '../src/data/campaign/rosters/discovery'
-import { CLASSIC_ERAS, CLASSIC_ROSTER, getClassic } from '../src/data/classic/roster'
+import { CLASSIC_ERAS, CLASSIC_ROSTER, classicUnlockedBy, getClassic, isClassicUnlocked } from '../src/data/classic/roster'
 import { classicPersona } from '../src/data/personas'
 import { blunderGuard, chooseMove } from '../src/engine/personalities'
 import { DEFAULT_SETTINGS, sanitizeSettings } from '../src/stores/settingsStore'
@@ -101,6 +101,12 @@ const b = beatenIds({
   matches: [],
 })
 check('only beaten opponents unlock: legends, bosses with a win, Classic', b.legends.join() === 'napoleon' && b.bosses.join() === 'cyber.oracle-7' && b.classicIds.has('morphy'))
+
+// The Classic ladder opens one opponent at a time.
+const rung0 = CLASSIC_ROSTER[0]!, rung1 = CLASSIC_ROSTER[1]!, rung2 = CLASSIC_ROSTER[2]!
+check('only the first Classic opponent is open at the start', isClassicUnlocked(rung0, new Set()) && !isClassicUnlocked(rung1, new Set()) && classicUnlockedBy(rung1, new Set())?.id === rung0.id)
+check('beating one opens the next', isClassicUnlocked(rung1, new Set([rung0.id])) && !isClassicUnlocked(rung2, new Set([rung0.id])))
+check('wins further up the ladder keep everything below them open', isClassicUnlocked(CLASSIC_ROSTER[50]!, new Set([CLASSIC_ROSTER[49]!.id])) && isClassicUnlocked(rung1, new Set([CLASSIC_ROSTER[49]!.id])) && !isClassicUnlocked(CLASSIC_ROSTER[51]!, new Set([CLASSIC_ROSTER[49]!.id])))
 
 console.log(failures === 0 ? '\nAll classic checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

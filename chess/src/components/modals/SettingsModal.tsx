@@ -125,6 +125,16 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
               >
                 Replay the cinematic intro
               </Button>
+              <Button
+                className="mt-2 w-full"
+                icon={<Clapperboard className="size-4" />}
+                onClick={() => {
+                  onClose()
+                  openIntro('clay')
+                }}
+              >
+                Replay the clay opening film
+              </Button>
             </Section>
             <Section title="Mobile ergonomics">
               <Toggle

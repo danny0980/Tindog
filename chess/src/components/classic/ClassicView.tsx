@@ -148,7 +148,7 @@ function OpponentCard({ c, active, beaten, locked, suggested, onSelect }: { c: C
       data-classic-opponent={c.id}
       data-locked={locked || undefined}
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 92px' }}
-      className={`relative flex items-center gap-2.5 rounded-2xl border p-2 text-left transition ${active ? 'border-accent bg-accent/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.07]'} ${locked && !active ? 'opacity-60' : ''}`}
+      className={`relative flex items-center gap-2.5 rounded-2xl border p-2 text-left transition ${active ? 'border-accent bg-accent/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.07]'} ${locked && !active ? 'opacity-90' : ''}`}
     >
       <PortraitEmblem spec={persona.portrait} label={c.name} size="sm" defeated={beaten} locked={locked} />
       <span className="min-w-0 flex-1">

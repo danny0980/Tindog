@@ -763,7 +763,7 @@ Folder layouts from 6.2 (`Portraits/`, `Pieces/<set>/`, `Boards/<theme>/`) still
   - *Napoleon* finds Napoleon Bonaparte, *einstein* finds Albert Einstein, and *Cleopatra* finds Cleopatra VII.
   - Titles are ignored (*Queen Elizabeth I*, *Richard the Lionheart*).
   - A few aliases are built in, e.g. *Ninja Leader* → Hattori Hanzō (`PORTRAIT_ALIASES` in `src/assets/artManifest.ts`).
-  - Locked characters keep their mystery emblem.
+  - Locked characters show their portrait dimmed and greyed behind a padlock.
   - Portraits for people who aren't characters in the game (e.g. Queen Victoria, Abraham Lincoln, Julius Caesar) are imported but unused until such a character exists.
 - **Piece sets and boards:**
   - **Automatic match:** a set or board named after a built-in one (`standard`, `classic-wood`, `nebula` …) automatically skins it, including inside themed character battles.

@@ -5,7 +5,20 @@ import type { TierId } from '../data/campaign/tiers'
 import type { GameSettings } from './chess'
 import type { GrandRealmId } from './campaign'
 import type { CampaignId } from './legend'
+import type { PortraitSpec } from './persona'
 import type { BoardThemeId, PieceSetId, SoundMaterial } from './theme'
+
+/**
+ * A beaten opponent worn as your avatar: a Classic character, a Grand Campaign
+ * boss or a Chronos legend. Name and emblem are kept with the choice, so it shows
+ * even before a lazily loaded campaign realm is in memory.
+ */
+export interface TrophyAvatar {
+  /** Persona key: "classic:morphy", "boss:cyber.oracle-7", "legend:napoleon". */
+  key: string
+  name: string
+  portrait: PortraitSpec
+}
 
 export type HapticIntensity = 'off' | 'light' | 'medium' | 'heavy'
 
@@ -36,8 +49,8 @@ export interface AppSettings {
   campaignTier: TierId
   /** Roll random mutators before campaign battles. */
   battleMutators: boolean
-  /** A Classic Chess character used as your avatar (null = none). */
-  classicAvatar: string | null
+  /** An opponent you have beaten, used as your avatar (null = none). */
+  trophyAvatar: TrophyAvatar | null
   /** The name other players see online ('' = ask). */
   onlineName: string
   /** Preferred clock for online rooms you create (a TIME_CONTROLS id from online/protocol). */

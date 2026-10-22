@@ -2,6 +2,7 @@ import { Coins, Crown, Flame, Puzzle, Swords, Trophy } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AchievementGrid } from '../components/profile/AchievementGrid'
 import { LegendPortrait } from '../components/legends/LegendPortrait'
+import { PortraitEmblem } from '../components/legends/PortraitEmblem'
 import { CAMPAIGNS, campaignLegends, isLegendUnlocked } from '../data/legends'
 import { formatShortDate } from '../utils/date'
 import { EloChart } from '../components/profile/EloChart'
@@ -21,6 +22,7 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
   const gauntletBest = useStore(gauntletStore, (g) => g.record.bestStreak)
   const lowPower = useStore(settingsStore, (s) => s.batterySaver)
   const avatarArt = useAvatarArt()
+  const trophy = useStore(settingsStore, (s) => s.trophyAvatar)
   const ctx = { profile, gauntletBest }
   const title = displayTitle(ctx)
   const { stats } = profile
@@ -40,7 +42,15 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
         <div className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full bg-accent/20 blur-3xl" aria-hidden="true" />
         <div className="relative flex flex-wrap items-center gap-5">
           <div className="idle-pause relative flex size-20 animate-float items-center justify-center rounded-3xl bg-gradient-to-br from-accent to-accent-2 font-display text-3xl font-extrabold text-ink-950 shadow-[0_20px_50px_-15px_var(--accent)]">
-            {avatarArt ? <img src={avatarArt} alt="" className="absolute inset-0 size-full rounded-3xl object-cover" data-profile-avatar /> : profile.name.slice(0, 1).toUpperCase()}
+            {trophy ? (
+              <span className="absolute inset-0" data-profile-avatar data-trophy-avatar={trophy.key}>
+                <PortraitEmblem spec={trophy.portrait} label={trophy.name} size="lg" />
+              </span>
+            ) : avatarArt ? (
+              <img src={avatarArt} alt="" className="absolute inset-0 size-full rounded-3xl object-cover" data-profile-avatar />
+            ) : (
+              profile.name.slice(0, 1).toUpperCase()
+            )}
             <Crown className="absolute -top-3 -right-2 size-7 rotate-12 text-amber-300 drop-shadow" />
           </div>
           <div className="min-w-0 flex-1">

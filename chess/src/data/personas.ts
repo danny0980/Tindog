@@ -11,7 +11,7 @@ import { LEGEND_SPELLS, spellsForBoss } from './spells'
 import { ARCHETYPE_TONE, LEGEND_TONE } from './taunts'
 import { ARCHETYPES, buildProfile } from './campaign/archetypes'
 import { BOOKS } from './campaign/books'
-import { type ClassicCharacter, getClassicEra } from './classic/roster'
+import { type ClassicCharacter, classicPortrait, getClassicEra } from './classic/roster'
 import type { Fingerprint } from '../ghost/fingerprint'
 
 /** Closest Quick Play difficulty bucket for a rating (coins and stats). */
@@ -89,7 +89,7 @@ export function classicPersona(c: ClassicCharacter, facing: string | null = null
       legendWins: rival ? [rival.victory] : lore ? [lore.victory] : [`${short} takes the game. Study it — you were closer than you think.`, 'A fine fight. Come back stronger.'],
       legendLoses: rival ? [rival.defeat] : lore ? [lore.defeat] : [`Well played. ${short} tips the king to you.`, 'The board was yours today. I salute you.'],
     },
-    portrait: { icon: c.icon, from: era.from, to: era.to, monogram: (c.name.replace(/^(The|Sir|Queen|Captain) /, '')[0] ?? '?').toUpperCase() },
+    portrait: classicPortrait(c),
     themeId: era.themeId,
     pieceSetId: era.pieceSetId,
     arrivalCaption: era.caption,

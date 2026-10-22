@@ -10,6 +10,7 @@ import { realmOfBoss } from '../data/campaign/realms'
 import { EMBER_BONUS_MS, FIREWALL_ELO_CAP, SHIELD_MOVE_LIMIT, activeRelics, applyRelicsToProfile } from '../data/campaign/relics'
 import { getLegend, strengthInfo } from '../data/legends'
 import { bossPersona, classicPersona, ghostPersona, legendPersona } from '../data/personas'
+import { trophyClassicId } from '../data/trophyAvatars'
 import { fingerprint } from '../ghost/fingerprint'
 import { withMemory } from '../memory/memory'
 import type { ArmyEffects } from '../army/army'
@@ -253,9 +254,9 @@ export function useGameController({ active }: { active: boolean }) {
   // What the opponent remembers of you, as it stood when this game began.
   const [memoryAtStart, setMemoryAtStart] = useState(() => profileStore.get().memory)
   const persona = useMemo<Persona | null>(() => {
-    const base = boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, settings.classicAvatar) : ghost
+    const base = boss ? bossPersona(boss) : legend ? legendPersona(legend, gameSettings.legendStrength) : classic ? classicPersona(classic, trophyClassicId(settings.trophyAvatar)) : ghost
     return base ? withMemory(base, memoryAtStart[base.key]) : null
-  }, [boss, classic, gameSettings.legendStrength, ghost, legend, memoryAtStart, settings.classicAvatar])
+  }, [boss, classic, gameSettings.legendStrength, ghost, legend, memoryAtStart, settings.trophyAvatar])
   const reviewPersona = useMemo<Persona | null>(
     () => (reviewBoss ? bossPersona(reviewBoss) : reviewLegend ? legendPersona(reviewLegend, 'authentic') : null),
     [reviewBoss, reviewLegend],
@@ -945,7 +946,7 @@ export function useGameController({ active }: { active: boolean }) {
         : next.mode === 'ai' && next.legendId
           ? legendPersona(getLegend(next.legendId), next.legendStrength)
           : challengerClassic
-            ? classicPersona(challengerClassic, settingsStore.get().classicAvatar)
+            ? classicPersona(challengerClassic, trophyClassicId(settingsStore.get().trophyAvatar))
             : next.mode === 'ai' && next.ghost
               ? ghostPersona(fingerprint(profileStore.get().matches, profileStore.get().elo), profileStore.get().name)
               : null
@@ -1086,13 +1087,9 @@ export function useGameController({ active }: { active: boolean }) {
   const captured = useMemo(() => getCapturedPieces(visibleHistory), [visibleHistory])
   const lastMove = visibleHistory[visibleHistory.length - 1] ?? null
 
-  // A Classic Chess character chosen as your avatar (portrait only — it never speaks for you).
-  const classicAvatar = settings.classicAvatar ? getClassic(settings.classicAvatar) : null
-  const avatarCharacter = useMemo<PlayerInfo['character']>(() => {
-    if (!classicAvatar) return null
-    const p = classicPersona(classicAvatar)
-    return { key: `avatar:${classicAvatar.id}`, name: p.name, portrait: p.portrait }
-  }, [classicAvatar])
+  // A beaten opponent worn as your avatar (portrait only — it never speaks for you).
+  const trophy = settings.trophyAvatar
+  const avatarCharacter = useMemo<PlayerInfo['character']>(() => (trophy ? { key: `avatar:${trophy.key}`, name: trophy.name, portrait: trophy.portrait } : null), [trophy])
   const players: Record<Color, PlayerInfo> = useMemo(() => {
     const info = (color: Color): PlayerInfo => {
       const thinking = aiThinking && color === aiColor

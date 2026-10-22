@@ -1,10 +1,11 @@
-import { Check, ChevronRight, Crown, ScrollText, Search, Sparkle, Swords, UserRound } from 'lucide-react'
+import { Check, ChevronRight, Crown, Lock, ScrollText, Search, Sparkle, Swords, UserRound } from 'lucide-react'
 import { loreFor } from '../../data/classic/lore'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ARCHETYPES } from '../../data/campaign/archetypes'
 import { BOOKS } from '../../data/campaign/books'
 import { CLASSIC_ERAS, CLASSIC_ROSTER, type ClassicCharacter, type ClassicEraId } from '../../data/classic/roster'
 import { classicPersona, difficultyForElo } from '../../data/personas'
+import { classicTrophy } from '../../data/trophyAvatars'
 import { useStore } from '../../hooks/useStore'
 import { profileStore } from '../../stores/profileStore'
 import { settingsStore, updateSettings } from '../../stores/settingsStore'
@@ -29,7 +30,8 @@ const LEVEL: Record<ReturnType<typeof difficultyForElo>, { label: string; tone: 
 export function ClassicView({ onPlay }: { onPlay: (id: string, options: ChallengeClock) => void }) {
   const elo = useStore(profileStore, (p) => p.elo)
   const matches = useStore(profileStore, (p) => p.matches)
-  const avatar = useStore(settingsStore, (s) => s.classicAvatar)
+  const avatar = useStore(settingsStore, (s) => s.trophyAvatar)
+  const classicBeaten = useStore(profileStore, (p) => p.feats.classicBeaten)
   const beaten = useMemo(() => new Set(matches.filter((m) => m.outcome === 'win').map((m) => m.opponent)), [matches])
   const suggested = useMemo(() => CLASSIC_ROSTER.find((c) => c.elo >= elo - 250 && !beaten.has(c.name)) ?? CLASSIC_ROSTER.find((c) => !beaten.has(c.name)) ?? CLASSIC_ROSTER[0], [beaten, elo])
   const [era, setEra] = useState<ClassicEraId | 'all'>('all')
@@ -97,18 +99,27 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
           <Button variant="primary" size="lg" className="w-full" icon={<Swords className="size-5" />} onClick={() => onPlay(selected.id, options)} data-classic-play>
             Play {selected.name.split(' ')[0]}
           </Button>
-          <button
-            type="button"
-            onClick={() => updateSettings({ classicAvatar: avatar === selected.id ? null : selected.id })}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
-            data-classic-avatar
-          >
-            {avatar === selected.id ? <Check className="size-4 text-accent" /> : <UserRound className="size-4" />}
-            {avatar === selected.id ? 'Your avatar — tap to remove' : `Use ${selected.name.split(' ')[0]} as my avatar`}
-          </button>
+          <AvatarButton c={selected} wearing={avatar?.key === `classic:${selected.id}`} canWear={beaten.has(selected.name) || classicBeaten.includes(selected.id)} />
         </aside>
       )}
     </div>
+  )
+}
+
+/** Wear a Classic character as your avatar — once you have beaten them. */
+function AvatarButton({ c, wearing, canWear }: { c: ClassicCharacter; wearing: boolean; canWear: boolean }) {
+  const first = c.name.split(' ')[0]
+  return (
+    <button
+      type="button"
+      disabled={!wearing && !canWear}
+      onClick={() => updateSettings(wearing ? { trophyAvatar: null } : { trophyAvatar: classicTrophy(c), playerAvatar: null })}
+      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:text-slate-500 disabled:hover:bg-transparent"
+      data-classic-avatar
+    >
+      {wearing ? <Check className="size-4 text-accent" /> : canWear ? <UserRound className="size-4" /> : <Lock className="size-4" />}
+      {wearing ? 'Your avatar — tap to remove' : canWear ? `Use ${first} as my avatar` : `Beat ${first} to wear them as your avatar`}
+    </button>
   )
 }
 

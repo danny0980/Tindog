@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react'
+import { Crown, Lock } from 'lucide-react'
 import { useState } from 'react'
 import { usePortraitArt } from '../../assets/useArt'
 import type { PortraitSpec } from '../../types/persona'
@@ -25,7 +25,8 @@ export function PortraitEmblem({ spec, label, size = 'md', locked = false, defea
   const art = usePortraitArt(locked ? null : label)
   const [failed, setFailed] = useState<string | null>(null)
   const showArt = art !== null && failed !== art
-  const Icon = locked ? Lock : PORTRAIT_ICONS[spec.icon]
+  // A stored emblem (e.g. a trophy avatar from localStorage) with an unknown icon still renders.
+  const Icon = locked ? Lock : (PORTRAIT_ICONS[spec.icon] ?? Crown)
   return (
     <div
       className={`relative flex shrink-0 items-center justify-center overflow-hidden ring-2 transition-all duration-500 ${ring} ${s.box} ${locked ? 'grayscale' : ''} ${className}`}

@@ -10,6 +10,8 @@ import { CLASSIC_ERAS, CLASSIC_ROSTER, getClassic } from '../src/data/classic/ro
 import { classicPersona } from '../src/data/personas'
 import { blunderGuard, chooseMove } from '../src/engine/personalities'
 import { DEFAULT_SETTINGS, sanitizeSettings } from '../src/stores/settingsStore'
+import { createDefaultProfile } from '../src/stores/profileStore'
+import { beatenIds, classicTrophy, sanitizeTrophy } from '../src/data/trophyAvatars'
 import type { SearchResult } from '../src/types/engine'
 import type { QuoteTrigger } from '../src/types/legend'
 
@@ -79,9 +81,26 @@ check('a mate in one is never passed up', chooseMove(FEN, mate, weakBalanced) ==
 check('legacy profiles get a sensible default guard', blunderGuard({ toleranceCp: 400 }) === 170 && blunderGuard({ toleranceCp: 10 }) === 35)
 
 // ── Settings ────────────────────────────────────────────────────────────────
+// The old setting ("classicAvatar": a Classic id) is migrated to a trophy avatar.
 const s = sanitizeSettings({ ...DEFAULT_SETTINGS, classicAvatar: 'morphy', legendsScreen: 'classic', game: { ...DEFAULT_SETTINGS.game, classicId: 'morphy' } })
-check('Classic screen and avatar are remembered', s.classicAvatar === 'morphy' && s.legendsScreen === 'classic')
-check('an unknown avatar is dropped; a classic game is not restored after reload', sanitizeSettings({ ...DEFAULT_SETTINGS, classicAvatar: 'nobody' }).classicAvatar === null && s.game.classicId === null)
+check('Classic screen and avatar are remembered', s.trophyAvatar?.key === 'classic:morphy' && s.trophyAvatar.name === 'Paul Morphy' && s.legendsScreen === 'classic')
+check('an unknown avatar is dropped; a classic game is not restored after reload', sanitizeSettings({ ...DEFAULT_SETTINGS, classicAvatar: 'nobody' }).trophyAvatar === null && s.game.classicId === null)
+
+// Trophy avatars: any beaten opponent, stored with its name and emblem.
+const morphy = getClassic('morphy')!
+const trophy = classicTrophy(morphy)
+check('a trophy avatar survives a save', JSON.stringify(sanitizeSettings({ ...DEFAULT_SETTINGS, trophyAvatar: trophy }).trophyAvatar) === JSON.stringify(trophy))
+check('a boss or legend trophy is kept', sanitizeTrophy({ key: 'boss:cyber.oracle-7', name: 'Oracle-7', portrait: { icon: 'eye', from: '#123456', to: 'teal', monogram: 'O' } })?.key === 'boss:cyber.oracle-7' && sanitizeTrophy({ ...trophy, key: 'legend:napoleon' }) !== null)
+check('a trophy that is not a beatable opponent is dropped', sanitizeTrophy({ ...trophy, key: 'ghost:me' }) === null && sanitizeTrophy({ ...trophy, key: 'online:alice' }) === null)
+check('a tampered trophy is dropped (colours are checked)', sanitizeTrophy({ ...trophy, portrait: { ...trophy.portrait, from: 'red;background:url(x)' } }) === null && sanitizeTrophy({ ...trophy, name: '' }) === null)
+const DEFAULT_PROFILE = createDefaultProfile()
+const b = beatenIds({
+  legends: { ...DEFAULT_PROFILE.legends, defeated: { napoleon: '2026-01-01' } },
+  campaign: { ...DEFAULT_PROFILE.campaign, bosses: { 'cyber.oracle-7': { stars: 1, wins: 1, losses: 0, draws: 0, bestMoves: 30, firstClear: '2026-01-02' }, 'cyber.glitch': { stars: 0, wins: 0, losses: 2, draws: 0, bestMoves: null, firstClear: null } } },
+  feats: { ...DEFAULT_PROFILE.feats, classicBeaten: ['morphy'] },
+  matches: [],
+})
+check('only beaten opponents unlock: legends, bosses with a win, Classic', b.legends.join() === 'napoleon' && b.bosses.join() === 'cyber.oracle-7' && b.classicIds.has('morphy'))
 
 console.log(failures === 0 ? '\nAll classic checks passed.' : `\n${failures} check(s) FAILED`)
 if (failures > 0) process.exitCode = 1

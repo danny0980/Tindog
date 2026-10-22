@@ -65,7 +65,7 @@ export function useLookChoices(): LookChoices {
       id: `avatar-${id}`,
       label: humanize(id),
       active: settings.playerAvatar === id,
-      onSelect: () => updateSettings({ playerAvatar: id }),
+      onSelect: () => updateSettings({ playerAvatar: id, trophyAvatar: null }),
       preview: () => <img src={assetUrl(path)} alt="" loading="lazy" decoding="async" className="size-12 rounded-xl object-cover" />,
     }))
     const backdrops = Object.entries(manifest.backgrounds).map<ChoiceItem>(([id, path]) => ({
@@ -96,8 +96,8 @@ export function useLookChoices(): LookChoices {
         avatar: {
           id: 'avatar-default',
           label: 'Default',
-          active: settings.playerAvatar === null,
-          onSelect: () => updateSettings({ playerAvatar: null }),
+          active: settings.playerAvatar === null && settings.trophyAvatar === null,
+          onSelect: () => updateSettings({ playerAvatar: null, trophyAvatar: null }),
           preview: () => <span className="flex size-12 items-center justify-center rounded-xl bg-slate-200 text-xl text-slate-800">♙</span>,
         },
         backdrop: {
@@ -109,5 +109,5 @@ export function useLookChoices(): LookChoices {
         },
       },
     }
-  }, [manifest, ownedSets, ownedThemes, settings.arenaBackdrop, settings.artBoard, settings.artPieces, settings.boardTheme, settings.pieceSet, settings.playerAvatar])
+  }, [manifest, ownedSets, ownedThemes, settings.arenaBackdrop, settings.artBoard, settings.artPieces, settings.boardTheme, settings.pieceSet, settings.playerAvatar, settings.trophyAvatar])
 }

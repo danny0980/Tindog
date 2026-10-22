@@ -56,7 +56,8 @@ import { useLayoutMode } from '../hooks/useLayoutMode'
 import { useStore } from '../hooks/useStore'
 import { type SwipeDirection, useSwipeGesture } from '../hooks/useSwipeGesture'
 import { profileStore } from '../stores/profileStore'
-import { updateSettings } from '../stores/settingsStore'
+import { settingsStore, updateSettings } from '../stores/settingsStore'
+import { isTrophyKey, trophyOf } from '../data/trophyAvatars'
 import { showToast } from '../stores/toastStore'
 import type { Color, GameSettings, MoveInput, Square } from '../types/chess'
 import { describeResult, givesCheck, opposite } from '../utils/chess'
@@ -412,6 +413,16 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const classicId = game.persona?.key.startsWith('classic:') ? game.persona.key.slice('classic:'.length) : null
   const classicFact = classicId ? (loadedLore()?.factFor(classicId, total) ?? null) : null
   const classicLesson = classicFact && game.persona ? { name: game.persona.name, fact: classicFact } : null
+  // Beat a Classic character, a campaign boss or a legend: wear them as your avatar.
+  const trophyAvatar = useStore(settingsStore, (s) => s.trophyAvatar)
+  const wonPersona = game.summary?.outcome === 'win' && game.persona && isTrophyKey(game.persona.key) ? game.persona : null
+  const trophy = wonPersona
+    ? {
+        name: wonPersona.name.split(' ')[0] ?? wonPersona.name,
+        active: trophyAvatar?.key === wonPersona.key,
+        onToggle: () => updateSettings(trophyAvatar?.key === wonPersona.key ? { trophyAvatar: null } : { trophyAvatar: trophyOf(wonPersona), playerAvatar: null }),
+      }
+    : null
   // Beat a Classic character: interview them, or take a quick quiz about them and the others you have beaten.
   const beatenClassic = classicId && game.summary?.outcome === 'win' ? getClassic(classicId) : null
   const classicHistory = beatenClassic
@@ -687,6 +698,7 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         summary={game.summary}
         opponent={game.persona ? { spec: game.persona.portrait, label: game.persona.name } : null}
         lesson={classicLesson}
+        trophy={trophy}
         history={classicHistory}
         onReel={() => {
           game.dismissGameOver()

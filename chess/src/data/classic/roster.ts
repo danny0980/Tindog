@@ -4,7 +4,7 @@
 // civilisation to the world champions. Portraits come from the art pack by
 // name (the same names as the campaign where a character appears in both).
 import type { ArchetypeId, BookId } from '../../types/campaign'
-import type { PortraitIcon } from '../../types/persona'
+import type { PortraitIcon, PortraitSpec } from '../../types/persona'
 import type { BoardThemeId, PieceSetId } from '../../types/theme'
 
 export type ClassicEraId = 'ancient' | 'classical' | 'medieval' | 'east' | 'renaissance' | 'sail' | 'enlightenment' | 'nineteenth' | 'science' | 'masters'
@@ -184,3 +184,9 @@ const BY_ID = new Map(CLASSIC_ROSTER.map((c) => [c.id, c]))
 export const getClassic = (id: string): ClassicCharacter | null => BY_ID.get(id) ?? null
 export const isClassicId = (v: unknown): v is string => typeof v === 'string' && BY_ID.has(v)
 export const getClassicEra = (id: ClassicEraId): ClassicEra => CLASSIC_ERAS.find((e) => e.id === id) ?? (CLASSIC_ERAS[0] as ClassicEra)
+
+/** A Classic character's emblem: their icon on their era's colours, with a monogram. */
+export function classicPortrait(c: ClassicCharacter): PortraitSpec {
+  const era = getClassicEra(c.era)
+  return { icon: c.icon, from: era.from, to: era.to, monogram: (c.name.replace(/^(The|Sir|Queen|Captain) /, '')[0] ?? '?').toUpperCase() }
+}

@@ -1,5 +1,5 @@
 import { TERRAIN_IDS } from '../cinema/terrain'
-import { isClassicId } from '../data/classic/roster'
+import { legacyClassicTrophy, sanitizeTrophy } from '../data/trophyAvatars'
 import { isTierId } from '../data/campaign/tiers'
 import { DEFAULT_GAME_SETTINGS, DIFFICULTIES, PERSONALITIES, STORAGE_KEYS, TIME_CONTROLS } from '../constants/game'
 import { BOARD_THEMES, PIECE_SETS } from '../constants/themes'
@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   artBoard: null,
   artPieceScale: 1.15,
   battleLook: 'realm',
-  classicAvatar: null,
+  trophyAvatar: null,
   onlineName: '',
   onlineTimeControl: '10+0',
   arenaBackdrop: null,
@@ -115,7 +115,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     artBoard: isArtId(s.artBoard) ? s.artBoard : null,
     artPieceScale: num(s.artPieceScale, d.artPieceScale, 0.8, 1.5),
     battleLook: oneOf(s.battleLook, ['realm', 'mine'], d.battleLook),
-    classicAvatar: isClassicId(s.classicAvatar) ? s.classicAvatar : null,
+    trophyAvatar: sanitizeTrophy(s.trophyAvatar) ?? legacyClassicTrophy(s.classicAvatar),
     onlineName: trimName(s.onlineName),
     onlineTimeControl: oneOf(s.onlineTimeControl, ONLINE_TIME_CONTROLS.map((t) => t.id), d.onlineTimeControl),
     arenaBackdrop: isArtId(s.arenaBackdrop) ? s.arenaBackdrop : null,

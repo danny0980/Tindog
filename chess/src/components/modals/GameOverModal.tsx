@@ -1,4 +1,4 @@
-import { Brain, Coins, Crown, Film, Globe2, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
+import { Brain, Check, Coins, Crown, Film, Globe2, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy, UserRound } from 'lucide-react'
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
@@ -34,9 +34,11 @@ interface GameOverModalProps {
   /** Opens the automatic highlight reel. */
   onReel?: (() => void) | null
   onOpenWar?: () => void
+  /** After a win: wear the beaten opponent as your avatar (or take it off again). */
+  trophy?: { name: string; active: boolean; onToggle: () => void } | null
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null, onOpenWar }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null, onOpenWar, trophy = null }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -129,6 +131,18 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
           <div className={`idle-pause mb-4 flex size-20 animate-float items-center justify-center rounded-3xl bg-gradient-to-br ${accent} text-ink-950 shadow-[0_20px_50px_-15px_var(--accent)]`}>
             <Icon className="size-10" />
           </div>
+        )}
+        {trophy && (
+          <button
+            type="button"
+            onClick={trophy.onToggle}
+            aria-pressed={trophy.active}
+            className="relative mb-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-300/20"
+            data-gameover-avatar
+          >
+            {trophy.active ? <Check className="size-3.5" /> : <UserRound className="size-3.5" />}
+            {trophy.active ? `${trophy.name} is your avatar` : `Use ${trophy.name} as my avatar`}
+          </button>
         )}
         <div className={`font-display text-3xl font-extrabold tracking-wide ${won ? 'holo-text animate-shimmer' : 'text-white'}`}>{headline}</div>
         <div className="mt-1 text-sm text-slate-300">{headline !== title ? `${title} ${detail}` : detail}</div>

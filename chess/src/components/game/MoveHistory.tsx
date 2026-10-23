@@ -49,7 +49,7 @@ export function MoveHistory({ history, currentPly, analysis, onSelect, defaultOp
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center gap-2 text-left lg:pointer-events-none"
+          className="flex flex-1 items-center gap-2 text-left lg:pointer-events-none pointer-coarse:min-h-10"
           aria-expanded={open}
           aria-controls="move-history-list"
         >

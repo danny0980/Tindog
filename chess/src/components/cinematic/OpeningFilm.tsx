@@ -2,7 +2,7 @@
 // source project lives outside the app): one game, every move played in another era. A gate comes first so the
 // tap that starts it also unlocks sound; Skip is always in reach, and the film
 // hands over to the board when it ends.
-import { Play, SkipForward, Volume2, VolumeX, X } from 'lucide-react'
+import { Play, SkipForward, Smartphone, Volume2, VolumeX, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { IntroExit } from './CinematicIntro'
 
@@ -65,6 +65,8 @@ export default function OpeningFilm({ onExit }: OpeningFilmProps) {
 
   return (
     <div className="fixed inset-0 z-[80] overflow-hidden bg-black text-white" role="dialog" aria-modal="true" aria-label="Opening film" data-intro="opening" data-stage={stage}>
+      {/* On a phone held upright the 16:9 film is letterboxed: fill the bars with its own blurred poster. */}
+      <div className="absolute inset-0 scale-110 bg-cover bg-center opacity-60 blur-2xl" style={{ backgroundImage: `url(${POSTER})` }} aria-hidden="true" />
       <video
         ref={videoRef}
         src={VIDEO}
@@ -93,6 +95,13 @@ export default function OpeningFilm({ onExit }: OpeningFilmProps) {
         </div>
       )}
 
+      {stage === 'playing' && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-xs font-semibold text-white/70 portrait:pointer-coarse:flex" aria-hidden="true">
+          <span className="flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 backdrop-blur-sm">
+            <Smartphone className="size-4 rotate-90" /> Turn your phone for the full picture
+          </span>
+        </div>
+      )}
       {stage === 'playing' && (
         // Always within thumb reach, clear of the notch.
         <div className={`safe-pt absolute top-0 right-0 flex gap-2 p-3 transition-opacity duration-500 sm:p-4 ${canSkip ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>

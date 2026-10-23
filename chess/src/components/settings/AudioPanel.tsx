@@ -199,7 +199,7 @@ function Track(props: {
           <div className="text-xs text-slate-500">{props.hint}</div>
         </div>
         {props.onTest && (
-          <button type="button" onClick={props.onTest} className="rounded-lg px-2 py-1 text-xs font-semibold text-accent hover:bg-white/10" disabled={!props.enabled}>
+          <button type="button" onClick={props.onTest} className="rounded-lg px-2 py-1 text-xs font-semibold text-accent hover:bg-white/10 pointer-coarse:min-h-10 pointer-coarse:px-3" disabled={!props.enabled}>
             Test
           </button>
         )}

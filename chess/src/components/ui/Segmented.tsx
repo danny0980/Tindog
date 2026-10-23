@@ -11,7 +11,7 @@ export function Segmented({ label, options, value, onChange }: { label: string; 
             role="radio"
             aria-checked={value === o.id}
             onClick={() => onChange(o.id)}
-            className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition ${value === o.id ? 'bg-accent text-ink-950' : 'text-slate-300 hover:bg-white/5'}`}
+            className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition pointer-coarse:min-h-10 ${value === o.id ? 'bg-accent text-ink-950' : 'text-slate-300 hover:bg-white/5'}`}
           >
             {o.label}
           </button>

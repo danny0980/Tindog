@@ -7,6 +7,7 @@ import { MAX_MEMORIES, MAX_SHIFT, memoryIntro, memoryShift, remember, sanitizeMe
 import { ENTRANCE_Z, ROW_X, clampWalk, glowFor, hallDepth, hallLayout } from '../src/museum/hall'
 import { createDefaultProfile, sanitizeProfile } from '../src/stores/profileStore'
 import { applyMatch } from '../src/utils/progression'
+import { ACHIEVEMENTS } from '../src/constants/achievements'
 import { FACTION_COINS, SIEGE_TURNS, TERRITORIES, VICTORY_COINS, attackable, besieger, conquestCoins, getTerritory, opponentFor, resolveBattle, sanitizeWar, startWar } from '../src/war/war'
 
 let failures = 0
@@ -129,5 +130,10 @@ check('a profile round-trips its memory, army and war', (() => {
   return back.army.king === 'napoleon' && back.war?.owned.length === 4 && back.memory['classic:napoleon']?.games === 4
 })())
 
+// Every achievement has its own id (a shared id hides one of them and unlocks both at once).
+check('achievement ids are unique', new Set(ACHIEVEMENTS.map((a) => a.id)).size === ACHIEVEMENTS.length)
+check('taking a war territory has its own achievement', ACHIEVEMENTS.some((a) => a.id === 'first-territory'))
+
 console.log(failures === 0 ? '\nAll conquest checks passed.' : `\n${failures} check(s) FAILED`)
+
 if (failures > 0) process.exitCode = 1

@@ -78,7 +78,7 @@ export const ACHIEVEMENTS: ReadonlyArray<AchievementDef> = [
   { id: 'curator', title: 'Curator', description: 'Beat 25 Classic characters and fill the Trophy Museum.', icon: 'trophy', reward: 200, tier: 'gold' },
   { id: 'perfect-recall', title: 'Perfect Recall', description: 'Answer every question of a history quiz correctly.', icon: 'brain', reward: 100, tier: 'silver' },
   { id: 'historian', title: 'Historian', description: 'Answer 50 history quiz questions correctly.', icon: 'hourglass', reward: 200, tier: 'gold' },
-  { id: 'first-conquest', title: 'First Conquest', description: 'Take a territory in the Historical World War.', icon: 'flag', reward: 100, tier: 'bronze' },
+  { id: 'first-territory', title: 'Banner Raised', description: 'Take a territory in the Historical World War.', icon: 'flag', reward: 100, tier: 'bronze' },
   { id: 'empire-breaker', title: 'Empire Breaker', description: 'Conquer every territory of one empire.', icon: 'crown', reward: 300, tier: 'gold' },
   { id: 'world-conqueror', title: 'Conqueror of the World', description: 'Win the Historical World War: hold all 21 territories.', icon: 'globe', reward: 1000, tier: 'platinum' },
   { id: 'card-sharp', title: 'Card Sharp', description: 'Win a game of Card Chess.', icon: 'sparkles', reward: 75, tier: 'bronze' },

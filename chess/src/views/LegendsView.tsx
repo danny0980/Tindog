@@ -123,8 +123,8 @@ export function LegendsView({ onChallenge, onChallengeClassic, onChallengeGhost,
           <ArtIcon slot={header.slot} fallback={<Icon className="size-6" />} />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate font-display text-xl font-extrabold tracking-wider text-white sm:text-2xl">{header.title}</h1>
-          <p className="truncate text-xs text-slate-400 sm:text-sm">{header.subtitle}</p>
+          <h1 className="line-clamp-2 font-display text-lg leading-tight font-extrabold tracking-wider text-white sm:truncate sm:text-2xl">{header.title}</h1>
+          <p className="line-clamp-2 text-xs text-slate-400 sm:truncate sm:text-sm">{header.subtitle}</p>
         </div>
       </header>
 

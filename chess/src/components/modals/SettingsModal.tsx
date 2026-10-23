@@ -152,7 +152,7 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                 checked={settings.gesturesEnabled}
                 onChange={(v) => updateSettings({ gesturesEnabled: v })}
               />
-              <button type="button" onClick={() => updateSettings({ gestureHintSeen: false })} className="px-1 py-1 text-xs font-semibold text-accent hover:underline">
+              <button type="button" onClick={() => updateSettings({ gestureHintSeen: false })} className="px-1 py-1 text-xs font-semibold text-accent hover:underline pointer-coarse:min-h-10">
                 Replay gesture tutorial
               </button>
             </Section>
@@ -220,7 +220,7 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                       type="button"
                       disabled={!owned}
                       onClick={() => updateSettings({ pieceSet: set.id })}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition pointer-coarse:min-h-10 ${
                         settings.pieceSet === set.id ? 'border-accent bg-accent/15 text-white' : 'border-white/10 text-slate-300 hover:border-white/25'
                       } disabled:opacity-40`}
                     >
@@ -229,7 +229,7 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                   )
                 })}
               </div>
-              <button type="button" onClick={onOpenShop} className="mt-2 text-xs font-semibold text-accent hover:underline">
+              <button type="button" onClick={onOpenShop} className="mt-2 text-xs font-semibold text-accent hover:underline pointer-coarse:min-h-10">
                 Unlock more in the shop →
               </button>
             </Section>

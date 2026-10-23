@@ -28,7 +28,7 @@ export default function TournamentView({ onFight }: TournamentViewProps) {
 
   return (
     <div className="space-y-4" data-tournament>
-      <section className="glass flex flex-wrap items-center gap-4 rounded-3xl p-4">
+      <section className="glass flex flex-col gap-4 rounded-3xl p-4 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">{tournament.date}</div>
           <div className="font-display text-lg font-extrabold text-white">
@@ -40,7 +40,7 @@ export default function TournamentView({ onFight }: TournamentViewProps) {
           </div>
         </div>
         {pending && (
-          <Button variant="primary" size="lg" data-tournament-play onClick={() => onFight(pending.opponent, pending.round)} icon={<Swords className="size-5" />}>
+          <Button variant="primary" size="lg" className="w-full sm:w-auto" data-tournament-play onClick={() => onFight(pending.opponent, pending.round)} icon={<Swords className="size-5" />}>
             Play {ROUND_NAMES[pending.round]?.toLowerCase()}
           </Button>
         )}

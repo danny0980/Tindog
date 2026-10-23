@@ -237,3 +237,9 @@ html[data-theme='oled-black'] [data-piece^='b'] svg {
     filter: url(#fx-chromatic) contrast(1.08) saturate(1.15);
   }
 }
+/* Touch screens: sliders get a finger-sized hit area (the track stays thin, centred). */
+@media (pointer: coarse) {
+  input[type='range'] {
+    min-height: 2rem;
+  }
+}

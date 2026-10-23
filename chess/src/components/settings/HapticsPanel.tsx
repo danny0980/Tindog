@@ -77,7 +77,7 @@ export function HapticsPanel({ settings }: { settings: AppSettings }) {
                 <button
                   type="button"
                   onClick={() => haptic(c.test)}
-                  className="rounded-lg px-2 py-1 text-xs font-semibold text-accent hover:bg-white/10"
+                  className="rounded-lg px-2 py-1 text-xs font-semibold text-accent hover:bg-white/10 pointer-coarse:min-h-10 pointer-coarse:px-3"
                   aria-label={`Test ${c.label}`}
                 >
                   Test
@@ -91,7 +91,7 @@ export function HapticsPanel({ settings }: { settings: AppSettings }) {
                     role="radio"
                     aria-checked={settings.haptics[c.id] === level}
                     onClick={() => set(c.id, level)}
-                    className={`rounded-md py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-md py-1.5 text-xs font-semibold transition pointer-coarse:min-h-10 ${
                       settings.haptics[c.id] === level ? 'bg-accent text-ink-950' : 'text-slate-400 hover:text-white'
                     }`}
                   >

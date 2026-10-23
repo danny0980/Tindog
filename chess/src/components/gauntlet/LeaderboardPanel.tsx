@@ -52,7 +52,7 @@ export function LeaderboardPanel({ local, highlight }: { local: readonly Leaderb
         <h3 className="flex-1 text-sm font-bold text-white">Leaderboard</h3>
         <div className="flex rounded-lg bg-white/5 p-0.5 text-xs" role="tablist">
           {(['local', 'global'] as const).map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => openTab(t)} className={`rounded-md px-2.5 py-1 font-semibold capitalize ${tab === t ? 'bg-accent text-ink-950' : 'text-slate-300'}`}>
+            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => openTab(t)} className={`rounded-md px-2.5 py-1 font-semibold capitalize pointer-coarse:min-h-10 ${tab === t ? 'bg-accent text-ink-950' : 'text-slate-300'}`}>
               {t}
             </button>
           ))}

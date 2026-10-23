@@ -9,7 +9,8 @@ const VARIANTS = {
 } as const
 
 const SIZES = {
-  sm: 'gap-1.5 rounded-lg px-2.5 py-1.5 text-xs',
+  // On touch screens even small buttons get a 40 px target.
+  sm: 'gap-1.5 rounded-lg px-2.5 py-1.5 text-xs pointer-coarse:min-h-10 pointer-coarse:min-w-10',
   md: 'gap-2 rounded-xl px-4 py-2.5 text-sm',
   lg: 'gap-2 rounded-xl px-5 py-3.5 text-base',
 } as const

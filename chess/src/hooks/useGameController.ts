@@ -507,7 +507,7 @@ export function useGameController({ active }: { active: boolean }) {
         const r = resolveBattle(warState, war.territoryId, war.mode, outcome === 'win')
         const spoils = outcome === 'win' ? Math.round(((out.coins + r.coins) * war.effects.spoils) / 100) : 0
         const coins = r.coins + spoils
-        const ids = [...(outcome === 'win' && war.mode === 'attack' ? ['first-conquest'] : []), ...(r.factionFallen ? ['empire-breaker'] : []), ...(r.warWon ? ['world-conqueror'] : [])]
+        const ids = [...(outcome === 'win' && war.mode === 'attack' ? ['first-territory'] : []), ...(r.factionFallen ? ['empire-breaker'] : []), ...(r.warWon ? ['world-conqueror'] : [])]
         const p = profileStore.get()
         const granted = grant({ ...p, war: r.state, coins: p.coins + coins, totalCoinsEarned: p.totalCoinsEarned + coins }, ids, new Date().toISOString())
         profileStore.set(granted.profile)

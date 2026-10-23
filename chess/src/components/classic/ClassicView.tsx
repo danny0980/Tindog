@@ -69,7 +69,7 @@ export function ClassicView({ onPlay }: { onPlay: (id: string, options: Challeng
               aria-selected={era === e.id}
               data-era={e.id}
               onClick={() => setEra(e.id)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${era === e.id ? 'bg-accent text-ink-950' : 'bg-white/[0.05] text-slate-300 hover:bg-white/10'}`}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition pointer-coarse:py-2 ${era === e.id ? 'bg-accent text-ink-950' : 'bg-white/[0.05] text-slate-300 hover:bg-white/10'}`}
             >
               {e.name}
             </button>
@@ -152,7 +152,7 @@ function OpponentCard({ c, active, beaten, locked, suggested, onSelect }: { c: C
     >
       <PortraitEmblem spec={persona.portrait} label={c.name} size="sm" defeated={beaten} locked={locked} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-white">{c.name}</span>
+        <span className="line-clamp-2 block text-sm leading-tight font-semibold break-words hyphens-auto text-white">{c.name}</span>
         <span className="block truncate text-[11px] text-slate-400">{c.title}</span>
         <span className="flex items-center gap-1.5 font-mono text-[10px]">
           <span className="text-slate-300">~{c.elo}</span>

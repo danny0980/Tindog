@@ -57,7 +57,7 @@ export function ProfileView({ onReview }: { onReview: (match: MatchRecord) => vo
             <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-accent" data-player-title>
               {title.name}
             </div>
-            <h2 className="truncate text-2xl font-extrabold text-white">{profile.name}</h2>
+            <h2 className="text-xl leading-tight font-extrabold break-words text-white sm:truncate sm:text-2xl">{profile.name}</h2>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
               <span>
                 Peak <span className="font-mono font-bold text-slate-200">{profile.peakElo}</span>

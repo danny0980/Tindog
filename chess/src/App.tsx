@@ -50,7 +50,7 @@ const QuestsView = lazyWithRetry(() => import('./views/QuestsView'), (m) => m.Qu
 // The cinematic intro (renderer, textures, score) is its own chunk, fetched only when it plays.
 const CinematicIntro = lazyWithRetry(() => import('./components/cinematic/CinematicIntro'), (m) => m.default)
 const LastGrainIntro = lazyWithRetry(() => import('./components/cinematic/lastGrain/LastGrainIntro'), (m) => m.default)
-const ClayIntro = lazyWithRetry(() => import('./components/cinematic/ClayIntro'), (m) => m.default)
+const OpeningFilm = lazyWithRetry(() => import('./components/cinematic/OpeningFilm'), (m) => m.default)
 
 function ViewFallback() {
   return (
@@ -119,7 +119,7 @@ export default function App() {
 
   // Where an intro hands over: the chosen Legends mode screen, or straight into a game.
   const enterFromIntro = useCallback((target: IntroExit) => {
-    updateSettings({ introSeen: true, clayIntroSeen: true })
+    updateSettings({ introSeen: true, openingSeen: true })
     if (target !== 'play') updateSettings({ legendsScreen: target })
     setView(target === 'play' ? 'play' : 'legends')
   }, [])
@@ -396,8 +396,8 @@ export default function App() {
               </div>
             }
           >
-            {introFilm === 'clay' ? (
-              <ClayIntro onExit={closeIntro} />
+            {introFilm === 'opening' ? (
+              <OpeningFilm onExit={closeIntro} />
             ) : introFilm === 'visual-evolution' ? (
               <CinematicIntro onExit={closeIntro} />
             ) : (

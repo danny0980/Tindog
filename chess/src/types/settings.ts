@@ -88,8 +88,8 @@ export interface AppSettings {
   gestureHintSeen: boolean
   /** The cinematic intro has been shown (it plays once automatically). */
   introSeen: boolean
-  /** The clay opening film ("The Board Wakes Up") has been shown (it plays once automatically). */
-  clayIntroSeen: boolean
+  /** The opening film ("One Game. Every Era.") has been shown (it plays once automatically; a new film resets it). */
+  openingSeen: boolean
   // ── Performance ──
   batterySaver: boolean
   autoBatterySaver: boolean

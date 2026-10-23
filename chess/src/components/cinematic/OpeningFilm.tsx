@@ -1,19 +1,19 @@
-// "The Board Wakes Up" — the 41 s plasticine opening film (a pre-rendered
-// video; its source project lives outside the app). A gate comes first so the
+// "One Game. Every Era." — the 38 s opening film (a pre-rendered video; its
+// source project lives outside the app): one game, every move played in another era. A gate comes first so the
 // tap that starts it also unlocks sound; Skip is always in reach, and the film
 // hands over to the board when it ends.
 import { Play, SkipForward, Volume2, VolumeX, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { IntroExit } from './CinematicIntro'
 
-interface ClayIntroProps {
+interface OpeningFilmProps {
   onExit: (target: IntroExit) => void
 }
 
-const VIDEO = `${import.meta.env.BASE_URL}intro/chronos-clay.mp4`
-const POSTER = `${import.meta.env.BASE_URL}intro/chronos-clay-poster.jpg`
+const VIDEO = `${import.meta.env.BASE_URL}intro/one-game-every-era.mp4`
+const POSTER = `${import.meta.env.BASE_URL}intro/one-game-every-era-poster.jpg`
 
-export default function ClayIntro({ onExit }: ClayIntroProps) {
+export default function OpeningFilm({ onExit }: OpeningFilmProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const exitedRef = useRef(false)
   const [stage, setStage] = useState<'gate' | 'playing'>('gate')
@@ -64,7 +64,7 @@ export default function ClayIntro({ onExit }: ClayIntroProps) {
   }, [stage, begin, exit])
 
   return (
-    <div className="fixed inset-0 z-[80] overflow-hidden bg-black text-white" role="dialog" aria-modal="true" aria-label="Opening film" data-intro="clay" data-stage={stage}>
+    <div className="fixed inset-0 z-[80] overflow-hidden bg-black text-white" role="dialog" aria-modal="true" aria-label="Opening film" data-intro="opening" data-stage={stage}>
       <video
         ref={videoRef}
         src={VIDEO}
@@ -85,10 +85,10 @@ export default function ClayIntro({ onExit }: ClayIntroProps) {
           </button>
           <div className="animate-cine-title font-display text-4xl font-black uppercase sm:text-6xl">Chronos Chess</div>
           <p className="max-w-md text-sm text-amber-100/80 sm:text-base">
-            Midnight in the study. The clock runs out — and the pieces wake up. <span className="text-white/60">Sound on.</span>
+            One game. Seven eras. Every move rewrites time. <span className="text-white/60">Sound on.</span>
           </p>
           <button type="button" data-intro-begin onClick={() => void begin()} className="cine-btn cine-btn-primary min-h-14 px-8 text-base" autoFocus>
-            <Play className="size-5" fill="currentColor" /> Wake the board
+            <Play className="size-5" fill="currentColor" /> Play the film
           </button>
         </div>
       )}

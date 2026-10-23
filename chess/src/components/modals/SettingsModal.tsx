@@ -131,10 +131,10 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                 icon={<Clapperboard className="size-4" />}
                 onClick={() => {
                   onClose()
-                  openIntro('clay')
+                  openIntro('opening')
                 }}
               >
-                Replay the clay opening film
+                Replay the opening film
               </Button>
             </Section>
             <Section title="Mobile ergonomics">

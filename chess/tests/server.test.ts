@@ -360,7 +360,10 @@ const appSocket = await new Promise<string>((resolve) => {
   const ws = new WebSocket(wsUrl, ['chronos', `chronos.token.${appToken}`], { headers: { origin: APP } })
   ws.on('message', (data) => {
     const msg = parseServerMessage(data.toString())
-    if (msg?.type === 'HELLO') (resolve(`${ws.protocol}:${msg.type}`), ws.close())
+    if (msg?.type === 'HELLO') {
+      resolve(`${ws.protocol}:${msg.type}`)
+      ws.close()
+    }
   })
   ws.on('unexpected-response', (_req, res) => resolve(String(res.statusCode)))
   ws.on('error', () => resolve('error'))

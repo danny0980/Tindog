@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
 import { createApp } from '../server/app'
 import { backupName, backupNow } from '../server/backup'
@@ -166,7 +166,7 @@ const file = join(dir, 'chess.db')
   check('an old DATA_FILE=*.json setting keeps working (imported next to it)', old.dataFile?.endsWith(join('data', 'my.db')) === true && old.legacyDataFile?.endsWith(join('data', 'my.json')) === true)
   check('in memory for tests', loadConfig({ DATA_FILE: ':memory:' }, []).dataFile === null)
   const prod = loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://chess.example.com/', SMTP_URL: 'smtp://x', DATABASE_FILE: '/var/lib/chess/chess.db' }, [])
-  check('production: daily backups next to the database, one proxy trusted', prod.production && prod.backupDir === join('/var/lib/chess', 'backups') && prod.backupHours === 24 && prod.trustProxy === 1 && prod.publicUrl === 'https://chess.example.com')
+  check('production: daily backups next to the database, one proxy trusted', prod.production && prod.backupDir === resolve('/var/lib/chess', 'backups') && prod.backupHours === 24 && prod.trustProxy === 1 && prod.publicUrl === 'https://chess.example.com')
   check('production needs PUBLIC_URL and a sign-in method', threw(() => loadConfig({ NODE_ENV: 'production' }, [])) && threw(() => loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com' }, [])))
   check('PUBLIC_URL must be an origin', threw(() => loadConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://x.com/app', SMTP_URL: 'smtp://mail.example.com' }, [])))
   check('bad numbers fall back to defaults', loadConfig({ PORT: 'abc', SESSION_DAYS: '9999', BACKUP_KEEP: '0' }, []).port === 8787 && loadConfig({ SESSION_DAYS: '9999' }, []).sessionDays === 30)

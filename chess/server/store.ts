@@ -298,7 +298,13 @@ export class Store {
     }
     this.db.pragma('foreign_keys = ON')
     this.db.pragma('busy_timeout = 5000')
-    this.migrate()
+    try {
+      this.migrate()
+    } catch (err) {
+      // A refused database (e.g. from a newer server) must not stay open and locked.
+      this.db.close()
+      throw err
+    }
     const db = this.db
     this.q = {
       user: db.prepare<[string], UserRow>('SELECT * FROM users WHERE id = ?'),

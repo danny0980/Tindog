@@ -63,6 +63,14 @@ import { type Mood, deriveMood, gameTension } from '../utils/mood'
 import { detectOpening } from '../utils/openings'
 import { type MatchInput, applyAnalysis, applyLegendResult, applyMatch, matchQuestEvents, outcomeFor } from '../utils/progression'
 import { trackQuestEvents } from '../stores/questActions'
+import { type JourneySummary, recordJourney } from '../journey/journeyActions'
+import { journeyStore } from '../journey/journeyStore'
+import { NEMESIS_BOOST, nemesisTaunt } from '../journey/characters'
+import { COOP_BOOST, PHASES, phaseFor, powerFor } from '../journey/modes'
+import { formIntro, shapeOf, styleRemark } from '../journey/remarks'
+import { skillEffects } from '../journey/skills'
+import { type JourneyTag, settleJourneyTag } from '../journey/tags'
+import { PRESTIGE_ELO } from '../journey/xp'
 import { usePageVisible } from './useAppEnvironment'
 import { useAiOpponent } from './useAiOpponent'
 import { useChessClock } from './useChessClock'
@@ -74,11 +82,17 @@ import { useStore } from './useStore'
 import { useTimeMachine } from './useTimeMachine'
 
 /** Battles booked by their own mode instead of the rating. */
-const UNRATED_KINDS: readonly BattleKind[] = ['gauntlet', 'event', 'bounty']
+const UNRATED_KINDS: readonly BattleKind[] = ['gauntlet', 'event', 'bounty', 'phases', 'powers']
+
+export type { JourneyTag }
+
+/** Journey games with their own stakes are unrated (handicaps and boosts). */
+const UNRATED_TAGS: ReadonlyArray<JourneyTag['kind']> = ['story', 'coop', 'nemesis']
 /** How long the checkmate kill-cam plays before the results card. */
 export const KILL_CAM_MS = 2600
 
 const UNTIMED: TimeControl = { id: 'none', label: 'Unlimited', category: 'none', initialMs: 0, incrementMs: 0 }
+const PIECE_POINTS: Readonly<Record<string, number>> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
 
 /** Extra rules for a character battle, chosen by the screen that launches it. */
 export interface BattleLaunch {
@@ -100,6 +114,8 @@ export interface BattleLaunch {
   parleyReply?: { text: string; mood: TauntMood }
   /** World War: the territory fought over, and what your army brings. */
   war?: WarLaunch
+  /** A Journey game (story chapter, nemesis, bullet, co-op, phases, powers). */
+  journey?: JourneyTag
 }
 
 export interface WarLaunch {
@@ -124,7 +140,16 @@ export interface KillCam {
 /** Player actions that cost no move (potions, traps, the altar). */
 export type PickMode = 'glue' | 'altar' | null
 
-const LAUNCH_DEFAULTS = { emp: false, freeUndos: 0, eventId: null, bountyId: null, war: null } as const
+const LAUNCH_DEFAULTS = { emp: false, freeUndos: 0, eventId: null, bountyId: null, war: null, journey: null } as const
+
+interface LaunchExtras {
+  emp: boolean
+  freeUndos: number
+  eventId: string | null
+  bountyId: string | null
+  war: WarLaunch | null
+  journey: JourneyTag | null
+}
 
 /** A short holographic banner over the board (spell warnings, casts, tactics). */
 export interface SpellFlash {
@@ -176,6 +201,8 @@ export interface GameEndSummary {
   arena: { title: string; detail: string; coins: number; potion: PotionId | null; success: boolean } | null
   /** World War battle: what happened on the map, and the spoils. */
   war: { territory: string; events: string[]; coins: number; spoils: number } | null
+  /** XP, level and league points (and the Journey game's own outcome). */
+  journey: (JourneySummary & { note: string | null; tag: JourneyTag | null }) | null
 }
 
 const characterOf = (p: Persona): PlayerInfo['character'] => ({ key: p.key, name: p.name, portrait: p.portrait })
@@ -206,8 +233,10 @@ export function useGameController({ active }: { active: boolean }) {
   const [shieldUsed, setShieldUsed] = useState(false)
   // Spells & tactics: the battle's rules, and the effect state after every ply (index = ply).
   const [battle, setBattle] = useState<BattleSetup | null>(null)
-  const [launchExtras, setLaunchExtras] = useState<{ emp: boolean; freeUndos: number; eventId: string | null; bountyId: string | null; war: WarLaunch | null }>(LAUNCH_DEFAULTS)
+  const [launchExtras, setLaunchExtras] = useState<LaunchExtras>(LAUNCH_DEFAULTS)
   const war = launchExtras.war
+  const journeyTag = launchExtras.journey
+  const prestige = useStore(journeyStore, (j) => j.prestige)
   const [pickMode, setPickMode] = useState<PickMode>(null)
   const [killCam, setKillCam] = useState<KillCam | null>(null)
   /** Bumped when the opponent lands a severe check (screen shake). */
@@ -221,6 +250,8 @@ export function useGameController({ active }: { active: boolean }) {
   }, [])
   /** Per-battle feat counters, booked when the game ends. */
   const battleFeatsRef = useRef({ sacrifices: 0, trapsSprung: 0 })
+  /** Three-phase bosses: the phase reached so far. */
+  const phaseRef = useRef(1)
   const [effectsLog, setEffectsLog] = useState<BattleEffects[]>([])
   const effectsLogRef = useRef<BattleEffects[]>([])
   const [spellFlash, setSpellFlash] = useState<SpellFlash | null>(null)
@@ -291,8 +322,15 @@ export function useGameController({ active }: { active: boolean }) {
     // World War: your army's Rally weakens the enemy; a Surprise attack catches it without its book.
     if (war && persona && war.effects.rally > 0) profile = rescaleProfile(profile, Math.max(400, persona.elo - war.effects.rally))
     if (war?.effects.surprise) profile = { ...profile, repertoire: { w: [], b: [] } }
+    // Journey: a story chapter at your chosen strength; co-op and your nemesis bring extra strength.
+    // Prestige: every crown makes the characters play a little stronger (campaign tiers and war rallies keep their own scale).
+    if (persona && journeyTag?.kind === 'story' && journeyTag.elo) profile = rescaleProfile(profile, journeyTag.elo)
+    else if (persona && !boss && !war) {
+      const extra = (journeyTag?.kind === 'coop' ? COOP_BOOST : 0) + (journeyTag?.kind === 'nemesis' ? NEMESIS_BOOST : 0) + prestige * PRESTIGE_ELO
+      if (extra > 0) profile = rescaleProfile(profile, persona.elo + extra)
+    }
     return profile
-  }, [battle, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, launchExtras.emp, overclocked, persona, war])
+  }, [battle, battleRelics, boss, gameSettings.difficulty, gameSettings.personality, journeyTag, launchExtras.emp, overclocked, persona, prestige, war])
 
   const clockSnapshotsRef = useRef<ClockTimes[]>([])
   const recordedGameRef = useRef<number | null>(null)
@@ -364,7 +402,7 @@ export function useGameController({ active }: { active: boolean }) {
         history,
         timeControl,
         // Gauntlet, ambush and bounty battles are arcade (handicaps, boosts): unrated.
-        rated: ai && !casual && (battle === null || UNRATED_KINDS.indexOf(battle.kind) === -1),
+        rated: ai && !casual && (battle === null || UNRATED_KINDS.indexOf(battle.kind) === -1) && (journeyTag === null || UNRATED_TAGS.indexOf(journeyTag.kind) === -1),
         opening: openingName,
         variant: game.getVariantEvents(),
         legendId: legend?.id ?? null,
@@ -498,7 +536,10 @@ export function useGameController({ active }: { active: boolean }) {
         pushBoardFx({ kind: 'mate', square: last ? kingSquare(last.after, loser) : null })
         window.setTimeout(() => setKillCam((k) => (k?.id === gameId ? null : k)), KILL_CAM_MS)
       }
-      if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
+      // Their parting words follow how the game went (a quick mate, a comeback, a win on time…).
+      const remark = persona && outcome && ai ? styleRemark(shapeOf(history, humanColor, outcome, result), gameId + history.length) : null
+      if (persona && outcome && remark && Math.random() < 0.6) personaLine(persona, remark, outcome === 'win' ? 'shocked' : outcome === 'loss' ? 'smug' : 'calm')
+      else if (persona && outcome) personaSay(persona, outcome === 'win' ? 'legendLoses' : outcome === 'loss' ? 'legendWins' : 'draw')
       trackQuestEvents(matchQuestEvents(matchInput), 1400 + unlocked.length * 1100)
       // World War: the map moves (conquest, sieges, counter-attacks) and your army's spoils are paid.
       let warSummary: GameEndSummary['war'] = null
@@ -513,6 +554,13 @@ export function useGameController({ active }: { active: boolean }) {
         profileStore.set(granted.profile)
         unlocked = [...unlocked, ...granted.unlocked]
         warSummary = { territory: getTerritory(war.territoryId)?.name ?? war.territoryId, events: r.events, coins, spoils }
+      }
+      // Journey: XP, level, season pass and league points, and the Journey game's own stakes.
+      let journeySummary: GameEndSummary['journey'] = null
+      if (ai && outcome) {
+        const booked = recordJourney({ outcome, opponentElo: persona?.elo ?? null, era: classic?.era ?? null, coins: out.coins, game: true }, 1800 + unlocked.length * 1100)
+        const note = settleJourneyTag(journeyTag, outcome, classic?.id ?? null, persona?.key ?? null)
+        journeySummary = { ...booked, note, tag: journeyTag }
       }
       setSummary({
         result,
@@ -529,6 +577,7 @@ export function useGameController({ active }: { active: boolean }) {
         ironman: ironmanSummary,
         arena: arenaSummary,
         war: warSummary,
+        journey: journeySummary,
       })
       setGameOverDismissed(false)
 
@@ -541,7 +590,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (ironmanSummary?.wiped) window.setTimeout(() => showToast('warning', 'Ironman run lost', `Permadeath: ${ironmanSummary.lostBosses} conquered bosses fall back into darkness.`, 6000), 1200)
       announceAchievements(unlocked, 1400)
     },
-    [aiColor, battle, battleRelics, boss, casual, classic, game, gameId, gameSettings, humanColor, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl, war],
+    [aiColor, battle, battleRelics, boss, casual, classic, game, gameId, gameSettings, humanColor, journeyTag, launchExtras.bountyId, launchExtras.eventId, legend, persona, playerNames, pushBoardFx, timeControl, war],
   )
 
   const handleFlag = useCallback(
@@ -688,6 +737,22 @@ export function useGameController({ active }: { active: boolean }) {
         }
       }
 
+      // Three-phase boss: losing material makes them transform (a new spell, stronger moves).
+      if (!result && battle?.kind === 'phases' && mover === 'human' && move.captured) {
+        const lost = history.reduce((n, m) => n + (m.color === humanColor && m.captured ? (PIECE_POINTS[m.captured] ?? 0) : 0), 0)
+        const phase = phaseFor(lost)
+        if (phase.phase > phaseRef.current) {
+          phaseRef.current = phase.phase
+          const spell = phase.spell
+          setBattle((b) => (b ? { ...b, bossBoost: phase.boost, spells: spell && !b.spells.includes(spell) ? [...b.spells, spell] : b.spells } : b))
+          sfx.spellCast()
+          flash(`Phase ${phase.phase}: ${phase.name}`, 'danger')
+          showToast('warning', `Phase ${phase.phase} of ${PHASES.length}`, phase.announce, 4200)
+          pushBoardFx({ kind: 'mate', square: kingSquare(move.after, aiColor) })
+          react({ kind: 'tactic-used', mood: 'angry', priority: 90, vars: {} })
+        }
+      }
+
       // Katana Blade: the boss loses this turn — recorded as a pass ply.
       if (!result && passBoss) {
         const pass = passTurn(game.getFen())
@@ -704,7 +769,7 @@ export function useGameController({ active }: { active: boolean }) {
       if (mover === 'boss' || passBoss) turnStartRef.current = performance.now()
       if (result) finishGame(result)
     },
-    [aiColor, battle, clock, emitBattleEvents, finishGame, game, humanColor, isAiMode, material, persona, pushBoardFx, react, timeMachine],
+    [aiColor, battle, clock, emitBattleEvents, finishGame, flash, game, humanColor, isAiMode, material, persona, pushBoardFx, react, timeMachine],
   )
 
   /** The player's (or a local game's) move; also accepts spell / tactic moves the board offers. */
@@ -885,9 +950,10 @@ export function useGameController({ active }: { active: boolean }) {
     setPickMode(null)
     turnStartRef.current = performance.now()
     bossEvalRef.current = null
-    if (isGauntletBattle || (war && launchExtras.freeUndos > 0)) {
+    if (isGauntletBattle || ((war || isCampaignBattle) && launchExtras.freeUndos > 0)) {
       setLaunchExtras((x) => ({ ...x, freeUndos: Math.max(0, x.freeUndos - 1) }))
-      showToast('info', war ? 'Second chance' : 'Aegis', war ? 'Your army’s free takeback is spent; the battle stays rated.' : 'Your free takeback is spent.', 2400)
+      const title = war ? 'Second chance' : isCampaignBattle ? 'Steady Hand' : 'Aegis'
+      showToast('info', title, war || isCampaignBattle ? 'A free takeback is spent; the battle stays rated.' : 'Your free takeback is spent.', 2400)
       return
     }
     if (isAiMode && !casual) {
@@ -899,7 +965,7 @@ export function useGameController({ active }: { active: boolean }) {
         showToast('info', 'Casual game', boss ? 'Takebacks make this battle unrated and cap it at one star.' : 'Takebacks make this game unrated.', 2800)
       }
     }
-  }, [boss, casual, clock, game, isAiMode, isGauntletBattle, launchExtras.freeUndos, playEngine, shieldReady, timeMachine, undoPlies, war])
+  }, [boss, casual, clock, game, isAiMode, isCampaignBattle, isGauntletBattle, launchExtras.freeUndos, playEngine, shieldReady, timeMachine, undoPlies, war])
 
   /** Engine help mid-game (the brain, the What-If engine) makes a rated game casual, like a takeback. */
   const makeCasual = useCallback(
@@ -982,17 +1048,35 @@ export function useGameController({ active }: { active: boolean }) {
       if (launch?.humanClockMs !== undefined && tc.initialMs > 0) {
         clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: launch.humanClockMs })
       }
+      // Journey skills (War Room): extra seconds and free takebacks in campaign battles.
+      const skills = skillEffects(journeyStore.get().skills)
+      if (kind === 'campaign' && skills.campaignSeconds > 0 && tc.initialMs > 0 && launch?.humanClockMs === undefined) {
+        const ember = relics.includes('dragonheart-ember') ? EMBER_BONUS_MS : 0
+        clock.restore({ w: tc.initialMs, b: tc.initialMs, [color]: tc.initialMs + ember + skills.campaignSeconds * 1000 })
+      }
+      const skillUndos = kind === 'campaign' && !ironman ? skills.campaignUndos : 0
       // Spells & tactics for character battles.
-      // Classic Chess is pure chess: no spells, tactics, weather or contracts — no battle setup at all.
-      const setup = challenger && !challengerClassic ? buildBattleSetup(kind, challenger.spells, tactics, tc.initialMs > 0, campaign.relics, { ...launch?.arena, ironman }) : null
+      // Classic Chess is pure chess: no spells, tactics, weather or contracts — no battle setup at all —
+      // except in the Journey's arcade fights (three-phase bosses, the Duel of Powers).
+      const arcade = Boolean(challengerClassic) && (kind === 'phases' || kind === 'powers')
+      const spells = arcade && challengerClassic ? (kind === 'powers' ? [powerFor(challengerClassic)] : []) : (challenger?.spells ?? [])
+      const setup = challenger && (!challengerClassic || arcade) ? buildBattleSetup(kind, spells, tactics, tc.initialMs > 0, campaign.relics, { ...launch?.arena, ironman }) : null
       setBattle(setup)
       effectsLogRef.current = setup ? [createEffects(setup)] : []
       setEffectsLog(effectsLogRef.current)
-      setLaunchExtras({ emp: launch?.emp ?? false, freeUndos: launch?.freeUndos ?? launch?.war?.effects.takebacks ?? 0, eventId: launch?.eventId ?? null, bountyId: launch?.bountyId ?? null, war: launch?.war ?? null })
+      setLaunchExtras({
+        emp: launch?.emp ?? false,
+        freeUndos: (launch?.freeUndos ?? launch?.war?.effects.takebacks ?? 0) + skillUndos,
+        eventId: launch?.eventId ?? null,
+        bountyId: launch?.bountyId ?? null,
+        war: launch?.war ?? null,
+        journey: launch?.journey ?? null,
+      })
       setSpellFlash(null)
       setPickMode(null)
       setKillCam(null)
       battleFeatsRef.current = { sacrifices: 0, trapsSprung: 0 }
+      phaseRef.current = 1
       rngRef.current = seededRandom(hashSeed(`${challenger?.key ?? 'game'}:${Date.now()}`))
       turnStartRef.current = performance.now()
       bossEvalRef.current = null
@@ -1007,7 +1091,18 @@ export function useGameController({ active }: { active: boolean }) {
       if (challenger) {
         sfx.timeTravel()
         const reply = launch?.parleyReply
-        window.setTimeout(() => (reply ? personaLine(challenger, reply.text, reply.mood) : personaSay(challenger, 'intro')), 1700)
+        // Your nemesis has a score to settle; a stranger may have heard about your form.
+        const p = profileStore.get()
+        const recentLosses = p.matches.slice(0, 5).filter((m) => m.outcome === 'loss').length
+        const greeting =
+          launch?.journey?.kind === 'nemesis' && challengerClassic
+            ? nemesisTaunt(challengerClassic, memory[challenger.key]).replace(/^“|” — .*$/g, '')
+            : !memory[challenger.key]
+              ? formIntro(p.stats.currentStreak, recentLosses, gameId)
+              : null
+        window.setTimeout(() => (reply ? personaLine(challenger, reply.text, reply.mood) : greeting ? personaLine(challenger, greeting, 'smug') : personaSay(challenger, 'intro')), 1700)
+        if (kind === 'phases') window.setTimeout(() => showToast('warning', 'Three-phase boss', 'Take their material and they transform: stronger in phase 2, unstoppable in phase 3.', 4200), 2600)
+        if (launch?.journey?.kind === 'coop') window.setTimeout(() => showToast('info', 'Co-op', `${launch.journey?.kind === 'coop' ? launch.journey.players[0] : ''} moves first. Pass the device after every move.`, 4200), 2400)
         if (setup && setup.spells.length > 0) {
           const names = setup.spells.map((id) => SPELLS[id].name).join(', ')
           window.setTimeout(() => showToast('warning', `${challenger.name} wields ${names}`, SPELLS[setup.spells[0] ?? 'frost-sigil'].trigger, 4200), 2600)
@@ -1114,7 +1209,9 @@ export function useGameController({ active }: { active: boolean }) {
       if (persona && color === aiColor) {
         const strength = gameSettings.legendStrength
         const tier = boss || strength === 'authentic' ? '' : ` · ${strengthInfo(strength).label}`
-        return { color, name: persona.name, subtitle: `${persona.title} · ~${persona.elo}${tier}`, isEngine: true, mood, character: characterOf(persona) }
+        // The strength they play at here: a story chapter's chosen strength, or their own plus Journey boosts.
+        const shownElo = journeyTag?.kind === 'story' && journeyTag.elo ? journeyTag.elo : persona.elo + (journeyTag?.kind === 'coop' ? COOP_BOOST : journeyTag?.kind === 'nemesis' ? NEMESIS_BOOST : 0) + (!boss && !war ? prestige * PRESTIGE_ELO : 0)
+        return { color, name: persona.name, subtitle: `${persona.title} · ~${shownElo}${tier}`, isEngine: true, mood, character: characterOf(persona) }
       }
       if (isAiMode && color === aiColor) {
         return {
@@ -1134,7 +1231,7 @@ export function useGameController({ active }: { active: boolean }) {
       return { color, name: color === 'w' ? 'White' : 'Black', subtitle: 'Local player', isEngine: false, mood, character: null }
     }
     return { w: info('w'), b: info('b') }
-  }, [aiColor, aiThinking, avatarCharacter, boss, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, persona, personality, review, reviewPersona])
+  }, [aiColor, aiThinking, avatarCharacter, boss, casual, clock.enabled, clock.times, difficultyLabel, evaluation, game.status, gameSettings.legendStrength, isAiMode, journeyTag, persona, personality, prestige, review, reviewPersona, war])
 
   const bestMoveArrow =
     !timeMachine.isLive && analysis.state.status === 'done' && evaluation?.bestMove
@@ -1267,6 +1364,8 @@ export function useGameController({ active }: { active: boolean }) {
     spellFlash,
     boardFx,
     freeUndos: launchExtras.freeUndos,
+    /** The Journey game being played (story chapter, nemesis, bullet, co-op, phases, powers). */
+    journeyTag,
     theme,
     pieceSet,
     legend,

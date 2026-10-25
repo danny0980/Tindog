@@ -2,6 +2,7 @@
 // while you look at another tab), with sounds, achievements and the rating
 // refresh wired to its events.
 import { Chess } from 'chess.js'
+import { recordJourney } from '../../journey/journeyActions'
 import { useSyncExternalStore } from 'react'
 import { resolveMaterial, sfx } from '../../audio'
 import { getBoardTheme } from '../../constants/themes'
@@ -46,6 +47,7 @@ export function getRanked(): RankedManager {
         else if (r.winner === e.game.color) sfx.victory()
         else sfx.defeat()
         applyFeat((p) => recordOnlineResult(p, r.winner === e.game.color))
+        recordJourney({ outcome: r.winner === null ? 'draw' : r.winner === e.game.color ? 'win' : 'loss', opponentElo: e.game.opponent.rating, game: true }, 1500)
       }
       if (!onlineScreen.visible) showToast('info', 'Ranked game over', rankedResultText(e.game))
       // The server has the new rating and record.

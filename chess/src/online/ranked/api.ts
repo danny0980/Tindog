@@ -221,6 +221,25 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
 
 const isUser = (u: unknown): u is AccountUser => typeof u === 'object' && u !== null && typeof (u as AccountUser).id === 'string' && typeof (u as AccountUser).rating === 'number'
 
+export interface FriendRow {
+  id: string
+  name: string
+  rating: number
+  status: 'friend' | 'incoming' | 'outgoing'
+  online: boolean
+}
+export interface FriendsInfo {
+  /** Your friend code (share it so friends can add you). */
+  code: string
+  friends: FriendRow[]
+}
+export interface ReferralInfo {
+  code: string
+  /** Players who signed up with your code. */
+  referred: number
+  referredBy: string | null
+}
+
 export const api = {
   config: () => call<ServerConfig>('/config'),
   me: async (): Promise<AccountUser | null> => {
@@ -253,6 +272,12 @@ export const api = {
   createClan: (name: string, tag: string) => call<{ id: string }>('/clans', { method: 'POST', body: { name, tag } }),
   joinClan: (id: string) => call<{ ok: boolean }>(`/clans/${encodeURIComponent(id)}/join`, { method: 'POST', body: {} }),
   leaveClan: () => call<{ ok: boolean }>('/clans/leave', { method: 'POST', body: {} }),
+  friends: () => call<FriendsInfo>('/friends'),
+  addFriend: (code: string) => call<{ result: 'requested' | 'friends' }>('/friends', { method: 'POST', body: { code } }),
+  acceptFriend: (id: string) => call<{ result: 'friends' }>(`/friends/${encodeURIComponent(id)}/accept`, { method: 'POST', body: {} }),
+  removeFriend: (id: string) => call<{ removed: boolean }>(`/friends/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} }),
+  referral: () => call<ReferralInfo>('/referral'),
+  redeemReferral: (code: string) => call<{ referredBy: string | null }>('/referral', { method: 'POST', body: { code } }),
   live: () => call<{ games: LiveGameRow[] }>('/live'),
   modes: () => call<ModesInfo>('/modes'),
   community: () => call<CommunityInfo>('/community'),

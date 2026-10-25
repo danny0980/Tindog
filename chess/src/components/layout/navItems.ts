@@ -1,4 +1,4 @@
-import { Globe2, Hourglass, Puzzle, Rocket, ScrollText, ShoppingBag, Swords, UserRound } from 'lucide-react'
+import { Compass, Globe2, Hourglass, Puzzle, Rocket, ScrollText, ShoppingBag, Swords, UserRound } from 'lucide-react'
 import type { AppView } from '../../types/ui'
 
 export interface NavItem {
@@ -11,6 +11,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: 'play', label: 'Play', icon: Swords, mobile: true },
+  { id: 'journey', label: 'Journey', icon: Compass, mobile: true },
   { id: 'legends', label: 'Legends', icon: Hourglass, mobile: true },
   { id: 'online', label: 'Online', icon: Globe2, mobile: true },
   { id: 'rush', label: 'Rush', icon: Rocket, mobile: true },

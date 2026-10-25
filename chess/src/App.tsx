@@ -1,6 +1,6 @@
 import { armyEffects } from './army/army'
 import { type BattleMode, opponentFor } from './war/war'
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { onBackButton } from './native/shell'
 import { AppHeader } from './components/layout/AppHeader'
@@ -36,6 +36,13 @@ import type { IntroExit } from './components/cinematic/CinematicIntro'
 import { navDirection, runViewTransition, supportsViewTransitions } from './utils/viewTransition'
 import { closeIntroOverlay, introStore, openIntro } from './stores/introStore'
 import { startupRoom } from './online/startup'
+import type { JourneyTab } from './types/ui'
+import type { JourneyLaunch } from './components/journey/launch'
+import { journeyStore } from './journey/journeyStore'
+import { ensureCurrent } from './journey/journeyActions'
+import { journeyBadge } from './journey/badges'
+import { scheduleReminders } from './journey/notify'
+import { rememberReferralFromUrl } from './journey/referral'
 
 // Secondary screens are code-split so the board loads first on slow mobile connections;
 // failed chunk downloads are retried and, failing that, caught by a view ErrorBoundary.
@@ -47,6 +54,7 @@ const LegendsView = lazyWithRetry(() => import('./views/LegendsView'), (m) => m.
 const OnlineView = lazyWithRetry(() => import('./views/OnlineView'), (m) => m.OnlineView)
 const RushView = lazyWithRetry(() => import('./views/RushView'), (m) => m.RushView)
 const QuestsView = lazyWithRetry(() => import('./views/QuestsView'), (m) => m.QuestsView)
+const JourneyView = lazyWithRetry(() => import('./views/JourneyView'), (m) => m.JourneyView)
 // The cinematic intro (renderer, textures, score) is its own chunk, fetched only when it plays.
 const CinematicIntro = lazyWithRetry(() => import('./components/cinematic/CinematicIntro'), (m) => m.default)
 const LastGrainIntro = lazyWithRetry(() => import('./components/cinematic/lastGrain/LastGrainIntro'), (m) => m.default)
@@ -64,7 +72,9 @@ function ViewFallback() {
 export default function App() {
   // An invite link (or a reload mid-game) opens the online room straight away.
   const [inviteCode, setInviteCode] = useState(startupRoom)
-  const [view, setView] = useState<AppView>(() => (inviteCode ? 'online' : 'play'))
+  // A friend's position challenge (?challenge=…) opens the Journey; an invite room the Online screen.
+  const [view, setView] = useState<AppView>(() => (inviteCode ? 'online' : typeof window !== 'undefined' && window.location.search.includes('challenge=') ? 'journey' : 'play'))
+  const [journeyTab, setJourneyTab] = useState<JourneyTab>('progress')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   // First launch (or after this update) opens on the cinematic intro.
@@ -82,6 +92,20 @@ export default function App() {
   const today = localDateKey()
   const unsolvedDaily = getDailyPuzzles(today).filter((p) => !solved[p.id]).length
   const questRewards = claimableCount(questProgress, today)
+  const journey = useStore(journeyStore, (j) => j)
+  const memory = useStore(profileStore, (p) => p.memory)
+  const journeyRewards = journeyBadge(journey, memory, today)
+
+  // The Journey: close a finished league week or season; remember an invite code; refresh reminders when the app is put away.
+  useEffect(() => {
+    ensureCurrent()
+    rememberReferralFromUrl()
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void scheduleReminders(journeyStore.get(), profileStore.get().memory, profileStore.get().name).catch(() => undefined)
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [])
 
   // Art pack (public/assets/manifest.json): portraits, piece sets and boards, if present.
   useEffect(() => {
@@ -180,7 +204,7 @@ export default function App() {
 
   // Classic Chess: pure chess against one of the 100 historical opponents (no spells, no arena rules).
   const challengeGhost = useCallback(
-    (options: ChallengeClock) => {
+    (options: ChallengeClock, launch?: BattleLaunch) => {
       game.startNewGame({
         ...game.gameSettings,
         mode: 'ai',
@@ -190,13 +214,13 @@ export default function App() {
         ghost: true,
         playerColor: options.color,
         timeControlId: options.timeControlId,
-      })
+      }, launch)
       navigate('play')
     },
     [game, navigate],
   )
   const challengeClassic = useCallback(
-    (classicId: string, options: ChallengeClock) => {
+    (classicId: string, options: ChallengeClock, launch?: BattleLaunch) => {
       game.startNewGame({
         ...game.gameSettings,
         mode: 'ai',
@@ -209,7 +233,7 @@ export default function App() {
         timeControlId: options.timeControlId,
         ...(options.customMinutes !== undefined ? { customMinutes: options.customMinutes } : {}),
         ...(options.customIncrementSeconds !== undefined ? { customIncrementSeconds: options.customIncrementSeconds } : {}),
-      })
+      }, launch)
       navigate('play')
     },
     [game, navigate],
@@ -301,6 +325,19 @@ export default function App() {
     [game, navigate],
   )
 
+  const journeyLaunch = useMemo<JourneyLaunch>(
+    () => ({
+      playClassic: challengeClassic,
+      playGhost: challengeGhost,
+      navigate,
+      openLegends: (screen) => {
+        updateSettings({ legendsScreen: screen })
+        navigate('legends')
+      },
+    }),
+    [challengeClassic, challengeGhost, navigate],
+  )
+
   const openCampaignMap = useCallback(() => {
     updateSettings({ legendsScreen: 'grand' })
     navigate('legends')
@@ -342,6 +379,10 @@ export default function App() {
             onOpenCampaign={openCampaignMap}
             onOpenGauntlet={openGauntlet}
             onOpenWar={openWarMap}
+            onOpenJourney={(tab) => {
+              setJourneyTab(tab)
+              navigate('journey')
+            }}
           />
           </ErrorBoundary>
         </div>
@@ -350,6 +391,7 @@ export default function App() {
           {/* Browsers without view transitions get a gentle CSS entrance instead. */}
           <div key={view} className={`flex min-h-0 flex-1 flex-col ${view === 'play' ? 'hidden' : ''} ${supportsViewTransitions() ? '' : 'animate-view-in'}`}>
           {view === 'legends' && <LegendsView onChallenge={challengeLegend} onChallengeBoss={challengeBoss} onChallengeClassic={challengeClassic} onChallengeGhost={challengeGhost} onChallengeWar={challengeWar} onFightGauntlet={fightGauntlet} onFightTournament={fightTournament} onReturnToBoard={() => navigate('play')} />}
+          {view === 'journey' && <JourneyView launch={journeyLaunch} tab={journeyTab} onTab={setJourneyTab} />}
           {view === 'rush' && <RushView active={view === 'rush'} />}
           {view === 'quests' && <QuestsView onNavigate={navigate} />}
           {view === 'puzzles' && <PuzzlesView />}
@@ -370,7 +412,7 @@ export default function App() {
         </ErrorBoundary>
       </main>
 
-      <BottomNav view={view} onNavigate={navigate} badges={{ puzzles: unsolvedDaily, quests: questRewards }} />
+      <BottomNav view={view} onNavigate={navigate} badges={{ puzzles: unsolvedDaily, quests: questRewards, journey: journeyRewards }} />
       {settingsOpen && (
         <ErrorBoundary scope="view" label="settings">
         <Suspense fallback={null}>

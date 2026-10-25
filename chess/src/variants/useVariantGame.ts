@@ -1,7 +1,8 @@
 // A variant game against the computer: the pure VariantGame rules, Stockfish
 // for ideas (in Chess960 mode when needed), the variant judgement in ai.ts,
 // and the app's sounds.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { recordJourney } from '../journey/journeyActions'
 import { resolveMaterial, sfx } from '../audio'
 import { playCheck } from '../audio/fanfares'
 import { playPieceSound } from '../audio/pieceSounds'
@@ -13,7 +14,7 @@ import { recordBattleResult, recordVanish, recordVariantResult } from '../utils/
 import type { Battle } from '../data/battles'
 import type { Color, MoveInput, Square } from '../types/chess'
 import { type Candidate, chooseVariantMove } from './ai'
-import { type VMove, VariantGame, type VariantId, random960 } from './rules'
+import { type BattleRules, type VMove, VariantGame, type VariantId, type VariantResult, random960 } from './rules'
 
 export type VariantLevel = 'beginner' | 'club' | 'master'
 
@@ -31,6 +32,12 @@ export interface VariantSetup {
   position960?: number
   /** A historic battle (variant 'battle'). */
   battle?: Battle
+  /** Any other position with its own objective (Journey: famous positions, events, endgame lessons). */
+  rules?: BattleRules
+  /** King of the Hill / Three-Check from this position instead of the start. */
+  fen?: string
+  /** Books the result instead of the variant / battle feats. */
+  onResult?: (result: VariantResult, me: Color) => void
 }
 
 export interface VariantView {
@@ -60,6 +67,7 @@ export function useVariantGame(active: boolean) {
   const [myColor, setMyColor] = useState<Color>('w')
   const [level, setLevel] = useState<VariantLevel>('club')
   const [battle, setBattle] = useState<Battle | null>(null)
+  const onResultRef = useRef<VariantSetup['onResult'] | null>(null)
   const engine = useEngine('variant', active && game !== null)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
 
@@ -69,6 +77,11 @@ export function useVariantGame(active: boolean) {
     if (r.winner === null) sfx.draw()
     else if (r.winner === me) sfx.victory()
     else sfx.defeat()
+    if (onResultRef.current) {
+      onResultRef.current(r, me)
+      return
+    }
+    recordJourney({ outcome: r.winner === null ? 'draw' : r.winner === me ? 'win' : 'loss', opponentElo: LEVELS[level].rating }, 1200)
     applyFeat((p) =>
       battle
         ? recordBattleResult(p, battle.id, me, r.winner === me)
@@ -93,8 +106,17 @@ export function useVariantGame(active: boolean) {
   const start = useCallback(
     (setup: VariantSetup) => {
       const color: Color = setup.color === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : setup.color
-      setGame(setup.battle ? VariantGame.battleGame(setup.battle.setup) : new VariantGame(setup.variant, setup.variant === 'chess960' ? (setup.position960 ?? random960()) : 518))
+      setGame(
+        setup.battle
+          ? VariantGame.battleGame(setup.battle.setup)
+          : setup.rules
+            ? VariantGame.battleGame(setup.rules)
+            : setup.fen && setup.variant !== 'chess960'
+              ? VariantGame.fromFen(setup.variant, setup.fen)
+              : new VariantGame(setup.variant, setup.variant === 'chess960' ? (setup.position960 ?? random960()) : 518),
+      )
       setBattle(setup.battle ?? null)
+      onResultRef.current = setup.onResult ?? null
       setMyColor(color)
       setLevel(setup.level)
       engine.newGame()

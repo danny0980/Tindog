@@ -30,6 +30,10 @@ import { terrainFor } from '../cinema/terrain'
 import { MoodBackdrop } from '../components/roguelike/MoodBackdrop'
 import { WeatherOverlay } from '../components/roguelike/WeatherOverlay'
 import { SpellParticles } from '../components/fx/SpellParticles'
+import { BoardAura, LivingLight } from '../components/fx/LivingLight'
+import { type BoardFx, captureStyleFor } from '../components/fx/boardFx'
+import { journeyStore } from '../journey/journeyStore'
+import { coopPlayer } from '../journey/modes'
 import { ArenaBackdrop } from '../components/fx/ArtBackdrop'
 import { Vignette } from '../components/fx/Vignette'
 import { playFx } from '../components/fx/playFx'
@@ -79,6 +83,8 @@ interface PlayViewProps {
   onOpenWar: () => void
   /** Opens the Endless Gauntlet screen. */
   onOpenGauntlet: () => void
+  /** Opens the Journey on a tab (after a story chapter, a bullet run…). */
+  onOpenJourney?: (tab: 'story' | 'arena' | 'characters' | 'progress') => void
 }
 
 function buildShareSummary(game: GameController): string {
@@ -107,7 +113,7 @@ const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 /** Plies between two coach warnings, so it never nags. */
 const COACH_GAP = 6
 
-export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet, onOpenWar }: PlayViewProps) {
+export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpenSettings, onOpenCampaign, onOpenGauntlet, onOpenWar, onOpenJourney }: PlayViewProps) {
   const [confirmResign, setConfirmResign] = useState(false)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -128,6 +134,16 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const { timeMachine } = game
   const total = game.history.length
   const potions = useStore(profileStore, (p) => p.inventory.potions)
+  // Journey cosmetics and modes: your board aura, capture effects by piece set, co-op turns.
+  const aura = useStore(journeyStore, (j) => j.aura)
+  const liveLast = game.history[game.history.length - 1]
+  const captureSet = settings.artPieces ?? pieceSet.id
+  const captureFx = useMemo<BoardFx | null>(
+    () => (liveLast?.captured && !settings.batterySaver && !game.review ? { id: 1_000_000 + game.history.length, kind: captureStyleFor(captureSet), square: liveLast.to } : null),
+    [captureSet, game.history.length, game.review, liveLast, settings.batterySaver],
+  )
+  const coop = game.journeyTag?.kind === 'coop' ? game.journeyTag : null
+  const coopTurn = coop && game.status.kind === 'playing' && game.status.turn === game.humanColor ? coop.players[coopPlayer(game.history.filter((m) => m.color === game.humanColor).length)] : null
   // Fog of war hides move hints and the evaluation bar for the whole battle.
   const fog = game.battle?.weather === 'fog' && !game.review && game.status.kind === 'playing'
   const showEval = game.evalEnabled && !fog
@@ -338,7 +354,8 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
   const board = (
     <div ref={boardFxRef} className="flex items-stretch gap-2">
       {showEval && <EvalBar evaluation={game.evaluation} orientation={game.orientation} />}
-      <div ref={boardLensRef} className="min-w-0 flex-1">
+      <div ref={boardLensRef} className="relative isolate min-w-0 flex-1">
+        <BoardAura id={aura} lowPower={settings.batterySaver} />
         <Battlefield terrain={terrain} lowPower={settings.batterySaver}>
         <CinemaStage shot={shot} orientation={game.orientation} mateCaption={game.killCam?.caption ?? null} youWon={game.killCam?.youWon ?? true} onDone={onShotDone}>
         <ChessBoard
@@ -364,6 +381,13 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
         >
           {game.effects && game.battle && !game.review && <WeatherOverlay weather={game.effects.weather} lowPower={settings.batterySaver} />}
           <SpellParticles fx={game.boardFx} orientation={game.orientation} frozen={game.arena?.frozen ?? NO_SQUARES} lowPower={settings.batterySaver} />
+          {captureFx && <SpellParticles fx={captureFx} orientation={game.orientation} frozen={NO_SQUARES} lowPower={settings.batterySaver} />}
+          <LivingLight enabled={settings.livingLight && !settings.batterySaver} />
+          {coopTurn && (
+            <div className="pointer-events-none absolute top-2 left-1/2 z-40 -translate-x-1/2 animate-pop-in rounded-full bg-ink-950/85 px-3 py-1 text-xs font-bold text-white shadow-xl ring-1 ring-accent/60" role="status" data-coop-turn>
+              {coopTurn}’s move
+            </div>
+          )}
           {hologram && !settings.batterySaver && candidate?.kind !== 'mate' && <BoardHologram key={`${game.gameKey}-${total}`} text={hologram.text} tone={hologram.tone} />}
           {coachShown && (
             <div className="absolute inset-x-2 bottom-2 z-40 rounded-2xl border border-amber-300/50 bg-ink-950/90 p-3 text-sm text-amber-50 shadow-2xl backdrop-blur" role="alert" data-coach-warning={coachShown.warnings[0]?.pattern}>
@@ -704,6 +728,14 @@ export function PlayView({ game, active, newGameOpen, onNewGameOpenChange, onOpe
           game.dismissGameOver()
           setReelOpen(true)
         }}
+        onOpenJourney={
+          onOpenJourney
+            ? (tab) => {
+                game.dismissGameOver()
+                onOpenJourney(tab)
+              }
+            : null
+        }
         isAiMode={game.isAiMode}
         moveCount={total}
         onNewGame={openNewGame}

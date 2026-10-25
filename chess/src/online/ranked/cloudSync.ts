@@ -13,6 +13,8 @@
 // has nothing unsaved, else you choose.
 import { createDefaultProfile, profileStore, sanitizeProfile } from '../../stores/profileStore'
 import { sanitizeSettings, settingsStore } from '../../stores/settingsStore'
+import { journeyStore } from '../../journey/journeyStore'
+import { sanitizeJourney } from '../../journey/state'
 import { createStore } from '../../utils/store'
 import { accountStore } from './account'
 import { ApiError, api } from './api'
@@ -37,11 +39,13 @@ interface SaveBlob {
   version: 1
   profile: unknown
   settings: unknown
+  /** The Journey (level, season, league…); missing in saves from before it existed. */
+  journey?: unknown
 }
 
 const UPLOAD_DELAY_MS = 4000
 
-const localBlob = (): SaveBlob => ({ version: 1, profile: profileStore.get(), settings: settingsStore.get() })
+const localBlob = (): SaveBlob => ({ version: 1, profile: profileStore.get(), settings: settingsStore.get(), journey: journeyStore.get() })
 
 const summarise = (profile: unknown, updatedAt: number | null): SaveSummary => {
   const p = sanitizeProfile(profile)
@@ -123,7 +127,7 @@ function watch(): void {
     if (uploadTimer) clearTimeout(uploadTimer)
     uploadTimer = setTimeout(() => void upload(), UPLOAD_DELAY_MS)
   }
-  watching = [profileStore.subscribe(schedule), settingsStore.subscribe(schedule)]
+  watching = [profileStore.subscribe(schedule), settingsStore.subscribe(schedule), journeyStore.subscribe(schedule)]
 }
 
 function apply(blob: SaveBlob): void {
@@ -131,6 +135,7 @@ function apply(blob: SaveBlob): void {
   try {
     profileStore.set(sanitizeProfile(blob.profile))
     if (blob.settings) settingsStore.set(sanitizeSettings(blob.settings))
+    if (blob.journey) journeyStore.set(sanitizeJourney(blob.journey))
   } finally {
     applying = false
   }

@@ -7,7 +7,7 @@ import { accountStore, patchUser, signOut, signedIn } from '../../online/ranked/
 import { api } from '../../online/ranked/api'
 import { resolveConflict, syncStore } from '../../online/ranked/cloudSync'
 import { type RankedGame, STALE_GAME, clocksNow, rankedResultText } from '../../online/ranked/onlineManager'
-import { RANKED_POOLS, poolById } from '../../online/ranked/protocol'
+import { EMOTES, EMOTE_IDS, type EmoteId, RANKED_POOLS, poolById } from '../../online/ranked/protocol'
 import { getRanked, useRanked } from '../../online/ranked/rankedSession'
 import { settingsStore } from '../../stores/settingsStore'
 import { PEEKS, hiddenCount, vanishMask } from '../../vanish/vanish'
@@ -304,6 +304,28 @@ const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 /** How long a Vanishing peek shows the whole board. */
 const PEEK_MS = 1500
 
+/** Quick emotes: tap to send; the latest one (yours or theirs) floats for a few seconds. */
+function EmoteBar({ game, now, onSend }: { game: RankedGame; now: number; onSend: (e: EmoteId) => void }) {
+  const recent = game.emote && now - game.emote.at < 4000 ? game.emote : null
+  return (
+    <div className="glass relative rounded-2xl p-2" data-emotes>
+      {recent && (
+        <div key={recent.at} className={`absolute -top-12 ${recent.by === game.color ? 'right-3' : 'left-3'} animate-pop-in rounded-2xl bg-white px-3 py-1.5 text-sm font-semibold text-ink-950 shadow-xl`} role="status" data-emote-bubble={recent.id}>
+          {EMOTES[recent.id].emoji} {EMOTES[recent.id].text}
+          <span className="block text-[10px] font-normal text-slate-500">{recent.by === game.color ? 'You' : game.opponent.name}</span>
+        </div>
+      )}
+      <div className="flex justify-between gap-1">
+        {EMOTE_IDS.map((e) => (
+          <button key={e} type="button" onClick={() => onSend(e)} title={EMOTES[e].text} aria-label={EMOTES[e].text} className="flex size-9 items-center justify-center rounded-xl text-lg transition hover:bg-white/10 active:scale-90 pointer-coarse:size-10" data-emote={e}>
+            {EMOTES[e].emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** A ranked game in progress (or just finished). */
 export function RankedGameView({ game }: { game: RankedGame }) {
   const ranked = getRanked()
@@ -406,6 +428,7 @@ export function RankedGameView({ game }: { game: RankedGame }) {
             </div>
           </div>
         )}
+        {!game.result && <EmoteBar game={game} now={now} onSend={(e) => ranked.sendEmote(e)} />}
         {game.drawOffer && !game.result && (
           <div className="glass rounded-2xl border border-sky-300/30 p-3 text-sm">
             {game.drawOffer === me ? (

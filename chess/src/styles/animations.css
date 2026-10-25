@@ -537,3 +537,76 @@ html[data-vt='zoom']::view-transition-new(root) {
 .battery-saver .animate-reaction {
   display: none;
 }
+
+/* Journey: shimmering avatar frames, board auras, chest shake, cutscene text. */
+@theme {
+  --animate-frame-spin: frame-shimmer 3.2s ease-in-out infinite;
+  --animate-aura: aura-breathe 4s ease-in-out infinite;
+  --animate-mote: mote-rise 7s linear infinite;
+  --animate-chest: chest-shake 0.5s ease-in-out 3;
+  --animate-panel-in: panel-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+
+  @keyframes frame-shimmer {
+    0%,
+    100% {
+      filter: brightness(1) saturate(1);
+    }
+    50% {
+      filter: brightness(1.35) saturate(1.35);
+    }
+  }
+  @keyframes aura-breathe {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.95;
+      transform: scale(1.015);
+    }
+  }
+  @keyframes mote-rise {
+    0% {
+      transform: translateY(0) scale(0.6);
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-120px) scale(1);
+      opacity: 0;
+    }
+  }
+  @keyframes chest-shake {
+    0%,
+    100% {
+      transform: rotate(0);
+    }
+    25% {
+      transform: rotate(-6deg) scale(1.05);
+    }
+    75% {
+      transform: rotate(6deg) scale(1.05);
+    }
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-frame-spin,
+  .animate-aura,
+  .animate-mote {
+    animation: none;
+  }
+}

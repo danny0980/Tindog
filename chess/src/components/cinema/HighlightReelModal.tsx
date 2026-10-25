@@ -22,8 +22,9 @@ interface HighlightReelModalProps {
   pieceSet: PieceSet
 }
 
-const W = 1280
-const H = 720
+/** Wide for YouTube and the web; tall (9:16) for TikTok, Reels and Shorts. */
+const FORMATS = { wide: { w: 1280, h: 720, label: 'Wide 16:9' }, tall: { w: 720, h: 1280, label: 'Vertical 9:16' } } as const
+type ReelFormat = keyof typeof FORMATS
 
 /** The game's best moments as a ≤ 30-second film: preview it, save it as a video, share it. */
 export function HighlightReelModal({ open, onClose, history, classes = [], info, look: baseLook, pieceSet }: HighlightReelModalProps) {
@@ -44,6 +45,9 @@ export function HighlightReelModal({ open, onClose, history, classes = [], info,
   const [video, setVideo] = useState<{ url: string; file: File } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const recording = progress !== null
+  const [format, setFormat] = useState<ReelFormat>('tall')
+  const W = FORMATS[format].w
+  const H = FORMATS[format].h
 
   // Preview: the reel plays on a loop while the window is open (and not recording).
   useEffect(() => {
@@ -57,7 +61,7 @@ export function HighlightReelModal({ open, onClose, history, classes = [], info,
     }
     raf = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(raf)
-  }, [info, length, look, moments, open, recording, replay])
+  }, [H, W, info, length, look, moments, open, recording, replay])
 
   useEffect(() => () => {
     abortRef.current?.abort()
@@ -75,7 +79,7 @@ export function HighlightReelModal({ open, onClose, history, classes = [], info,
     setProgress(0)
     try {
       const { blob, extension } = await recordReel({ canvas, durationMs: length, draw: (ms) => drawReel(ctx, W, H, moments, info, look, ms), onProgress: setProgress, signal: abort.signal })
-      const name = `chronos-highlights-${info.white}-vs-${info.black}.${extension}`.replace(/[^\w.-]+/g, '_')
+      const name = `chronos-highlights-${info.white}-vs-${info.black}${format === 'tall' ? '-vertical' : ''}.${extension}`.replace(/[^\w.-]+/g, '_')
       const file = new File([blob], name, { type: blob.type })
       const url = URL.createObjectURL(blob)
       setVideo({ url, file })
@@ -137,8 +141,15 @@ export function HighlightReelModal({ open, onClose, history, classes = [], info,
         </div>
       }
     >
-      <div className="space-y-2" data-reel={moments.length}>
-        <canvas ref={canvasRef} width={W} height={H} className="aspect-video w-full rounded-xl bg-black" aria-label={`Highlight reel: ${moments.map((m) => m.title).join(', ') || 'no highlights'}`} />
+      <div className="space-y-2" data-reel={moments.length} data-reel-format={format}>
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-white/[0.05] p-1" role="radiogroup" aria-label="Video format">
+          {(Object.keys(FORMATS) as ReelFormat[]).map((f) => (
+            <button key={f} type="button" role="radio" aria-checked={format === f} disabled={recording} onClick={() => setFormat(f)} className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition pointer-coarse:min-h-10 ${format === f ? 'bg-accent text-ink-950' : 'text-slate-300 hover:bg-white/5'}`}>
+              {FORMATS[f].label}
+            </button>
+          ))}
+        </div>
+        <canvas ref={canvasRef} width={W} height={H} className={`mx-auto rounded-xl bg-black ${format === 'tall' ? 'aspect-[9/16] max-h-[60dvh] w-auto max-w-full' : 'aspect-video w-full'}`} aria-label={`Highlight reel: ${moments.map((m) => m.title).join(', ') || 'no highlights'}`} />
         {recording && (
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
             <div className="h-full bg-accent transition-[width]" style={{ width: `${(progress ?? 0) * 100}%` }} />

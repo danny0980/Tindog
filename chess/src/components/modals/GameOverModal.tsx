@@ -1,4 +1,4 @@
-import { Brain, Check, Coins, Crown, Film, Globe2, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy, UserRound } from 'lucide-react'
+import { Brain, Check, Coins, Compass, Crown, Film, Globe2, Mic, Eye, Handshake, Hourglass, Infinity as InfinityIcon, Map as MapIcon, Microscope, RotateCcw, ScrollText, Share2, Skull, Swords, TrendingDown, TrendingUp, Trophy, UserRound } from 'lucide-react'
 import { POTIONS } from '../../data/arena'
 import { getGrandRealm } from '../../data/campaign/realms'
 import { RelicTile } from '../campaign/RelicTile'
@@ -36,9 +36,11 @@ interface GameOverModalProps {
   onOpenWar?: () => void
   /** After a win: wear the beaten opponent as your avatar (or take it off again). */
   trophy?: { name: string; active: boolean; onToggle: () => void } | null
+  /** Opens the Journey (the story, the arena) after a Journey game. */
+  onOpenJourney?: ((tab: 'story' | 'arena' | 'characters' | 'progress') => void) | null
 }
 
-export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null, onOpenWar, trophy = null }: GameOverModalProps) {
+export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, onRematch, onOpenCampaign, onOpenGauntlet, onReview, onAnalyze, onShare, opponent = null, lesson = null, history = null, onReel = null, onOpenWar, trophy = null, onOpenJourney = null }: GameOverModalProps) {
   if (!summary) return null
   const { title, detail } = describeResult(summary.result)
   const isDraw = summary.result.kind === 'draw'
@@ -179,6 +181,37 @@ export function GameOverModal({ open, summary, isAiMode, moveCount, onNewGame, o
               <ScrollText className="size-3.5" /> History lesson · {lesson.name}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-slate-200">{lesson.fact}</p>
+          </div>
+        )}
+
+        {summary.journey && (
+          <div className="mt-3 w-full space-y-1.5 rounded-xl border border-sky-300/30 bg-sky-400/10 p-3 text-left" data-journey-summary>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.2em] text-sky-200 uppercase">
+                <Compass className="size-3.5" /> Journey
+              </span>
+              <span className="font-mono text-sm font-bold text-sky-100">+{summary.journey.xp} XP</span>
+            </div>
+            <div className="text-xs text-slate-300">
+              {summary.journey.levelAfter > summary.journey.levelBefore ? `Level up! You are now level ${summary.journey.levelAfter}.` : `Level ${summary.journey.levelAfter}`}
+              {' · '}+{summary.journey.leaguePoints} league points
+              {summary.journey.firstOfDay ? ' · first win of the day' : ''}
+              {summary.journey.bonusCoins > 0 ? ` · +${summary.journey.bonusCoins} Treasury coins` : ''}
+              {summary.journey.tierUp ? ` · pass tier ${summary.journey.tierAfter}!` : ''}
+            </div>
+            {summary.journey.note && <div className="text-sm font-semibold text-white">{summary.journey.note}</div>}
+            {summary.journey.tag && onOpenJourney && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="w-full"
+                icon={<Compass className="size-4" />}
+                onClick={() => onOpenJourney(summary.journey?.tag?.kind === 'story' ? 'story' : summary.journey?.tag?.kind === 'nemesis' ? 'characters' : 'arena')}
+                data-journey-continue
+              >
+                {summary.journey.tag.kind === 'story' ? 'Continue the story' : summary.journey.tag.kind === 'bullet' && summary.outcome === 'win' ? 'Next opponent' : 'Back to the Journey'}
+              </Button>
+            )}
           </div>
         )}
 

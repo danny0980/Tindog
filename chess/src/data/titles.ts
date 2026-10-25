@@ -1,6 +1,8 @@
 // Noble ranks (from your rating) and feat titles (from what you have done).
 import type { PlayerProfile } from '../types/profile'
 import type { TitleDef } from '../types/rpg'
+import { journeyStore } from '../journey/journeyStore'
+import { LEVEL_TITLES, levelInfo } from '../journey/xp'
 
 export interface TitleContext {
   profile: PlayerProfile
@@ -34,6 +36,21 @@ export const FEAT_TITLES: ReadonlyArray<TitleDef & { earned: (ctx: TitleContext)
   { id: 'brilliant-mind', name: 'Brilliant Mind', kind: 'feat', description: 'Play five brilliant moves (in analysed games).', earned: ({ profile }) => profile.matches.reduce((n, m) => n + (m.analysis?.brilliant ?? 0), 0) >= 5 },
 ]
 
+type FeatTitle = TitleDef & { earned: (ctx: TitleContext) => boolean }
+
+/** Journey titles: one per level milestone (kept for good after a prestige), and those won on the Journey. */
+export function journeyTitles(): FeatTitle[] {
+  const j = journeyStore.get()
+  const level = levelInfo(j.xp).level
+  return [
+    ...LEVEL_TITLES.filter((t) => t.level > 1).map((t) => ({ id: t.id, name: t.name, kind: 'feat' as const, description: `Reach level ${t.level} on your Journey.`, earned: () => j.prestige > 0 || level >= t.level })),
+    ...j.titles.map((t) => ({ id: t.id, name: t.name, kind: 'feat' as const, description: 'Won on your Journey.', earned: () => true })),
+  ]
+}
+
+/** Every feat title, the Journey's included. */
+export const allFeatTitles = (): FeatTitle[] => [...FEAT_TITLES, ...journeyTitles()]
+
 /** Your noble rank from your peak rating. */
 export function nobleRank(peakElo: number): TitleDef {
   let rank: TitleDef = NOBLE_RANKS[0] ?? { id: 'squire', name: 'Squire', kind: 'rank', description: '' }
@@ -49,12 +66,12 @@ export function nextRank(peakElo: number): { rank: TitleDef; elo: number } | nul
 
 export const earnedTitles = (ctx: TitleContext): TitleDef[] => [
   nobleRank(ctx.profile.peakElo),
-  ...FEAT_TITLES.filter((t) => t.earned(ctx)),
+  ...allFeatTitles().filter((t) => t.earned(ctx)),
 ]
 
 /** The title shown on your card: your chosen feat title if still earned, else your rank. */
 export function displayTitle(ctx: TitleContext): TitleDef {
-  const chosen = ctx.profile.title ? FEAT_TITLES.find((t) => t.id === ctx.profile.title && t.earned(ctx)) : undefined
+  const chosen = ctx.profile.title ? allFeatTitles().find((t) => t.id === ctx.profile.title && t.earned(ctx)) : undefined
   return chosen ?? nobleRank(ctx.profile.peakElo)
 }
 

@@ -1,5 +1,5 @@
 import { Check, Lock } from 'lucide-react'
-import { FEAT_TITLES, NOBLE_RANKS, type TitleContext, displayTitle, nextRank, nobleRank } from '../../data/titles'
+import { NOBLE_RANKS, type TitleContext, allFeatTitles, displayTitle, nextRank, nobleRank } from '../../data/titles'
 import { profileStore } from '../../stores/profileStore'
 
 /** Noble ranks (from your peak rating) and feat titles you can wear on your player card. */
@@ -29,7 +29,7 @@ export function TitlePicker({ ctx }: { ctx: TitleContext }) {
         <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Feat titles</div>
         <div className="grid gap-1.5 sm:grid-cols-2">
           <TitleRow label={`${rank.name} (your rank)`} description="Show your noble rank." on={shown.id === rank.id} earned onClick={() => choose(null)} />
-          {FEAT_TITLES.map((t) => {
+          {allFeatTitles().map((t) => {
             const earned = t.earned(ctx)
             return <TitleRow key={t.id} label={t.name} description={t.description} on={shown.id === t.id} earned={earned} onClick={() => earned && choose(t.id)} />
           })}

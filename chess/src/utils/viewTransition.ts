@@ -8,7 +8,7 @@ import type { AppView } from '../types/ui'
 export type TransitionDirection = 'forward' | 'back' | 'zoom'
 
 /** Order of the main screens, left to right (drives slide direction). */
-export const VIEW_ORDER: readonly AppView[] = ['play', 'legends', 'rush', 'puzzles', 'quests', 'profile', 'shop']
+export const VIEW_ORDER: readonly AppView[] = ['play', 'journey', 'legends', 'rush', 'puzzles', 'quests', 'profile', 'shop']
 
 export function navDirection(from: AppView, to: AppView): TransitionDirection {
   if (from === to) return 'zoom'

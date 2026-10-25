@@ -4,6 +4,7 @@ import { useAvatarArt } from '../../assets/useArt'
 import type { Color } from '../../types/chess'
 import type { PortraitSpec } from '../../types/persona'
 import { PortraitEmblem } from '../legends/PortraitEmblem'
+import { FrameRing } from '../journey/ui'
 import type { Mood } from '../../utils/mood'
 
 const MOODS: Record<Mood, { icon: typeof Smile; label: string; ring: string; badge: string; motion: string }> = {
@@ -50,6 +51,8 @@ export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }:
   const MoodIcon = m.icon ?? Meh
   return (
     <div className={`idle-pause relative shrink-0 ${m.motion}`} title={m.label}>
+      {/* Your Journey frame rings your own avatar. */}
+      <FrameRing frame={isEngine ? null : undefined}>
       {portrait ? (
         <PortraitEmblem spec={portrait.spec} label={portrait.label} size="sm" ring={m.ring} className={mood === 'defeat' ? 'grayscale' : ''} />
       ) : (
@@ -68,6 +71,7 @@ export function PlayerAvatar({ color, isEngine, mood, isTurn, portrait = null }:
           )}
         </div>
       )}
+      </FrameRing>
       <span
         className={`absolute -right-1.5 -bottom-1.5 flex size-5 items-center justify-center rounded-full text-white shadow-lg ring-2 ring-ink-900 transition-colors duration-300 ${m.badge}`}
         aria-label={m.label}

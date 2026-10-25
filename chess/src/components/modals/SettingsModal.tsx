@@ -275,6 +275,13 @@ export function SettingsModal({ open, onClose, onOpenShop }: SettingsModalProps)
                 checked={settings.pieceReactions}
                 onChange={(v) => updateSettings({ pieceReactions: v })}
               />
+              <Toggle
+                label="Living light"
+                description="The board follows your clock: a warm dawn, a golden dusk, a starry night"
+                icon={<Sparkles className="size-5" />}
+                checked={settings.livingLight}
+                onChange={(v) => updateSettings({ livingLight: v })}
+              />
               {settings.batterySaver && <p className="text-xs text-amber-200/80">Battery saver is on: the camera and battlefield particles are paused.</p>}
             </Section>
             <Section title="Predictive coach">

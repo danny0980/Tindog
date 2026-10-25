@@ -77,6 +77,8 @@ export interface AppSettings {
   battlefield: BattlefieldSetting
   /** Pieces react to the position (trembling king, shining knight, glowing pawn). */
   pieceReactions: boolean
+  /** The board's light follows your local time: dawn, day, dusk and a starry night. */
+  livingLight: boolean
   /** Predictive coach: warn before a move that walks into a trap — only ones that have cost you before ('mine'), any, or never. */
   coachWarnings: CoachMode
   // ── Haptics ──

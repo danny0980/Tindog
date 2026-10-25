@@ -57,7 +57,7 @@ export interface Synergy {
 }
 
 /** What launched a character battle (decides how its result is booked). */
-export type BattleKind = 'campaign' | 'legend' | 'gauntlet' | 'event' | 'bounty' | 'tournament'
+export type BattleKind = 'campaign' | 'legend' | 'gauntlet' | 'event' | 'bounty' | 'tournament' | 'phases' | 'powers'
 
 /** Rules in force for one battle (computed when it starts, fixed until it ends). */
 export interface BattleSetup {

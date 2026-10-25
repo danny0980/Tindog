@@ -222,6 +222,9 @@ CREATE INDEX IF NOT EXISTS clan_members_clan ON clan_members (clan_id, position)
 CREATE TABLE IF NOT EXISTS clan_war (week TEXT NOT NULL, clan_id TEXT NOT NULL, points INTEGER NOT NULL, PRIMARY KEY (week, clan_id));
 CREATE TABLE IF NOT EXISTS live_games (id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS games_ended ON games (ended_at DESC);
+CREATE TABLE IF NOT EXISTS friends (user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE, friend_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE, status TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (user_id, friend_id));
+CREATE TABLE IF NOT EXISTS referrals (user_id TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE, referrer_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS referrals_by ON referrals (referrer_id);
 `
 
 interface UserRow {
@@ -737,6 +740,50 @@ export class Store {
   private toClan(r: ClanRow): Clan {
     return { id: r.id, name: r.name, tag: r.tag, ownerId: r.owner_id, createdAt: r.created_at, members: this.q.members.all(r.id).map((m) => m.user_id) }
   }
+  // ── Friends & referrals ───────────────────────────────────────────────────
+  /** Your friends and pending requests (`incoming` = they asked you). */
+  friendsOf(userId: string): Array<{ id: string; status: 'friend' | 'incoming' | 'outgoing'; since: number }> {
+    const out = this.db.prepare<[string], { friend_id: string; status: string; created_at: number }>('SELECT friend_id, status, created_at FROM friends WHERE user_id = ?').all(userId)
+    const incoming = this.db.prepare<[string], { user_id: string; created_at: number }>("SELECT user_id, created_at FROM friends WHERE friend_id = ? AND status = 'pending'").all(userId)
+    return [
+      ...out.map((r) => ({ id: r.friend_id, status: r.status === 'accepted' ? ('friend' as const) : ('outgoing' as const), since: r.created_at })),
+      ...incoming.filter((r) => !out.some((o) => o.friend_id === r.user_id)).map((r) => ({ id: r.user_id, status: 'incoming' as const, since: r.created_at })),
+    ]
+  }
+  /** Asks `friendId` to be friends; if they had already asked you, you are friends at once. */
+  requestFriend(userId: string, friendId: string, at: number): 'requested' | 'friends' {
+    const theirs = this.db.prepare<[string, string], { status: string }>('SELECT status FROM friends WHERE user_id = ? AND friend_id = ?').get(friendId, userId)
+    if (theirs) {
+      this.acceptFriend(userId, friendId, at)
+      return 'friends'
+    }
+    this.db.prepare("INSERT OR IGNORE INTO friends (user_id, friend_id, status, created_at) VALUES (?, ?, 'pending', ?)").run(userId, friendId, at)
+    return 'requested'
+  }
+  acceptFriend(userId: string, friendId: string, at: number): boolean {
+    const asked = this.db.prepare<[string, string], { status: string }>('SELECT status FROM friends WHERE user_id = ? AND friend_id = ?').get(friendId, userId)
+    if (!asked) return false
+    this.transaction(() => {
+      this.db.prepare("UPDATE friends SET status = 'accepted' WHERE user_id = ? AND friend_id = ?").run(friendId, userId)
+      this.db.prepare("INSERT OR REPLACE INTO friends (user_id, friend_id, status, created_at) VALUES (?, ?, 'accepted', ?)").run(userId, friendId, at)
+    })
+    return true
+  }
+  removeFriend(userId: string, friendId: string): void {
+    this.db.prepare('DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)').run(userId, friendId, friendId, userId)
+  }
+  /** Records who referred a player (once; never yourself). */
+  refer(userId: string, referrerId: string, at: number): boolean {
+    if (userId === referrerId || !this.user(referrerId)) return false
+    return this.db.prepare('INSERT OR IGNORE INTO referrals (user_id, referrer_id, created_at) VALUES (?, ?, ?)').run(userId, referrerId, at).changes > 0
+  }
+  referrerOf(userId: string): string | null {
+    return this.db.prepare<[string], { referrer_id: string }>('SELECT referrer_id FROM referrals WHERE user_id = ?').get(userId)?.referrer_id ?? null
+  }
+  referralCount(userId: string): number {
+    return this.db.prepare<[string], { n: number }>('SELECT COUNT(*) AS n FROM referrals WHERE referrer_id = ?').get(userId)?.n ?? 0
+  }
+
   clan(id: string): Clan | null {
     const r = this.q.clan.get(id)
     return r ? this.toClan(r) : null

@@ -71,6 +71,20 @@ export interface SpectateSnapshot {
   label: string | null
 }
 
+/** Quick emotes in online games: a fixed set, so there is no chat to moderate. */
+export const EMOTES = {
+  hello: { emoji: '👋', text: 'Hello!' },
+  gl: { emoji: '🍀', text: 'Good luck!' },
+  wow: { emoji: '😮', text: 'Wow!' },
+  think: { emoji: '🤔', text: 'Hmm…' },
+  oops: { emoji: '😅', text: 'Oops!' },
+  nice: { emoji: '👏', text: 'Nice move!' },
+  gg: { emoji: '🤝', text: 'Good game!' },
+} as const
+export type EmoteId = keyof typeof EMOTES
+export const EMOTE_IDS = Object.keys(EMOTES) as EmoteId[]
+const isEmote = (v: unknown): v is EmoteId => typeof v === 'string' && (EMOTE_IDS as readonly string[]).includes(v)
+
 // ── Client → server ─────────────────────────────────────────────────────────
 export type ClientMessage =
   | { type: 'FIND_MATCH'; pool: string }
@@ -82,6 +96,7 @@ export type ClientMessage =
   | { type: 'PING'; at: number }
   | { type: 'SPECTATE'; gameId: string }
   | { type: 'UNSPECTATE' }
+  | { type: 'EMOTE'; gameId: string; emote: EmoteId }
   | ModeClientMessage
 
 // ── Server → client ─────────────────────────────────────────────────────────
@@ -105,6 +120,7 @@ export type ServerMessage =
   | { type: 'SPECTATE_OVER'; gameId: string; winner: 'w' | 'b' | null; reason: RankedReason }
   /** The weekly tournament changed (sign-ups, results): fetch /api/tournament again. */
   | { type: 'TOURNAMENT_CHANGED' }
+  | { type: 'EMOTE'; gameId: string; emote: EmoteId; by: 'w' | 'b' }
   | ModeServerMessage
 
 const UCI = /^[a-h][1-8][a-h][1-8][qrbn]?$/
@@ -156,6 +172,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'UNSPECTATE':
       return { type: 'UNSPECTATE' }
+    case 'EMOTE': {
+      const gameId = id(d.gameId)
+      return gameId && isEmote(d.emote) ? { type: 'EMOTE', gameId, emote: d.emote } : null
+    }
     default:
       return parseModeClientMessage(d)
   }
@@ -251,6 +271,11 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const gameId = id(d.gameId)
       const by = color(d.by)
       return gameId && by ? { type: 'DRAW_OFFERED', gameId, by } : null
+    }
+    case 'EMOTE': {
+      const gameId = id(d.gameId)
+      const by = color(d.by)
+      return gameId && by && isEmote(d.emote) ? { type: 'EMOTE', gameId, emote: d.emote, by } : null
     }
     case 'DRAW_DECLINED':
     case 'OPPONENT_RECONNECTED': {

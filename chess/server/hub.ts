@@ -65,6 +65,8 @@ export class Hub {
   /** Card Chess and Battle Royale. */
   readonly modes: ModeRooms
   private readonly games = new Map<string, GameRoom>()
+  /** When each player last sent an emote (one every two seconds). */
+  private readonly lastEmote = new Map<string, number>()
   private readonly activeGame = new Map<string, string>()
   private readonly gameTimers = new Map<string, unknown>()
   private readonly graceTimers = new Map<string, unknown>()
@@ -394,6 +396,15 @@ export class Hub {
         if (!game || !side) return
         const r = game.resign(side)
         if (r) this.finish(game, r)
+        return
+      }
+      case 'EMOTE': {
+        const game = this.games.get(msg.gameId)
+        const side = game?.sideOf(userId)
+        const at = this.now()
+        if (!game || !side || at - (this.lastEmote.get(userId) ?? 0) < 2000) return
+        this.lastEmote.set(userId, at)
+        this.send(game.players[side === 'w' ? 'b' : 'w'], { type: 'EMOTE', gameId: game.id, emote: msg.emote, by: side })
         return
       }
       case 'OFFER_DRAW': {

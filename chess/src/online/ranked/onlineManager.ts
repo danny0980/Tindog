@@ -9,7 +9,7 @@ import type { RoyaleGame } from '../../royale/royale'
 import type { Color, MoveInput, Square } from '../../types/chess'
 import type { CardAction, CardSnapshot, ModeOver, OnlineMode, RoyaleAction, RoyaleSeat, RoyaleSnapshot } from './modeProtocol'
 import { applyCardAction, applyRoyaleAction, endsTurn, replayCards, replayRoyale, seatPlayer } from './modeRules'
-import { type ActiveGame, type ClientMessage, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, type SpectateSnapshot, parseServerMessage } from './protocol'
+import { type ActiveGame, type ClientMessage, type EmoteId, type GameSnapshot, type PublicPlayer, type RankedReason, type ServerMessage, type SpectateSnapshot, parseServerMessage } from './protocol'
 
 /** The parts of the browser WebSocket API we use (the `ws` package matches it too). */
 export interface SocketLike {
@@ -37,6 +37,8 @@ export interface RankedGame {
   clocksAt: number
   running: Color | null
   drawOffer: Color | null
+  /** The last emote in this game (who sent it and when, local time). */
+  emote?: { id: EmoteId; by: Color; at: number } | null
   /** Set while the opponent is disconnected: when their grace period ends (local time). */
   opponentAwayUntil: number | null
   result: { winner: Color | null; reason: RankedReason; rating: { before: number; after: number } } | null
@@ -362,6 +364,13 @@ export class RankedManager {
     if (g && !g.result) this.send({ type: 'RESIGN', gameId: g.gameId })
   }
 
+  /** Sends a quick emote to your opponent (shown on your side at once). */
+  sendEmote(emote: EmoteId): void {
+    const g = this.view.game
+    if (!g || g.result) return
+    if (this.send({ type: 'EMOTE', gameId: g.gameId, emote })) this.set({ game: { ...g, emote: { id: emote, by: g.color, at: this.deps.now() } } })
+  }
+
   offerDraw(): void {
     const g = this.view.game
     if (!g || g.result || g.drawOffer || g.moves.length < 2) return
@@ -517,6 +526,9 @@ export class RankedManager {
         return
       case 'DRAW_DECLINED':
         if (g && g.gameId === msg.gameId) this.set({ game: { ...g, drawOffer: null } })
+        return
+      case 'EMOTE':
+        if (g && g.gameId === msg.gameId) this.set({ game: { ...g, emote: { id: msg.emote, by: msg.by, at: this.deps.now() } } })
         return
       case 'OPPONENT_DISCONNECTED': {
         if (g && g.gameId === msg.gameId) this.set({ game: { ...g, opponentAwayUntil: this.deps.now() + msg.graceMs } })

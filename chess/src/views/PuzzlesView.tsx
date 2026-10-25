@@ -1,4 +1,5 @@
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Eye, Flame, Lightbulb, Library, RotateCcw, Target, Trophy } from 'lucide-react'
+import { recordJourney } from '../journey/journeyActions'
 import { type CSSProperties, useCallback, useMemo, useState } from 'react'
 import { sfx } from '../audio'
 import { ChessBoard } from '../components/board/ChessBoard'
@@ -39,6 +40,7 @@ export function PuzzlesView() {
       const out = applyPuzzleSolve(profileStore.get(), puzzle, { daily: isDaily, assisted })
       profileStore.set(out.profile)
       if (out.firstSolve) trackQuestEvents({ puzzles_solved: 1 }, 1200)
+      if (out.firstSolve) recordJourney({ outcome: null, base: assisted ? 6 : 12 }, 1400)
       if (!settingsStore.get().batterySaver) setCelebration((c) => c + 1)
       if (out.coins > 0) {
         window.setTimeout(() => sfx.coins(), 600)

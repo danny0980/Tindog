@@ -1,4 +1,5 @@
 import { Chess } from 'chess.js'
+import { recordJourney } from '../journey/journeyActions'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { resolveMaterial, sfx } from '../audio'
 import { RUSH_LEVELS, RUSH_MATE_BONUS, RUSH_MAX_TIME_MS, RUSH_ROUND_BONUS_MS, RUSH_START_MS } from '../constants/rush'
@@ -115,6 +116,7 @@ export function useTimeRush(active: boolean) {
       const out = applyRushResult(profileStore.get(), r.score, r.round)
       profileStore.set(out.profile)
       trackQuestEvents({ rush_runs: 1, rush_points: r.score }, 1500)
+      recordJourney({ outcome: null, base: 15 + Math.min(60, Math.floor(r.score / 500)) }, 1700)
       setSummary({ score: r.score, round: r.round, reason, stats: r.stats, coins: out.coins, newBest: out.newBest && r.score > 0 })
       setPhase('over')
       if (out.newBest && r.score > 0) sfx.victory()

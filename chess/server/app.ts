@@ -589,6 +589,54 @@ export function createApp(deps: AppDeps): Running {
     res.json({ ok: true })
   })
 
+  // ── Friends & referrals ───────────────────────────────────────────────────
+  // Your friend code is your player id: share it, or a link with ?ref= for referrals.
+  const friendCode = (raw: unknown): string => (typeof raw === 'string' ? raw.trim().toLowerCase() : '')
+  app.get('/api/friends', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const friends = store.friendsOf(user.id).flatMap((f) => {
+      const u = store.user(f.id)
+      return u ? [{ id: u.id, name: u.name, rating: u.rating, status: f.status, online: hub.isOnline(u.id) }] : []
+    })
+    res.json({ code: user.id, friends })
+  })
+  app.post('/api/friends', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const other = store.user(friendCode((req.body as { code?: unknown } | undefined)?.code))
+    if (!other || other.id === user.id) return void res.status(404).json({ error: 'No player has that friend code.' })
+    if (store.friendsOf(user.id).length >= 200) return void res.status(400).json({ error: 'Your friends list is full.' })
+    res.json({ result: store.requestFriend(user.id, other.id, now()) })
+  })
+  app.post('/api/friends/:id/accept', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    if (!store.acceptFriend(user.id, String(req.params.id), now())) return void res.status(404).json({ error: 'No such request.' })
+    res.json({ result: 'friends' })
+  })
+  app.delete('/api/friends/:id', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    store.removeFriend(user.id, String(req.params.id))
+    res.json({ removed: true })
+  })
+  app.get('/api/referral', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    res.json({ code: user.id, referred: store.referralCount(user.id), referredBy: name(store.referrerOf(user.id)) })
+  })
+  app.post('/api/referral', (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    if (store.referrerOf(user.id)) return void res.status(409).json({ error: 'You have already used a referral code.' })
+    // Only new accounts can be referred (within 14 days of signing up).
+    if (now() - user.createdAt > 14 * 86_400_000) return void res.status(400).json({ error: 'Referral codes are for new accounts.' })
+    const code = friendCode((req.body as { code?: unknown } | undefined)?.code)
+    if (!store.refer(user.id, code, now())) return void res.status(404).json({ error: 'That referral code is not valid.' })
+    res.json({ referredBy: name(code) })
+  })
+
   app.use('/api', (_req, res) => void res.status(404).json({ error: 'Not found.' }))
 
   // ── The built app (production) ────────────────────────────────────────────

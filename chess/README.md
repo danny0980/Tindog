@@ -1,4 +1,4 @@
-# ♞ Chess Arena: AAA Edition (v6.18 · Chronos Chess — iOS & Android)
+# ♞ Chess Arena: AAA Edition (v6.19 · Chronos Chess — the Journey)
 
 A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with **Tailwind CSS v4**. Rules come from **chess.js**, the board is **react-chessboard**, and the engine is **Stockfish 19** (WASM in Web Workers). It's built mobile-first and is set up to be wrapped as a native iOS/Android app with **Capacitor**.
 
@@ -7,6 +7,32 @@ A chess app built with **React 19, Vite 8 and strict TypeScript**, styled with *
 - Works offline once loaded, apart from the Google Fonts stylesheet.
 
 ---
+
+## What's new in 6.19: the Journey
+
+A new **Journey** tab (Compass, second in the bottom bar) gives the game a long-term spine: everything you play earns XP, and there is always something to chase. Its logic lives in `src/journey/` (pure and unit-tested), its screens in `src/components/journey/`, its save under its own key (`chess-arena:journey:v1`, also in the cloud save).
+
+- **Progress.**
+  - 50 levels with titles (Strategist at 5, Emperor at 35, Lord of Time at 50) and up to ten prestige crowns: back to level 1 with stronger opponents.
+  - Six-week **seasons**, each themed on an era (the Pharaohs, the Vikings, the Samurai…); games against that era earn +50% XP. A free 30-tier **season pass** pays coins, potions, a season frame, a board aura and a title.
+  - Weekly **leagues** (Bronze → Diamond): you race 19 historical characters for league points; the top five go up, the bottom five down. The rivals are the game's own characters (shown as such), on a deterministic curve.
+  - A **skill tree** (Treasury, War Room, Library): more coins, extra time and takebacks in campaign battles, more XP, faster bonds.
+- **Story mode — "The Keeper of Time".** Eleven chapters across the eras, each with a typed-out scene before and after the game; the last guardian is your own Ghost. Chosen strength (Gentle → Authentic); story games are unrated.
+- **Characters.** A **nemesis** (the character who keeps beating you, back +120 Elo for a revenge match), **bonds** that grow with every game (they tell you about their lives and give gifts at levels 3 and 5), the **Codex** of collectible cards with rarities, era **collections** (complete one for its board and pieces), and **dream matches** — two characters play each other in their own styles.
+- **Characters talk about how you played**: a quick mate, a comeback, a win on time or a long siege each get their own parting line, and strangers may have heard about your winning streak.
+- **New ways to play.**
+  - Three-phase bosses (they transform as they lose material: a spell in phase 2, full engine power in phase 3).
+  - Duel of Powers (you bring one ability, they bring their signature power).
+  - Local co-op against a boosted boss.
+  - **Hold the Line**, chess tower defence.
+  - Six **famous positions** replayed from the real games (the Immortal, the Opera Game, the Game of the Century…).
+  - **Weekend events** (Cavalry Charge, the Peasants' Revolt, Court of Queens, Fischer Weekend…).
+  - The **Bullet Gauntlet** (1 + 0, a stronger character after every win).
+- **Learning.** A mentor's diagnosis from your games with a seven-day plan, five endgame lessons taught by the masters (the basic mates, the opposition, Lucena, Philidor), **puzzles from your own mistakes** (the engine scans your games) and a weekly report.
+- **Friends.** Friend codes, requests and who is online (`/api/friends`); invite links with rewards for both players (`/api/referral`); "beat my position" challenge links; quick **emotes** in ranked games (a fixed set, no open chat).
+- **Rewards.** A free daily chest with its odds shown, a rotating daily shop, a free **Founders Pack** until 30 June 2027, avatar frames and board auras in a wardrobe, and **smart reminders** (local notifications in the apps via `@capacitor/local-notifications`, at most one a day, only with a real reason).
+- **Look and feel.** Captures look like their piece set (dragons burn, crystal shatters, ninjas slash), the board's light follows your local time (*Living light* in Settings), and the highlight reel also saves a vertical 9:16 clip for TikTok, Reels and Shorts.
+- **Tests:** `npm run test:journey` (levels, seasons, leagues, skills, rewards, bonds, the nemesis, story, remarks, chest odds, the shop, every famous game replayed move by move, events, lessons, the tower defence, the mentor and mistake puzzles) and `npm run test:social` (friends, referrals, emotes).
 
 ## What's new in 6.18: the iOS and Android apps
 
